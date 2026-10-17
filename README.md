@@ -51,7 +51,10 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - `GET http://localhost:8000/health` → `200` + `{"status": "ok"}`
 - `GET http://localhost:8000/` → страница «Hello world» с часами,
   обновляемыми каждую секунду через htmx (`GET /time`)
-- `GET http://localhost:8000/tutors` → список репетиторов
+- `GET http://localhost:8000/tutor/register` → регистрация репетитора
+- `GET http://localhost:8000/tutor/login` → вход
+- `GET http://localhost:8000/tutor/` → личный кабинет (только после входа)
+- `GET http://localhost:8000/tutor/remember-password` → восстановление пароля
 - `GET http://localhost:8000/students` → список учеников
 - Swagger UI: `http://localhost:8000/docs`
 
