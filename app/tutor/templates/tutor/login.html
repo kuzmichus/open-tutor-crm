@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Вход — Open Tutor CRM{% endblock %}
+{% block body %}
+    <h1>Вход</h1>
+
+    {% if notice %}
+    <p class="notice">{{ notice }}</p>
+    {% endif %}
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="/tutor/login">
+        <p><label>Email <input type="email" name="email" required></label></p>
+        <p><label>Пароль <input type="password" name="password" required></label></p>
+        <p><button type="submit">Войти</button></p>
+    </form>
+
+    <p><a href="/tutor/register">Нет аккаунта? Зарегистрироваться</a></p>
+    <p><a href="/tutor/remember-password">Забыли пароль?</a></p>
+{% endblock %}

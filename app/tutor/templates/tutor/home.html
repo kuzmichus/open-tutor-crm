@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Кабинет — Open Tutor CRM{% endblock %}
+{% block body %}
+    <h1>Личный кабинет</h1>
+
+    <p><strong>Имя:</strong> {{ tutor.name }}</p>
+    <p><strong>Email:</strong> {{ tutor.email }}</p>
+    {% if tutor.phone %}<p><strong>Телефон:</strong> {{ tutor.phone }}</p>{% endif %}
+    {% if tutor.subject %}<p><strong>Предмет:</strong> {{ tutor.subject }}</p>{% endif %}
+    {% if tutor.experience %}<p><strong>Опыт:</strong> {{ tutor.experience }}</p>{% endif %}
+    {% if tutor.hourly_rate %}<p><strong>Стоимость часа:</strong> {{ tutor.hourly_rate }}</p>{% endif %}
+    {% if tutor.timezone %}<p><strong>Часовой пояс:</strong> {{ tutor.timezone }}</p>{% endif %}
+    {% if tutor.about %}<p><strong>О себе:</strong> {{ tutor.about }}</p>{% endif %}
+
+    <form method="post" action="/tutor/logout">
+        <button type="submit">Выйти</button>
+    </form>
+{% endblock %}
