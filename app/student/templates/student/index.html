@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Ученики — Open Tutor CRM{% endblock %}
+{% block body %}
+    <h1>Ученики</h1>
+    <ul>
+    {% for student in students %}
+        <li>{{ student.name }} &lt;{{ student.email }}&gt;</li>
+    {% else %}
+        <li>Пока нет учеников</li>
+    {% endfor %}
+    </ul>
+{% endblock %}

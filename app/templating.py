@@ -1,0 +1,22 @@
+"""Общий помощник шаблонов Jinja2.
+
+Собирает все каталоги шаблонов: общий `app/templates` и каталоги модулей
+(`app/<module>/templates`). Шаблоны модулей неймспейсятся подкаталогом
+(например `tutor/index.html`), чтобы не было коллизий имён.
+
+Чтобы подключить новый модуль — добавьте его каталог в `TEMPLATE_DIRS`.
+"""
+
+from pathlib import Path
+
+from fastapi.templating import Jinja2Templates
+
+_APP_DIR = Path(__file__).resolve().parent
+
+TEMPLATE_DIRS = [
+    _APP_DIR / "templates",  # общие шаблоны
+    _APP_DIR / "tutor" / "templates",  # модуль tutor
+    _APP_DIR / "student" / "templates",  # модуль student
+]
+
+templates = Jinja2Templates(directory=TEMPLATE_DIRS)

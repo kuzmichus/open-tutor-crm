@@ -1,0 +1,12 @@
+"""Агрегатор ORM-моделей.
+
+Импортирует все доменные модели, чтобы они зарегистрировались на
+`Base.metadata` — это нужно для `create_all` и для autogenerate в Alembic.
+Новые доменные модели добавляются сюда.
+
+Нарушает «один класс — один файл»? Нет: здесь нет ни одного класса,
+только импорты-регистраторы.
+"""
+
+from app.student.models.student import Student  # noqa: F401
+from app.tutor.models.tutor import Tutor  # noqa: F401
