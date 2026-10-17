@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.common.views import router as common_router
+from app.common.views.not_found import not_found
 from app.database import init_db
 from app.student.views import router as student_router
 from app.tutor.views import router as tutor_router
@@ -30,6 +31,8 @@ def create_app() -> FastAPI:
     app.include_router(common_router)
     app.include_router(tutor_router)
     app.include_router(student_router)
+    # Кастомная страница 404 вместо стандартного JSON/Not Found.
+    app.add_exception_handler(404, not_found)
     # Статические ассеты (htmx и т.п.) отдаются локально, без CDN.
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
     return app

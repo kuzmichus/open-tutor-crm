@@ -1,0 +1,31 @@
+{#
+  Общий макет страниц авторизации (без дашборда и сайдбара).
+  Наследники переопределяют блоки:
+      auth_title — заголовок формы,
+      auth_form  — сама форма,
+      auth_footer — ссылки под формой.
+  Контекст из вью: error, notice, message, link, show_form, key, form.
+#}
+{% extends "base.html" %}
+{% block body %}
+    <main class="auth">
+        <section class="auth__card card" aria-labelledby="auth-title">
+            <a class="auth__brand" href="/">
+                <span class="sidebar__logo" aria-hidden="true">
+                    {% include "_logo.html" %}
+                </span>
+                <span class="sidebar__brand">OpenTutorCRM</span>
+            </a>
+
+            <h1 class="auth__title" id="auth-title">{% block auth_title %}{% endblock %}</h1>
+
+            {% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+            {% if error %}<p class="error">{{ error }}</p>{% endif %}
+            {% if message %}<p class="notice">{{ message }}</p>{% endif %}
+
+            {% block auth_form %}{% endblock %}
+
+            {% block auth_footer %}{% endblock %}
+        </section>
+    </main>
+{% endblock %}

@@ -4,8 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Open Tutor CRM{% endblock %}</title>
+
+    {# Шрифты: Geist + Geist Mono (интерфейс/числа) + Lexend (display) #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    {# Дизайн-система + иконки Lucide (локально) + минимальный JS #}
+    <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/htmx.min.js"></script>
+    <script src="/static/lucide.min.js" defer></script>
+    <script src="/static/app.js" defer></script>
+
     {% block head %}{% endblock %}
+
+    {# Ранняя инициализация сворачивания сайдбара: класс на <html> ставится
+       до отрисовки, иначе сайдбар «прыгает» из развёрнутого в свёрнутый. #}
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem("opentutorcrm:sidebar-collapsed") === "1") {
+                    document.documentElement.classList.add("sidebar-collapsed");
+                }
+            } catch (e) { /* localStorage недоступен */ }
+        })();
+    </script>
 </head>
 <body>
     {% block body %}{% endblock %}

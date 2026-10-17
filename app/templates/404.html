@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}404 — страница не найдена · Open Tutor CRM{% endblock %}
+
+{% block body %}
+    <main class="not-found">
+        {# Картинка: inline SVG (без CDN и внешних запросов) #}
+        <svg class="not-found__art"
+             viewBox="0 0 240 160"
+             role="img"
+             aria-label="Сломанная иллюстрация: ученик потерялся">
+            <!-- телефон/карточка с 404 -->
+            <rect x="56" y="14" width="128" height="132" rx="16"
+                  fill="none" stroke="currentColor" stroke-width="4" opacity="0.35"/>
+            <rect x="70" y="34" width="100" height="60" rx="8"
+                  fill="none" stroke="currentColor" stroke-width="4" opacity="0.55"/>
+            <text x="120" y="74" text-anchor="middle"
+                  font-family="Lexend, system-ui, sans-serif" font-size="30" font-weight="700"
+                  fill="currentColor">404</text>
+
+            <!-- курсив-вопрос -->
+            <path d="M104 112 q0 -12 12 -12 q12 0 12 10 q0 8 -10 10 l-4 4"
+                  fill="none" stroke="currentColor" stroke-width="4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="114" cy="142" r="3.5" fill="currentColor"/>
+
+            <!-- шапка-конфутий -->
+            <path d="M30 44 L92 24 L92 40 L30 60 Z"
+                  fill="currentColor" opacity="0.18"/>
+            <path d="M30 44 L92 24"
+                  fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            <path d="M30 44 L30 60 L92 40"
+                  fill="none" stroke="currentColor" stroke-width="4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+
+            <!-- россыпь искр/точек -->
+            <circle cx="196" cy="40" r="4" fill="currentColor" opacity="0.5"/>
+            <circle cx="212" cy="96" r="6" fill="currentColor" opacity="0.3"/>
+            <circle cx="44" cy="108" r="5" fill="currentColor" opacity="0.35"/>
+            <path d="M198 130 l8 0 M202 126 l0 8"
+                  stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+        </svg>
+
+        <p class="not-found__code">404</p>
+        <h1 class="not-found__title">Кажется, у этого урока не было учителя…</h1>
+        <p class="not-found__text">
+            Такой страницы не существует — возможно, она переехала, была отменена
+            или так и не запланировалась. Мы уже отправили её на поиски.
+        </p>
+
+        <div class="not-found__actions">
+            <a class="btn btn--primary" href="/">На главную</a>
+            <a class="btn btn--ghost" href="/tutor/login">Войти</a>
+        </div>
+    </main>
+{% endblock %}

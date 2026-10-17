@@ -1,0 +1,1026 @@
+/* ==========================================================================
+   OpenTutorCRM — дизайн-система
+   Нативный CSS: @layer + CSS Nesting + CSS-переменные. Без сборщиков.
+   Секции: tokens → base → components → utilities.
+   ========================================================================== */
+
+@layer tokens {
+  /* --------------------------------------------------------------------------
+     Токены (light — база)
+     -------------------------------------------------------------------------- */
+  :root {
+    color-scheme: light;
+
+    /* Цвета */
+    --background: #FFFFFF;              /* фон страницы */
+    --foreground: #17171B;              /* основной текст */
+    --surface: #F7F7F5;                 /* фон сайдбара / surface */
+    --card: #FFFFFF;                    /* фон карточек */
+    --card-foreground: #17171B;
+    --popover: #FFFFFF;                 /* поповеры, дропдауны */
+    --popover-foreground: #17171B;
+    --muted: #EFEFEC;                   /* второй фон: chips, tablist */
+    --muted-foreground: #71717A;        /* вторичный текст */
+    --accent: #EFEFEC;                  /* hover-фон ghost-кнопок */
+    --accent-foreground: #17171B;
+    --brand: #A85B34;                   /* тёплый терракотовый акцент */
+    --brand-dark: #8E4A28;              /* hover тёмный */
+    --brand-soft: #F6EBE4;              /* мягкий фон акцента */
+    --primary: #1F1F24;                 /* primary-кнопки, лого */
+    --primary-foreground: #FFFFFF;
+    --secondary: #EFEFEC;               /* chips */
+    --secondary-foreground: #3F3F46;    /* not specified — chosen: тёплый тёмно-серый */
+    --destructive: #DE3B3D;
+    --destructive-foreground: #FFFFFF;  /* not specified — chosen: белый */
+    --overlay: rgba(23, 23, 27, 0.45);  /* not specified — chosen: тёмный veil для off-canvas */
+
+    /* Границы, фокус */
+    --border: #E4E3DF;
+    --input: #E4E3DF;
+    --ring: #A85B34;
+
+    /* Сайдбар */
+    --sidebar: #F7F7F5;
+    --sidebar-foreground: #17171B;
+    --sidebar-accent: #EFEFEC;
+    --sidebar-accent-foreground: #17171B;
+    --sidebar-border: #E4E3DF;
+    --sidebar-primary: #1F1F24;
+    --sidebar-primary-foreground: #FFFFFF;
+
+    /* Статусы уроков */
+    --status-cancelled: #F8DDDB;        /* отменён */
+    --status-unplanned: #C9EEE5;        /* незапланирован */
+    --status-rescheduled: #F7E6C3;      /* перенесён */
+    --status-regular: #DBE9FF;          /* обычный */
+    --status-cancelled-fg: #8C2F2F;     /* not specified — chosen: тёмный оттенок тона */
+    --status-unplanned-fg: #166B58;
+    --status-rescheduled-fg: #7A5514;
+    --status-regular-fg: #26457F;
+
+    /* Шрифты */
+    --font-sans: "Geist", system-ui, Arial, sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+    --font-display: "Lexend", "Geist", system-ui, sans-serif;
+
+    /* Размеры текста: 12 / 14 / 16 / 20 / 24 / 30 / 36 */
+    --text-xs: 0.75rem;    /* 12 */
+    --text-sm: 0.875rem;   /* 14 */
+    --text-base: 1rem;     /* 16 */
+    --text-lg: 1.25rem;    /* 20 */
+    --text-xl: 1.5rem;     /* 24 */
+    --text-2xl: 1.875rem;  /* 30 */
+    --text-3xl: 2.25rem;   /* 36 */
+
+    /* Геометрия */
+    --space: 0.25rem;                 /* базовая сетка 4px */
+    --radius: 0.875rem;               /* 14px — базовый радиус */
+    --radius-sm: 0.5rem;              /* 8px — nav-item, кнопки малые */
+    --radius-md: 0.75rem;             /* 12px — кнопки, инпуты */
+    --radius-lg: 1.125rem;            /* 18px — карточки */
+    --radius-full: 9999px;            /* пилюли, аватары */
+
+    /* Тени */
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+
+    /* Анимации */
+    --duration-fast: 150ms;
+    --duration-base: 200ms;
+    --duration-slow: 300ms;
+    --ease: ease-in-out;
+
+    /* Размеры layout */
+    --sidebar-width: 260px;
+    --sidebar-width-collapsed: 72px;
+    --mobile-header-h: 64px;
+    --mobile-tabbar-h: 56px;
+
+    /* Скроллбар */
+    --scrollbar-thumb: #D8D7D2;       /* not specified — chosen: тёплый серый */
+    --scrollbar-thumb-hover: #BFBEBA;
+  }
+
+  /* --------------------------------------------------------------------------
+     Тёмная тема — только переопределение токенов. Компоненты не меняются.
+     Тёплая, не инверсия: фон #0E0E11, текст #EDEDEF, терракотовый акцент.
+     -------------------------------------------------------------------------- */
+  .dark {
+    color-scheme: dark;
+
+    --background: #0E0E11;
+    --foreground: #EDEDEF;
+    --surface: #1C1C20;               /* not specified — chosen: #1C1C20 (surface-light) */
+    --card: #17171A;
+    --card-foreground: #EDEDEF;
+    --popover: #17171A;
+    --popover-foreground: #EDEDEF;
+    --muted: #232327;
+    --muted-foreground: #8A8F98;
+    --accent: #232327;
+    --accent-foreground: #EDEDEF;
+    --brand: #C97A4F;                 /* осветлённый терракот для контраста */
+    --brand-dark: #A85B34;
+    --brand-soft: #2A1D16;
+    --primary: #EDEDEF;               /* инверсная primary-кнопка */
+    --primary-foreground: #17171A;
+    --secondary: #232327;
+    --secondary-foreground: #D4D4D8;
+    --destructive: #F2555A;
+    --destructive-foreground: #17171A;
+    --overlay: rgba(0, 0, 0, 0.6);
+
+    --border: #26262B;
+    --input: #26262B;
+    --ring: #C97A4F;
+
+    --sidebar: #131316;
+    --sidebar-foreground: #EDEDEF;
+    --sidebar-accent: #232327;
+    --sidebar-accent-foreground: #EDEDEF;
+    --sidebar-border: #26262B;
+    --sidebar-primary: #EDEDEF;
+    --sidebar-primary-foreground: #17171A;
+
+    /* Статусы: приглушённая пастель — 16% от светлых тонов, светлый текст */
+    --status-cancelled: rgba(248, 221, 219, 0.16);
+    --status-unplanned: rgba(201, 238, 229, 0.16);
+    --status-rescheduled: rgba(247, 230, 195, 0.16);
+    --status-regular: rgba(219, 233, 255, 0.16);
+    --status-cancelled-fg: #F0A9A6;
+    --status-unplanned-fg: #86DCC8;
+    --status-rescheduled-fg: #E7C88A;
+    --status-regular-fg: #A9C6F5;
+
+    --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.05); /* тени почти не видны — компенсируем границей */
+
+    --scrollbar-thumb: #3A3A40;
+    --scrollbar-thumb-hover: #4A4A52;
+  }
+}
+
+@layer base {
+  /* --------------------------------------------------------------------------
+     Reset / база
+     -------------------------------------------------------------------------- */
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+    line-height: 1.25;
+  }
+
+  h1 {
+    font-size: var(--text-xl);
+    font-weight: 700;
+  }
+
+  h2 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+  }
+
+  h3 {
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  p { margin: 0; }
+  ul, ol { margin: 0; padding: 0; list-style: none; }
+
+  a {
+    color: var(--brand);
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease);
+    &:hover { color: var(--brand-dark); }
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  img, svg { display: block; }
+
+  /* Lucide-иконки: stroke-width 2 по умолчанию задаётся в JS-разметке */
+  [data-lucide] {
+    width: 20px;
+    height: 20px;
+    flex: none;
+  }
+
+  /* Фокус виден всегда через :focus-visible */
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Числа, ID — моно */
+  code, kbd, samp, [data-mono] {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Крупные заголовки — tracking-tight */
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  /* Тонкий скроллбар */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: var(--radius-full);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+  * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+}
+
+@layer components {
+  /* ==========================================================================
+     Сайдбар (fixed, off-canvas на мобиле)
+     ========================================================================== */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    background: var(--sidebar);
+    color: var(--sidebar-foreground);
+    border-right: 1px solid var(--sidebar-border);
+    transition: transform var(--duration-slow) var(--ease),
+                width var(--duration-slow) var(--ease);
+
+    & .nav-divider {
+      border-top: 1px solid var(--sidebar-border);
+      margin: calc(var(--space)) 0;       /* 4px */
+    }
+  }
+
+  /* Элементы сайдбара: плоские BEM-селекторы (в нативном CSS нельзя
+     конкатенировать селекторы через &, поэтому &__x не работает). */
+  .sidebar__header {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);        /* 12px */
+    height: 56px;
+    padding: 0 calc(var(--space) * 3);
+    border-bottom: 1px solid var(--sidebar-border);
+    flex: none;
+  }
+
+  .sidebar__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    flex: none;
+  }
+
+  /* Логотип-иконка (SVG, градиент внутри) тянется на размер контейнера */
+  .brand-logo {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .sidebar__brand {
+    font-size: var(--text-base);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--foreground);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .sidebar__nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: calc(var(--space) * 2);
+  }
+
+  .sidebar__footer {
+    flex: none;
+    margin-top: auto;
+    border-top: 1px solid var(--sidebar-border);
+    padding: calc(var(--space) * 3);
+  }
+
+  /* Пункт меню */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);          /* 12px */
+    min-height: 40px;                     /* тач-таргет ≥ 40px */
+    border-radius: 8px;
+    padding: calc(var(--space) * 2) calc(var(--space) * 3); /* 8px 12px */
+    font-size: var(--text-sm);
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--muted-foreground);
+    background: transparent;
+    text-decoration: none;
+    overflow: hidden;
+    transition: background-color var(--duration-base) var(--ease),
+                color var(--duration-base) var(--ease);
+
+    &:hover {
+      background: color-mix(in srgb, var(--sidebar-accent) 60%, transparent);
+      color: var(--foreground);
+    }
+
+    & span {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .nav-item--active {
+    background: var(--sidebar-accent);
+    color: var(--sidebar-accent-foreground);
+    font-weight: 600;
+
+    &:hover { background: var(--sidebar-accent); }
+  }
+
+  /* Нижний блок сайдбара (Настройки) */
+  .sidebar__section {
+    flex: none;
+    border-top: 1px solid var(--sidebar-border);
+    padding: calc(var(--space) * 3);
+  }
+
+  /* Кнопка-«язычок» сворачивания */
+  .sidebar__toggle {
+    position: absolute;
+    right: -12px;
+    top: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--sidebar-border);
+    background: var(--sidebar);
+    box-shadow: var(--shadow-card);
+    color: var(--muted-foreground);
+
+    &:hover { color: var(--foreground); }
+
+    & [data-lucide] { width: 14px; height: 14px; }
+  }
+
+  /* ==========================================================================
+     Свёрнутый сайдбар: полоса иконок 72px.
+     Источник истины — класс sidebar-collapsed на <html> (его ставит бутстрап-
+     скрипт в base.html ещё до отрисовки, чтобы не было «прыжка»).
+     Только десктоп: на мобиле сайдбар работает как off-canvas.
+     ========================================================================== */
+  @media (min-width: 1024px) {
+    html.sidebar-collapsed .sidebar {
+      width: var(--sidebar-width-collapsed);
+
+      & .sidebar__brand,
+      & .nav-item span,
+      & .user-row__meta,
+      & .nav-divider {
+        display: none;
+      }
+
+      /* Иконки по центру полосы */
+      & .sidebar__header {
+        justify-content: center;
+        padding: 0;
+        gap: 0;
+      }
+
+      & .sidebar__nav,
+      & .sidebar__section,
+      & .sidebar__footer {
+        padding-left: calc(var(--space) * 2);
+        padding-right: calc(var(--space) * 2);
+      }
+
+      & .nav-item {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      & .user-row-wrap {
+        flex-direction: column;
+        gap: calc(var(--space) * 2);
+      }
+
+      & .user-row {
+        justify-content: center;
+        padding: calc(var(--space) * 2) 0;
+      }
+
+      /* «Язычок» разворачивает обратно */
+      & .sidebar__toggle [data-lucide] {
+        transform: rotate(180deg);
+      }
+    }
+  }
+
+  /* Строка пользователя в футере сайдбара */
+  .user-row {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    border-radius: 8px;
+    padding: calc(var(--space) * 2);
+    min-height: 40px;
+    text-decoration: none;
+    color: inherit;
+    transition: background-color var(--duration-base) var(--ease);
+
+    &:hover { background: var(--muted); }
+  }
+
+  .nav-item--grow { flex: 1; min-width: 0; }
+  .user-row--grow { flex: 1; min-width: 0; }
+
+  .user-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--foreground);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    flex: none;
+  }
+
+  .user-row__meta {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .user-row__name {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .user-row__role {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .user-row__name,
+  .user-row__role {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ==========================================================================
+     Overlay (мобильный off-canvas)
+     ========================================================================== */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: var(--overlay);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--duration-slow) var(--ease);
+
+    &.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  /* ==========================================================================
+     Кнопки
+     ========================================================================== */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--space) * 2);
+    min-height: 36px;
+    min-width: 36px;
+    padding: 0 calc(var(--space) * 4);    /* 0 16px */
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border: 1px solid transparent;
+    transition: background-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    & [data-lucide] { width: 16px; height: 16px; } /* 16px в кнопках */
+  }
+
+  .btn--primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+
+    &:hover { background: color-mix(in srgb, var(--primary) 90%, transparent); }
+  }
+
+  .btn--ghost {
+    background: transparent;
+    color: var(--foreground);
+
+    &:hover { background: var(--accent); }
+  }
+
+  .btn--brand {
+    background: var(--brand);
+    color: #FFFFFF; /* not specified — chosen: белый текст на терракоте */
+
+    &:hover { background: var(--brand-dark); }
+  }
+
+  .btn--destructive {
+    background: var(--destructive);
+    color: var(--destructive-foreground);
+
+    &:hover { background: color-mix(in srgb, var(--destructive) 90%, transparent); }
+  }
+
+  .btn--icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+  }
+
+  .btn--block {
+    width: 100%;
+  }
+
+  /* ==========================================================================
+     Карточки
+     ========================================================================== */
+  .card {
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: calc(var(--space) * 6);      /* 24px */
+
+  }
+
+  .card__title {
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .card__desc {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  /* Сетка «ключ — значение» внутри карточки профиля */
+  .profile-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* ==========================================================================
+     Табы (segmented control)
+     ========================================================================== */
+  .tabs {
+    display: inline-flex;
+    background: var(--muted);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .tab {
+    min-height: 32px;
+    padding: 0 calc(var(--space) * 3);
+    border-radius: 6px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    transition: background-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    &:hover { color: var(--foreground); }
+  }
+
+  .tab--active {
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ==========================================================================
+     Формы
+     ========================================================================== */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .input {
+    height: 36px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--input);
+    background: var(--background);
+    color: var(--foreground);
+    padding: 0 calc(var(--space) * 3);    /* 0 12px */
+    font-size: var(--text-sm);
+    transition: border-color var(--duration-fast) var(--ease),
+                box-shadow var(--duration-fast) var(--ease);
+
+    &::placeholder { color: var(--muted-foreground); }
+
+    &:focus-visible {
+      outline: none;
+      border-color: var(--ring);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
+    }
+  }
+
+  /* ==========================================================================
+     Chips / статусы уроков
+     ========================================================================== */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space));
+    min-height: 24px;
+    padding: 0 calc(var(--space) * 2.5);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--secondary-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+
+  .chip--cancelled     { background: var(--status-cancelled);     color: var(--status-cancelled-fg); }
+  .chip--unplanned     { background: var(--status-unplanned);     color: var(--status-unplanned-fg); }
+  .chip--rescheduled   { background: var(--status-rescheduled);   color: var(--status-rescheduled-fg); }
+  .chip--regular       { background: var(--status-regular);       color: var(--status-regular-fg); }
+
+  /* ==========================================================================
+     Страницы авторизации (без сайдбара): центрированная карточка
+     ========================================================================== */
+  .auth {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(var(--space) * 4);
+    background: var(--surface);
+  }
+
+  .auth__card {
+    width: 100%;
+    max-width: 400px;               /* not specified — chosen: узкая колонка формы */
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 5);    /* 20px */
+    padding: calc(var(--space) * 8);/* 32px */
+  }
+
+  .auth__brand {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    text-decoration: none;
+    color: var(--foreground);
+    align-self: center;
+  }
+
+  .auth__brand:hover { color: var(--foreground); }
+
+  .auth__title {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-align: center;
+  }
+
+  .auth__links {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    font-size: var(--text-sm);
+  }
+
+  .auth__links a { color: var(--muted-foreground); }
+  .auth__links a:hover { color: var(--brand); }
+
+  /* Вертикальная форма-стек */
+  .form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);      /* 16px */
+  }
+
+  /* Уведомления (notice — успех, error — ошибка) */
+  .notice,
+  .error {
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    border-radius: var(--radius-md);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4); /* 12px 16px */
+  }
+
+  .notice {
+    background: color-mix(in srgb, var(--status-unplanned) 70%, transparent);
+    color: var(--status-unplanned-fg);
+  }
+
+  .error {
+    background: color-mix(in srgb, var(--status-cancelled) 70%, transparent);
+    color: var(--status-cancelled-fg);
+  }
+
+  /* Ссылка сброса пароля (long URL — переносимо) */
+  .reset-link-wrap {
+    margin-top: calc(var(--space) * 4);
+    font-size: var(--text-xs);
+    word-break: break-all;
+  }
+
+  /* ==========================================================================
+     404 — страница ошибки
+     ========================================================================== */
+  .not-found {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--space) * 4);
+    text-align: center;
+    padding: calc(var(--space) * 6) calc(var(--space) * 4);
+  }
+
+  /* Иллюстрация: ограничена и по ширине, и по высоте, чтобы вся страница
+     (арт + код + заголовок + текст + кнопки) умещалась на один экран. */
+  .not-found__art {
+    width: auto;
+    height: clamp(96px, 22vh, 200px);    /* fallback: без поддержки dvh */
+    height: clamp(96px, 22dvh, 200px);
+    max-width: min(280px, 60vw);
+    flex: none;
+    color: var(--brand);
+  }
+
+  .not-found__code {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    color: var(--foreground);
+  }
+
+  .not-found__title {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .not-found__text {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+    max-width: 36rem;
+  }
+
+  .not-found__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Низкие экраны (ноутбуки, ландшафт телефона): ещё компактнее. */
+  @media (max-height: 640px) {
+    .not-found {
+      gap: calc(var(--space) * 3);
+      padding: calc(var(--space) * 4) calc(var(--space) * 4);
+    }
+
+    .not-found__art {
+      height: clamp(72px, 18vh, 140px);   /* fallback: без поддержки dvh */
+      height: clamp(72px, 18dvh, 140px);
+    }
+    .not-found__code { font-size: var(--text-xl); }
+    .not-found__title { font-size: var(--text-base); }
+  }
+
+  /* ==========================================================================
+     Основной layout
+     ========================================================================== */
+  .main {
+    padding-left: 0;
+    transition: padding-left var(--duration-slow) var(--ease);
+  }
+
+  /* Страница без сайдбара (/): отступ не нужен ни на десктопе, ни на мобиле */
+  .main--no-sidebar {
+    padding-left: 0;
+  }
+
+  .main__container {
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: calc(var(--space) * 4) calc(var(--space) * 4); /* 32px 16px */
+  }
+
+  .page-header {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space));
+    margin-bottom: calc(var(--space) * 5);
+
+    & h1 {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    & p {
+      color: var(--muted-foreground);
+      font-size: var(--text-sm);
+    }
+  }
+
+  /* ==========================================================================
+     Мобильная шапка и нижний таб-бар
+     ========================================================================== */
+  .mobile-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    height: var(--mobile-header-h);
+    padding: 0 calc(var(--space) * 4);
+    background: var(--background);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .bottom-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    height: var(--mobile-tabbar-h);
+    background: var(--background);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bottom-bar__item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    font-size: 10px;
+    min-height: 40px;
+    transition: color var(--duration-fast) var(--ease);
+  }
+
+  .bottom-bar__item:hover { color: var(--foreground); }
+
+  .bottom-bar__item--active { color: var(--brand); }
+
+  /* Десктоп: сайдбар всегда виден, контент со сдвигом */
+  @media (min-width: 1024px) {
+    .sidebar {
+      transform: translateX(0);
+    }
+
+    .main {
+      padding-left: var(--sidebar-width);
+    }
+
+    /* Свёрнутый сайдбар — контент сдвигается меньше.
+       :not(.main--no-sidebar) — иначе на публичной / появился бы отступ. */
+    .sidebar-collapsed .main:not(.main--no-sidebar) {
+      padding-left: var(--sidebar-width-collapsed);
+    }
+
+    .main--no-sidebar { padding-left: 0; }
+
+    .main__container {
+      padding: calc(var(--space) * 8) calc(var(--space) * 8); /* 32px 32px */
+    }
+
+    .mobile-header,
+    .bottom-bar,
+    .overlay {
+      display: none;
+    }
+  }
+
+  /* Мобилка: off-canvas + отступ под нижний таб-бар */
+  @media (max-width: 1023.98px) {
+    .sidebar {
+      transform: translateX(-100%);
+
+      &.is-open { transform: translateX(0); }
+    }
+
+    .main {
+      padding-bottom: calc(var(--mobile-tabbar-h) + calc(var(--space) * 4));
+    }
+  }
+}
+
+@layer utilities {
+  /* Утилиты — минимальный набор */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .flex-wrap { flex-wrap: wrap; }
+  .gap-2 { gap: calc(var(--space) * 2); }
+  .mt-4 { margin-top: calc(var(--space) * 4); }
+  .mt-5 { margin-top: calc(var(--space) * 5); }
+  .hidden { display: none; }
+}

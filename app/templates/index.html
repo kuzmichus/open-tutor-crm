@@ -1,10 +1,55 @@
+{# Демо/landing-страница: стили дизайн-системы, но БЕЗ сайдбара. #}
 {% extends "base.html" %}
 {% block title %}Open Tutor CRM{% endblock %}
+
 {% block body %}
-    <h1>Hello world</h1>
-    <p>Дата и время (обновляется каждую секунду):</p>
-    <div id="clock"
-         hx-get="/time"
-         hx-trigger="every 1s"
-         hx-swap="innerHTML">{{ now }}</div>
+    <!-- Мобильная шапка (без бургера: сайдбара на этой странице нет) -->
+    <header class="mobile-header">
+        <span class="sidebar__logo" aria-hidden="true">
+            {% include "_logo.html" %}
+        </span>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+        <button class="btn btn--ghost btn--icon" type="button" data-theme-toggle aria-label="Переключить тему">
+            <i data-lucide="moon"></i>
+        </button>
+    </header>
+
+    <!-- Основной контент -->
+    <main class="main main--no-sidebar">
+        <div class="main__container">
+            <div class="page-header">
+                <h1>OpenTutorCRM</h1>
+                <p>CRM для репетиторов: календарь, брони, ученики и финансы.</p>
+            </div>
+
+            <!-- Табы -->
+            <div class="tabs" role="tablist" aria-label="Период">
+                <button class="tab tab--active" role="tab" aria-selected="true">Сегодня</button>
+                <button class="tab" role="tab" aria-selected="false">Неделя</button>
+                <button class="tab" role="tab" aria-selected="false">Месяц</button>
+            </div>
+
+            <!-- Карточка -->
+            <section class="card mt-5">
+                <h2 class="card__title">Hello world</h2>
+                <p class="card__desc">Дата и время (обновляется каждую секунду):</p>
+                <div id="clock"
+                     hx-get="/time"
+                     hx-trigger="every 1s"
+                     hx-swap="innerHTML">{{ now }}</div>
+
+                <div class="flex flex-wrap gap-2 mt-4">
+                    <span class="chip chip--regular">Обычный урок</span>
+                    <span class="chip chip--cancelled">Отменён</span>
+                    <span class="chip chip--unplanned">Незапланирован</span>
+                    <span class="chip chip--rescheduled">Перенесён</span>
+                </div>
+            </section>
+
+            <div class="flex gap-2 mt-5">
+                <a class="btn btn--primary" href="/tutor/login">Войти</a>
+                <a class="btn btn--ghost" href="/tutor/register">Регистрация</a>
+            </div>
+        </div>
+    </main>
 {% endblock %}

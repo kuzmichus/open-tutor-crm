@@ -1,0 +1,35 @@
+{#
+  Логотип OpenTutorCRM: облако диалога с шестерёнкой внутри.
+
+  Использование:
+      {% include "_logo.html" %}
+
+  Размер задаётся CSS-классом контейнера (`.sidebar__logo`), SVG тянется на 100%.
+#}
+<svg class="brand-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="36" height="36" role="img" aria-hidden="true" focusable="false">
+    <defs>
+        <linearGradient id="brand-logo-gradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#F97316"/>
+            <stop offset="100%" stop-color="#EC4899"/>
+        </linearGradient>
+    </defs>
+    <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#brand-logo-gradient)"/>
+    <!-- облако диалога -->
+    <path d="M14 22 Q14 14 22 14 L42 14 Q50 14 50 22 L50 34 Q50 42 42 42 L30 42 L22 50 L24 42 L22 42 Q14 42 14 34 Z"
+          fill="#FFFFFF" opacity="0.95"/>
+    <!-- шестерёнка внутри -->
+    <g fill="#EC4899" transform="translate(32 28)">
+        <circle r="6" fill="none" stroke="#EC4899" stroke-width="3"/>
+        <circle r="2" fill="#EC4899"/>
+        <g stroke="#EC4899" stroke-width="2.5" stroke-linecap="round">
+            <line x1="0" y1="-9" x2="0" y2="-11"/>
+            <line x1="0" y1="9" x2="0" y2="11"/>
+            <line x1="-9" y1="0" x2="-11" y2="0"/>
+            <line x1="9" y1="0" x2="11" y2="0"/>
+            <line x1="-6.5" y1="-6.5" x2="-8" y2="-8"/>
+            <line x1="6.5" y1="6.5" x2="8" y2="8"/>
+            <line x1="6.5" y1="-6.5" x2="8" y2="-8"/>
+            <line x1="-6.5" y1="6.5" x2="-8" y2="8"/>
+        </g>
+    </g>
+</svg>

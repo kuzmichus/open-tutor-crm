@@ -1,21 +1,25 @@
-{% extends "base.html" %}
+{% extends "auth.html" %}
 {% block title %}Вход — Open Tutor CRM{% endblock %}
-{% block body %}
-    <h1>Вход</h1>
 
-    {% if notice %}
-    <p class="notice">{{ notice }}</p>
-    {% endif %}
-    {% if error %}
-    <p class="error">{{ error }}</p>
-    {% endif %}
+{% block auth_title %}Вход{% endblock %}
 
-    <form method="post" action="/tutor/login">
-        <p><label>Email <input type="email" name="email" required></label></p>
-        <p><label>Пароль <input type="password" name="password" required></label></p>
-        <p><button type="submit">Войти</button></p>
+{% block auth_form %}
+    <form method="post" action="/tutor/login" class="form-stack">
+        <div class="field">
+            <label class="label" for="login-email">Email</label>
+            <input class="input" id="login-email" type="email" name="email" placeholder="you@example.com" required>
+        </div>
+        <div class="field">
+            <label class="label" for="login-password">Пароль</label>
+            <input class="input" id="login-password" type="password" name="password" placeholder="••••••••" required>
+        </div>
+        <button class="btn btn--primary btn--block" type="submit">Войти</button>
     </form>
+{% endblock %}
 
-    <p><a href="/tutor/register">Нет аккаунта? Зарегистрироваться</a></p>
-    <p><a href="/tutor/remember-password">Забыли пароль?</a></p>
+{% block auth_footer %}
+    <div class="auth__links">
+        <a href="/tutor/register">Нет аккаунта? Зарегистрироваться</a>
+        <a href="/tutor/remember-password">Забыли пароль?</a>
+    </div>
 {% endblock %}

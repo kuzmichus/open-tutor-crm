@@ -1,18 +1,104 @@
 {% extends "base.html" %}
 {% block title %}Кабинет — Open Tutor CRM{% endblock %}
 {% block body %}
-    <h1>Личный кабинет</h1>
+    {% set active_page = 'home' %}
+    {% set user_name = tutor.name %}
+    {% set user_role = 'Владелец' %}
+    {% include "sidebar.html" %}
 
-    <p><strong>Имя:</strong> {{ tutor.name }}</p>
-    <p><strong>Email:</strong> {{ tutor.email }}</p>
-    {% if tutor.phone %}<p><strong>Телефон:</strong> {{ tutor.phone }}</p>{% endif %}
-    {% if tutor.subject %}<p><strong>Предмет:</strong> {{ tutor.subject }}</p>{% endif %}
-    {% if tutor.experience %}<p><strong>Опыт:</strong> {{ tutor.experience }}</p>{% endif %}
-    {% if tutor.hourly_rate %}<p><strong>Стоимость часа:</strong> {{ tutor.hourly_rate }}</p>{% endif %}
-    {% if tutor.timezone %}<p><strong>Часовой пояс:</strong> {{ tutor.timezone }}</p>{% endif %}
-    {% if tutor.about %}<p><strong>О себе:</strong> {{ tutor.about }}</p>{% endif %}
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
 
-    <form method="post" action="/tutor/logout">
-        <button type="submit">Выйти</button>
-    </form>
+    <!-- Основной контент -->
+    <main class="main">
+        <div class="main__container">
+            <div class="page-header">
+                <h1>Личный кабинет</h1>
+                <p>Профиль репетитора и данные аккаунта.</p>
+            </div>
+
+            <section class="card">
+                <h2 class="card__title">Профиль</h2>
+
+                <div class="profile-grid mt-4">
+                    <div class="field">
+                        <span class="label">Имя</span>
+                        <span>{{ tutor.name }}</span>
+                    </div>
+                    <div class="field">
+                        <span class="label">Email</span>
+                        <span>{{ tutor.email }}</span>
+                    </div>
+                    {% if tutor.phone %}
+                    <div class="field">
+                        <span class="label">Телефон</span>
+                        <span>{{ tutor.phone }}</span>
+                    </div>
+                    {% endif %}
+                    {% if tutor.subject %}
+                    <div class="field">
+                        <span class="label">Предмет</span>
+                        <span>{{ tutor.subject }}</span>
+                    </div>
+                    {% endif %}
+                    {% if tutor.experience %}
+                    <div class="field">
+                        <span class="label">Опыт</span>
+                        <span>{{ tutor.experience }}</span>
+                    </div>
+                    {% endif %}
+                    {% if tutor.hourly_rate %}
+                    <div class="field">
+                        <span class="label">Стоимость часа</span>
+                        <span data-mono>{{ tutor.hourly_rate }}</span>
+                    </div>
+                    {% endif %}
+                    {% if tutor.timezone %}
+                    <div class="field">
+                        <span class="label">Часовой пояс</span>
+                        <span>{{ tutor.timezone }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if tutor.about %}
+                <div class="field mt-4">
+                    <span class="label">О себе</span>
+                    <p class="card__desc">{{ tutor.about }}</p>
+                </div>
+                {% endif %}
+
+                <form method="post" action="/tutor/logout" class="mt-5">
+                    <button class="btn btn--ghost" type="submit">
+                        <i data-lucide="log-out"></i>
+                        Выйти
+                    </button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <!-- Нижний таб-бар (мобилка) -->
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item bottom-bar__item--active" aria-current="page">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/bookings" class="bottom-bar__item">
+            <i data-lucide="calendar-check"></i><span>Брони</span>
+        </a>
+        <a href="/tasks" class="bottom-bar__item">
+            <i data-lucide="square-check-big"></i><span>Задачи</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
 {% endblock %}
