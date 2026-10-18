@@ -596,6 +596,30 @@
     width: 100%;
   }
 
+  /* Вторичная кнопка с рамкой: действие без заливки */
+  .btn--outline {
+    border-color: var(--border);
+    background: var(--background);
+    color: var(--foreground);
+
+    &:hover { background: var(--accent); }
+
+    &.is-active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+  }
+
+  .btn--sm {
+    min-height: 32px;
+    min-width: 32px;
+    padding: 0 calc(var(--space) * 3);
+    font-size: var(--text-xs);
+
+    & [data-lucide] { width: 14px; height: 14px; }
+  }
+
   /* ==========================================================================
      Карточки
      ========================================================================== */
@@ -644,10 +668,14 @@
   .tab {
     min-height: 32px;
     padding: 0 calc(var(--space) * 3);
+    border: 0;
     border-radius: 6px;
+    background: none;
+    font: inherit;
     font-size: var(--text-sm);
     font-weight: 500;
     color: var(--muted-foreground);
+    cursor: pointer;
     transition: background-color var(--duration-fast) var(--ease),
                 color var(--duration-fast) var(--ease);
 
@@ -658,6 +686,37 @@
     background: var(--background);
     color: var(--foreground);
     box-shadow: var(--shadow-card);
+  }
+
+  /* Табы модалки ученика: на всю ширину, на мобильном переносятся. */
+  .modal-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .modal-tabs .tab {
+    flex: 1 1 auto;
+  }
+
+  /* Панель вкладки — колонка секций; скрывается Alpine через x-show. */
+  .tab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+
+  .tab-panel__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 8) calc(var(--space) * 4);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+    text-align: center;
   }
 
   /* ==========================================================================
@@ -696,6 +755,106 @@
   }
 
   /* ==========================================================================
+     Селект с поиском (combobox)
+     ========================================================================== */
+  .combobox__control {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .combobox__control .input {
+    flex: 1;
+    min-width: 0;
+    padding-right: calc(var(--space) * 9);  /* место под кнопку очистки */
+  }
+
+  .combobox__clear {
+    position: absolute;
+    right: calc(var(--space) * 2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: var(--text-base);
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    &:hover {
+      background: var(--accent);
+      color: var(--foreground);
+    }
+  }
+
+  .combobox__list {
+    /* Список в потоке, а не absolute-поповер: модалка формы прокручивается
+       (`overflow-y: auto`), а абсолютный потомок не clipping-ится ею и
+       вылезал бы за нижний край экрана. В потоке список всегда виден,
+       а модалка подкручивается сама. */
+    margin: calc(var(--space) * 2) 0 0;
+    max-height: 260px;
+    overflow-y: auto;
+    padding: var(--space);
+    list-style: none;
+    background: var(--popover);
+    color: var(--popover-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+  }
+
+  .combobox__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    min-height: 32px;
+    padding: 0 calc(var(--space) * 2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease);
+
+    &:hover { background: var(--accent); }
+  }
+
+  .combobox__option--active {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .combobox__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .combobox__offset {
+    flex: none;
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .combobox__option--active .combobox__offset {
+    color: var(--accent-foreground);
+  }
+
+  .combobox__note {
+    padding: calc(var(--space) * 2);
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  /* ==========================================================================
      Chips / статусы уроков
      ========================================================================== */
   .chip {
@@ -716,9 +875,642 @@
   .chip--rescheduled   { background: var(--status-rescheduled);   color: var(--status-rescheduled-fg); }
   .chip--regular       { background: var(--status-regular);       color: var(--status-regular-fg); }
 
+  /* Статусы ученика */
+  .chip--new      { background: var(--status-regular);     color: var(--status-regular-fg); }
+  .chip--active   { background: var(--status-unplanned);   color: var(--status-unplanned-fg); }
+  .chip--archived { background: var(--muted);              color: var(--muted-foreground); }
+
   /* ==========================================================================
-     Страницы авторизации (без сайдбара): центрированная карточка
+     Страница учеников: сетка карточек, фильтры, вид «список»
      ========================================================================== */
+  .students-card {
+    padding: calc(var(--space) * 5);
+  }
+
+  .card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .filters__search {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .filters__status {
+    width: auto;
+    min-width: 170px;
+  }
+
+  .view-toggle {
+    display: inline-flex;
+    gap: calc(var(--space));
+  }
+
+  .students-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  /* Вид «список»: таблица зеброй вместо карточек.
+
+     Сервер отдаёт обе разметки одним партиалом (`_grid.html`) и не знает о
+     выбранном виде, поэтому переключение — чистый CSS поверх Alpine-класса
+     на контейнере: в «списке» карточки скрываются и показывается таблица. */
+  .students-grid--list {
+    grid-template-columns: 1fr;
+
+    & .student-card {
+      display: none;
+    }
+
+    & .students-table-wrap {
+      display: block;
+    }
+  }
+
+  .students-table-wrap {
+    display: none;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    color: var(--card-foreground);
+    box-shadow: var(--shadow-card);
+  }
+
+  .students-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .students-table__head {
+    background: var(--muted);
+  }
+
+  .students-table__th {
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  .students-table__th--status {
+    text-align: right;
+  }
+
+  .students-table__row {
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    /* Зебра: чётные строки на втором фоне */
+    &:nth-child(even) {
+      background: var(--muted);
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--brand-soft);
+      outline: none;
+    }
+  }
+
+  .students-table__cell {
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    vertical-align: middle;
+  }
+
+  .students-table__cell--status {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .students-table__name {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .students-table__meta {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .students-table__contact {
+    display: block;
+    color: var(--muted-foreground);
+
+    & + & {
+      margin-top: 2px;
+    }
+  }
+
+  .students-table__contact--empty {
+    color: var(--muted-foreground);
+  }
+
+  /* На телефоне таблица теснеет: компактные отступы и шрифт. */
+  @media (max-width: 639.98px) {
+    .students-table {
+      font-size: var(--text-xs);
+    }
+
+    .students-table__th,
+    .students-table__cell {
+      padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    }
+  }
+
+  .student-card {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 5);
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .student-head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+  }
+
+  .avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    border-radius: var(--radius-full);
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .student-id {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .student-name {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+
+    &:hover { color: var(--brand); }
+  }
+
+  .student-meta {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .student-contacts {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space));
+  }
+
+  .student-contact {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+    min-width: 0;
+
+    & [data-lucide] {
+      width: 16px;
+      height: 16px;
+      color: var(--muted-foreground);
+    }
+  }
+
+  .student-contact__meta {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .student-payer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+  }
+
+  /* Заглушка будущих модулей: нейтральная плашка без чисел */
+  .student-metrics {
+    padding: calc(var(--space) * 3);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+  }
+
+  .student-metrics__text {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .student-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+    margin-top: auto;
+  }
+
+  .empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 10) calc(var(--space) * 4);
+    text-align: center;
+    color: var(--muted-foreground);
+
+    & [data-lucide] {
+      width: 32px;
+      height: 32px;
+    }
+  }
+
+  .empty-state__title {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .empty-state__text {
+    font-size: var(--text-sm);
+  }
+
+  /* ==========================================================================
+     Модальное окно и секции формы
+     ========================================================================== */
+  .modal-root {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(var(--space) * 4);
+  }
+
+  .modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--overlay);
+  }
+
+  .modal-content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 720px;
+    max-height: 90vh;
+    max-height: 90dvh;
+    /* Скроллится только тело (`.modal-body`): шапка и футер с кнопками
+       остаются на месте при любом объёме контента. */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .modal-header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 6) calc(var(--space) * 6) 0;
+  }
+
+  /* Форма занимает остаток модалки: скроллящееся тело + липкий футер. */
+  .modal-form {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+    padding: calc(var(--space) * 4) calc(var(--space) * 6);
+  }
+
+  .modal-actions {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: flex-end;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 4) calc(var(--space) * 6) calc(var(--space) * 6);
+    border-top: 1px solid var(--border);
+    background: var(--card);
+  }
+
+  .form-section {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 3);
+    margin: 0;
+    padding: calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .form-section__title {
+    padding: 0 calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+
+  .checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+  }
+
+  /* Контакты в форме ученика: аккордеон привязанных строк и поле добавления
+     с поиском по базе. */
+  .contact-rows {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin: 0 0 calc(var(--space) * 4);
+    padding: 0;
+    list-style: none;
+    grid-column: 1 / -1;
+  }
+
+  .contact-rows__empty {
+    padding: calc(var(--space) * 3);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .contact-row {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .contact-row__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space);
+  }
+
+  .contact-row__toggle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    min-width: 0;
+    padding: calc(var(--space) * 3);
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .contact-row__arrow {
+    flex: none;
+    display: inline-flex;
+    color: var(--muted-foreground);
+    transition: transform var(--duration-fast) var(--ease);
+  }
+
+  .contact-row__arrow--open {
+    transform: rotate(90deg);
+  }
+
+  .contact-row__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .contact-row__role {
+    flex: none;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .contact-row__role:empty,
+  .contact-row__phone:empty {
+    display: none;
+  }
+
+  .contact-row__phone {
+    margin-left: auto;
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .contact-row__remove {
+    flex: none;
+    margin-right: calc(var(--space) * 2);
+  }
+
+  .contact-row__form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 4);
+    border-top: 1px solid var(--border);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .contact-row__reminders {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Поле добавления контакта: поиск по базе с фильтрацией по мере ввода. */
+  .contact-add {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    grid-column: 1 / -1;
+  }
+
+  .contact-add__list {
+    margin: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: var(--space);
+    list-style: none;
+    background: var(--popover);
+    color: var(--popover-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+  }
+
+  .contact-add__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    min-height: 32px;
+    padding: 0 calc(var(--space) * 2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease);
+
+    &:hover { background: var(--accent); }
+  }
+
+  .contact-add__option--active {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .contact-add__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .contact-add__phone {
+    flex: none;
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .contact-add__option--active .contact-add__phone {
+    color: var(--accent-foreground);
+  }
+
+  .contact-add__note {
+    padding: calc(var(--space) * 2);
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .contact-suggestion {
+    grid-column: 1 / -1;
+  }
+
+  .contact-hint {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .contact-suggestion__body {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3);
+    border-radius: var(--radius-md);
+    background: var(--brand-soft);
+  }
+
+  /* Модалка и панель фильтров на мобильном: форма на весь экран,
+     фильтры скрыты до нажатия кнопки «Фильтры». */
+  @media (max-width: 639.98px) {
+    .modal-root {
+      padding: 0;
+      align-items: stretch;
+    }
+
+    .modal-content {
+      max-width: none;
+      max-height: none;
+      border-radius: 0;
+    }
+
+    .filters {
+      display: none;
+
+      &.is-open { display: flex; }
+    }
+
+    .filters__search,
+    .filters__status {
+      flex: 1 1 100%;
+      min-width: 0;
+      width: 100%;
+    }
+  }
+
+
   .auth {
     min-height: 100vh;
     min-height: 100dvh;
@@ -906,6 +1698,15 @@
     }
   }
 
+  /* Заголовок страницы с действиями справа (список учеников, карточка) */
+  .page-header--row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+  }
+
   /* ==========================================================================
      Мобильная шапка и нижний таб-бар
      ========================================================================== */
@@ -1023,4 +1824,27 @@
   .mt-4 { margin-top: calc(var(--space) * 4); }
   .mt-5 { margin-top: calc(var(--space) * 5); }
   .hidden { display: none; }
+
+  /* Дополнительные утилиты раскладки */
+  .grow { flex-grow: 1; }
+  .flex-1 { flex: 1; min-width: 0; }
+  .justify-between { justify-content: space-between; }
+  .span-2 { grid-column: span 2; }
+
+  /* Скрыть на телефоне: второстепенные действия не занимают экран */
+  @media (max-width: 639.98px) {
+    .hide-sm { display: none; }
+  }
+
+  /* Показать только на телефоне: кнопка раскрытия панели фильтров.
+     На десктопе панель видна всегда, и кнопка была бы пустым действием. */
+  .show-sm { display: none; }
+
+  @media (max-width: 639.98px) {
+    .show-sm { display: inline-flex; }
+  }
 }
+
+/* Alpine: скрыть до инициализации, иначе модалка мигнёт при загрузке.
+   Правило вне @layer: это не утилита и не компонент, а служебная директива. */
+[x-cloak] { display: none !important; }

@@ -1,0 +1,108 @@
+{# Один контакт в форме ученика: строка-сводка (ФИО · роль · телефон
+   со стрелкой) и раскрывающаяся форма редактирования.
+
+   Макрос используется дважды: для уже привязанных (или введённых) контактов
+   и как инертный шаблон (`<template>`), из которого `students.js` добавляет
+   новый контакт. Для шаблона `index` — строка `__index__`, которую JS
+   заменяет на число; `open=true` означает, что новая строка раскрыта сразу.
+
+   Контекст: index, row, open (по умолчанию false). #}
+{% macro contact_row(index, row, open=false) %}
+<li class="contact-row" data-contact-row
+    x-data="{ open: {{ 'true' if open else 'false' }} }">
+    <input type="hidden" name="contact_id_{{ index }}" value="{{ row.contact_id }}"
+           data-field="contact_id">
+
+    <div class="contact-row__head">
+        {# Сводка раскрывается/сворачивается кликом; стрелка поворачивается
+           вниз через CSS по классу контейнера — иконку lucide Alpine
+           не перепривязывает, поэтому `:class` висит на обёртке. #}
+        <button class="contact-row__toggle" type="button"
+                @click="open = !open"
+                aria-expanded="{{ 'true' if open else 'false' }}"
+                :aria-expanded="open ? 'true' : 'false'">
+            <span class="contact-row__arrow"
+                  :class="open ? 'contact-row__arrow--open' : ''" aria-hidden="true">
+                <i data-lucide="chevron-right"></i>
+            </span>
+            <span class="contact-row__name" data-summary="full_name">{{ row.full_name }}</span>
+            <span class="contact-row__role" data-summary="relation">{{ row.relation }}</span>
+            <span class="contact-row__phone" data-summary="phone">{{ row.phone }}</span>
+        </button>
+        <button class="btn btn--ghost btn--icon contact-row__remove" type="button"
+                @click="removeRow($el)" aria-label="Убрать контакт">
+            <i data-lucide="trash-2"></i>
+        </button>
+    </div>
+
+    <div class="contact-row__form" x-show="open" x-cloak>
+        <div class="field">
+            <label class="label" for="contact-name-{{ index }}">ФИО</label>
+            <input class="input" id="contact-name-{{ index }}" type="text"
+                   name="contact_full_name_{{ index }}" value="{{ row.full_name }}"
+                   data-field="full_name"
+                   autocomplete="off">
+        </div>
+
+        <div class="field">
+            <label class="label" for="contact-relation-{{ index }}">Роль</label>
+            <input class="input" id="contact-relation-{{ index }}" type="text"
+                   name="contact_relation_{{ index }}" value="{{ row.relation }}"
+                   data-field="relation"
+                   placeholder="мама, папа, бабушка…">
+        </div>
+
+        {# Ленивый поиск: по введённому телефону или почте находим контакт
+           из базы и предлагаем привязать его вместо создания дубля. #}
+        <div class="field">
+            <label class="label" for="contact-phone-{{ index }}">Телефон</label>
+            <input class="input" id="contact-phone-{{ index }}" type="tel"
+                   name="contact_phone_{{ index }}" value="{{ row.phone }}"
+                   data-field="phone"
+                   data-phone-mask
+                   inputmode="tel"
+                   placeholder="+7 555 555-55-55"
+                   hx-get="/tutor/students/contacts/lookup"
+                   hx-trigger="input changed delay:400ms, change delay:400ms"
+                   hx-target="#contact-suggestion-{{ index }}"
+                   hx-swap="innerHTML"
+                   hx-include="closest .contact-row"
+                   hx-vals='{"row_index": "{{ index }}", "student_id": "{{ student_id or "" }}"}'>
+        </div>
+
+        <div class="field">
+            <label class="label" for="contact-email-{{ index }}">Email</label>
+            <input class="input" id="contact-email-{{ index }}" type="email"
+                   name="contact_email_{{ index }}" value="{{ row.email }}"
+                   data-field="email"
+                   hx-get="/tutor/students/contacts/lookup"
+                   hx-trigger="input changed delay:400ms, change delay:400ms"
+                   hx-target="#contact-suggestion-{{ index }}"
+                   hx-swap="innerHTML"
+                   hx-include="closest .contact-row"
+                   hx-vals='{"row_index": "{{ index }}", "student_id": "{{ student_id or "" }}"}'>
+        </div>
+
+        <div class="contact-row__reminders">
+            <span class="label">Напоминания</span>
+            <label class="checkbox">
+                <input type="checkbox" name="contact_remind_lesson_{{ index }}"
+                       {% if row.remind_lesson %}checked{% endif %}>
+                <span>Об уроке</span>
+            </label>
+            <label class="checkbox">
+                <input type="checkbox" name="contact_remind_homework_{{ index }}"
+                       {% if row.remind_homework %}checked{% endif %}>
+                <span>О домашке</span>
+            </label>
+            <label class="checkbox">
+                <input type="checkbox" name="contact_remind_cancel_{{ index }}"
+                       {% if row.remind_cancel %}checked{% endif %}>
+                <span>Об отмене</span>
+            </label>
+        </div>
+
+        <div class="contact-suggestion" id="contact-suggestion-{{ index }}"></div>
+    </div>
+</li>
+{% endmacro %}

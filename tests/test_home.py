@@ -125,7 +125,15 @@ def test_expired_session_redirects(client, tutor_factory):
 
 
 def test_session_of_deleted_tutor_redirects(client, tutor_factory):
-    """Сессия удалённого репетитора не открывает кабинет."""
+    """Сессия удалённого репетитора не открывает кабинет.
+
+    С включённой `PRAGMA foreign_keys=ON` сессия не может ссылаться на
+    несуществующего репетитора, поэтому при удалении репетитора сначала
+    удаляются его сессии — ровно так, как это сделает будущий сценарий
+    удаления аккаунта.
+    """
+    from sqlalchemy import delete
+
     from app.database import SessionLocal
     from app.tutor.models.tutor import Tutor
 
@@ -135,6 +143,7 @@ def test_session_of_deleted_tutor_redirects(client, tutor_factory):
         data={"email": "gone@example.com", "password": PASSWORD},
     )
     with SessionLocal() as db:
+        db.execute(delete(TutorSession).where(TutorSession.tutor_id == tutor_id))
         db.delete(db.get(Tutor, tutor_id))
         db.commit()
 

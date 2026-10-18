@@ -71,3 +71,69 @@ def tutor_factory():
             return tutor.id
 
     return _create
+
+
+@pytest.fixture()
+def student_factory(tutor_factory):
+    """Создаёт ученика в тестовой БД и возвращает его id.
+
+    `tutor_id` по умолчанию берётся у свежесозданного репетитора, поэтому
+    тест, которому важен только ученик, не обязан заводить репетитора сам.
+    Значения по умолчанию уникальны, чтобы фабрику можно было звать подряд.
+    """
+
+    def _create(
+        tutor_id: str | None = None,
+        first_name: str | None = None,
+        kind: str = "child",
+        **extra,
+    ):
+        from uuid import uuid4
+
+        from app.database import SessionLocal
+        from app.student.models.student import Student
+
+        if tutor_id is None:
+            tutor_id = tutor_factory()
+        if first_name is None:
+            first_name = f"Ученик{uuid4().hex[:8]}"
+
+        with SessionLocal() as session:
+            student = Student(tutor_id=tutor_id, first_name=first_name, kind=kind, **extra)
+            session.add(student)
+            session.commit()
+            return student.id
+
+    return _create
+
+
+@pytest.fixture()
+def contact_factory(tutor_factory):
+    """Создаёт контакт взрослого в тестовой БД и возвращает его id.
+
+    `tutor_id` по умолчанию — у свежесозданного репетитора; передайте его
+    явно, если контакт должен принадлежать тому же репетитору, что и ученик.
+    """
+
+    def _create(
+        tutor_id: str | None = None,
+        full_name: str | None = None,
+        **extra,
+    ):
+        from uuid import uuid4
+
+        from app.database import SessionLocal
+        from app.student.models.contact import Contact
+
+        if tutor_id is None:
+            tutor_id = tutor_factory()
+        if full_name is None:
+            full_name = f"Контакт {uuid4().hex[:8]}"
+
+        with SessionLocal() as session:
+            contact = Contact(tutor_id=tutor_id, full_name=full_name, **extra)
+            session.add(contact)
+            session.commit()
+            return contact.id
+
+    return _create

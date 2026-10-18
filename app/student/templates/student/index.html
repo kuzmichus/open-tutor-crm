@@ -1,12 +1,121 @@
 {% extends "base.html" %}
 {% block title %}Ученики — Open Tutor CRM{% endblock %}
+
 {% block body %}
-    <h1>Ученики</h1>
-    <ul>
-    {% for student in students %}
-        <li>{{ student.name }} &lt;{{ student.email }}&gt;</li>
-    {% else %}
-        <li>Пока нет учеников</li>
-    {% endfor %}
-    </ul>
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container" x-data="studentsPage()">
+            <div class="page-header page-header--row">
+                <div>
+                    <h1>Ученики</h1>
+                    <p>Карточки учеников: контакты, плательщик и напоминания.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button class="btn btn--ghost btn--sm show-sm" type="button"
+                            @click="filtersOpen = !filtersOpen"
+                            :aria-expanded="filtersOpen ? 'true' : 'false'"
+                            aria-controls="students-filters">
+                        <i data-lucide="sliders-horizontal"></i>
+                        Фильтры
+                    </button>
+                    <button class="btn btn--primary" type="button"
+                            hx-get="/tutor/students/new"
+                            hx-target="#modal"
+                            hx-swap="innerHTML">
+                        <i data-lucide="plus"></i>
+                        Добавить ученика
+                    </button>
+                </div>
+            </div>
+
+            <section class="card students-card">
+                <div class="card-header">
+                    <form id="students-filters"
+                          class="filters"
+                          :class="filtersOpen ? 'is-open' : ''"
+                          role="search"
+                          hx-get="/tutor/students/list"
+                          hx-target="#students-grid"
+                          hx-swap="innerHTML"
+                          hx-trigger="input changed delay:300ms from:input, change from:select, search">
+                        <label class="sr-only" for="students-search">Поиск учеников</label>
+                        <input class="input filters__search"
+                               id="students-search"
+                               type="search"
+                               name="q"
+                               value="{{ q }}"
+                               placeholder="Имя, фамилия, телефон или email">
+
+                        <label class="sr-only" for="students-status">Статус</label>
+                        <select class="input filters__status" id="students-status" name="status">
+                            <option value="" {% if not status %}selected{% endif %}>Все, кроме архива</option>
+                            <option value="new" {% if status == 'new' %}selected{% endif %}>Новые</option>
+                            <option value="active" {% if status == 'active' %}selected{% endif %}>Активные</option>
+                            <option value="archived" {% if status == 'archived' %}selected{% endif %}>В архиве</option>
+                        </select>
+                    </form>
+
+                    <div class="view-toggle" role="group" aria-label="Вид списка">
+                        <button class="btn btn--sm btn--outline"
+                                type="button"
+                                data-view="grid"
+                                :class="view === 'grid' ? 'is-active' : ''"
+                                @click="setView('grid')">
+                            <i data-lucide="layout-grid"></i>
+                            Сетка
+                        </button>
+                        <button class="btn btn--sm btn--outline"
+                                type="button"
+                                data-view="list"
+                                :class="view === 'list' ? 'is-active' : ''"
+                                @click="setView('list')">
+                            <i data-lucide="list"></i>
+                            Список
+                        </button>
+                    </div>
+                </div>
+
+                {# После сохранения перезапрашиваем сетку: статус мог смениться
+                   (например, на «В архиве»), и карточка должна исчезнуть из
+                   списка по умолчанию. Поиск и фильтр сохраняются через
+                   #students-filters. #}
+                <div id="students-grid"
+                     class="students-grid"
+                     :class="view === 'list' ? 'students-grid--list' : ''"
+                     hx-get="/tutor/students/list"
+                     hx-trigger="student-saved from:body"
+                     hx-include="#students-filters"
+                     hx-swap="innerHTML">
+                    {% include "student/_grid.html" %}
+                </div>
+            </section>
+
+            <!-- Сюда htmx вставляет форму создания/редактирования -->
+            <div id="modal"></div>
+        </div>
+    </main>
+
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/tutor/students" class="bottom-bar__item bottom-bar__item--active" aria-current="page">
+            <i data-lucide="users"></i><span>Ученики</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
 {% endblock %}
