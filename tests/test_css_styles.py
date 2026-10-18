@@ -11,9 +11,10 @@ from pathlib import Path
 
 import pytest
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "app" / "static"
+ROOT = Path(__file__).resolve().parent.parent
+STATIC_DIR = ROOT / "app" / "static"
 STYLES = (STATIC_DIR / "styles.css").read_text(encoding="utf-8")
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "app" / "templates"
+TEMPLATES_DIR = ROOT / "app" / "templates"
 
 
 def _without_comments(css: str) -> str:
@@ -58,3 +59,33 @@ def test_template_classes_have_css_rules(template: str):
     used = {c for c in used if c.startswith(prefix)}
     missing = sorted(c for c in used if f".{c}" not in STYLES)
     assert not missing, f"Классы без CSS-правил: {', '.join(missing)}"
+
+
+STUDENT_TEMPLATES_DIR = ROOT / "app" / "student" / "templates" / "student"
+
+
+def _literal_classes(html: str) -> set[str]:
+    """Литеральные классы из разметки.
+
+    Alpine-привязки (`:class`, `x-bind:class`) и Jinja-выражения внутри
+    атрибута — не имена классов, а значения, вычисляемые на клиенте или
+    на сервере, поэтому в проверку они не попадают.
+    """
+    html = re.sub(r"\{\{.*?\}\}|\{%.*?%\}", " ", html, flags=re.S)
+    used: set[str] = set()
+    for attr in re.findall(r'(?<![:\w-])class="([^"]*)"', html):
+        used.update(token for token in attr.split() if token)
+    return used
+
+
+@pytest.mark.parametrize(
+    "template",
+    sorted(p.name for p in STUDENT_TEMPLATES_DIR.glob("*.html")),
+)
+def test_student_template_classes_have_css_rules(template: str):
+    """Каждый класс из шаблонов учеников описан в styles.css."""
+    html = (STUDENT_TEMPLATES_DIR / template).read_text(encoding="utf-8")
+    missing = sorted(c for c in _literal_classes(html) if f".{c}" not in STYLES)
+    assert not missing, (
+        f"{template}: классы без CSS-правил: {', '.join(missing)}"
+    )

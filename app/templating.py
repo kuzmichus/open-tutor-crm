@@ -20,3 +20,11 @@ TEMPLATE_DIRS = [
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
+
+# Функции отображения модуля учеников (подписи статусов, инициалы, полное
+# имя). Регистрируются здесь, чтобы шаблоны работали и без импорта вьюх.
+from app.student.services.presentation import (  # noqa: E402
+    register_template_helpers,
+)
+
+register_template_helpers()

@@ -105,7 +105,15 @@
   }
 
   /* --- Lucide ----------------------------------------------------------- */
-  if (typeof lucide !== "undefined") {
+  /* Отрисовка иконок повторяется после каждого htmx-свопа: модалка формы и
+     карточки приходят по сети уже после первого обхода страницы, и их иконки
+     (<i data-lucide>) иначе остались бы пустыми. Тот же хелпер вызывает
+     students.js при добавлении строки контакта (`window.renderIcons`). */
+  function renderIcons() {
+    if (typeof lucide === "undefined") return;
     lucide.createIcons({ attrs: { "stroke-width": 2 } });
   }
+  window.renderIcons = renderIcons;
+  renderIcons();
+  document.addEventListener("htmx:afterSwap", renderIcons);
 })();

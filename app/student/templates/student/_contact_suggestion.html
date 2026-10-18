@@ -1,0 +1,27 @@
+{# Подсказка ленивого поиска контакта.
+   Контекст: found = {"contact": Contact, "already_linked": bool} | None. #}
+{% if found and found.already_linked %}
+<p class="contact-hint">Этот контакт уже добавлен к ученику.</p>
+{% elif found %}
+<div class="contact-suggestion__body">
+    <p class="contact-hint">
+        Найден контакт: <strong>{{ found.contact.full_name }}</strong>
+        {% if found.contact.phone %}· {{ found.contact.phone }}{% endif %}
+        {% if found.contact.email %}· {{ found.contact.email }}{% endif %}
+    </p>
+    <div class="flex flex-wrap gap-2">
+        <button class="btn btn--sm btn--outline" type="button"
+                data-contact-id="{{ found.contact.id }}"
+                data-contact-name="{{ found.contact.full_name }}"
+                data-contact-phone="{{ found.contact.phone or '' }}"
+                data-contact-email="{{ found.contact.email or '' }}"
+                @click="useContact($el)">
+            Использовать
+        </button>
+        <button class="btn btn--sm btn--ghost" type="button"
+                @click="dismissSuggestion($el)">
+            Это другой человек
+        </button>
+    </div>
+</div>
+{% endif %}

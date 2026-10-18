@@ -6,7 +6,7 @@
 
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -14,6 +14,19 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 
 _DATABASE_URL = settings.database_url
+
+
+@event.listens_for(Engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, connection_record) -> None:
+    """Включает проверку внешних ключей в SQLite на каждом соединении.
+
+    По умолчанию SQLite не проверяет объявленные FK (pragma выключена),
+    поэтому удаление родителя оставляло бы сирот. Слушатель на классе Engine
+    покрывает и dev-базу, и in-memory базу в тестах.
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 
 def _connect_args(url: str) -> dict:

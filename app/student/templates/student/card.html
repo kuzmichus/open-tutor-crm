@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{{ student_full_name(card.student) }} — Open Tutor CRM{% endblock %}
+
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            {% set student = card.student %}
+            <div class="page-header page-header--row">
+                <div class="flex items-center gap-2">
+                    <a class="btn btn--ghost btn--icon" href="/tutor/students" aria-label="К списку учеников">
+                        <i data-lucide="arrow-left"></i>
+                    </a>
+                    <div>
+                        <h1>{{ student_full_name(student) }}</h1>
+                        <p>
+                            {{ kind_label(student.kind) }}
+                            <span class="chip chip--{{ student.status }}">{{ status_label(student.status) }}</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button class="btn btn--ghost btn--sm" type="button"
+                            hx-get="/tutor/students/{{ student.id }}/edit?from_card=1"
+                            hx-target="#modal"
+                            hx-swap="innerHTML">
+                        <i data-lucide="pencil"></i>
+                        Редактировать
+                    </button>
+                    <form method="post" action="/tutor/students/{{ student.id }}/archive">
+                        <button class="btn btn--ghost btn--sm" type="submit">
+                            <i data-lucide="archive"></i>
+                            {% if student.status == 'archived' %}Вернуть из архива{% else %}В архив{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="profile-grid">
+                <section class="card">
+                    <h2 class="card__title">Данные ученика</h2>
+                    <div class="profile-grid mt-4">
+                        <div class="field">
+                            <span class="label">Имя</span>
+                            <span>{{ student.first_name }}</span>
+                        </div>
+                        {% if student.last_name %}
+                        <div class="field">
+                            <span class="label">Фамилия</span>
+                            <span>{{ student.last_name }}</span>
+                        </div>
+                        {% endif %}
+                        {% if student.phone %}
+                        <div class="field">
+                            <span class="label">Телефон</span>
+                            <span>{{ student.phone }}</span>
+                        </div>
+                        {% endif %}
+                        {% if student.email %}
+                        <div class="field">
+                            <span class="label">Email</span>
+                            <span>{{ student.email }}</span>
+                        </div>
+                        {% endif %}
+                        {% if student.kind == 'child' and student.grade %}
+                        <div class="field">
+                            <span class="label">Класс</span>
+                            <span>{{ student.grade }}</span>
+                        </div>
+                        {% endif %}
+                        {% if student.kind == 'child' and student.school %}
+                        <div class="field">
+                            <span class="label">Школа</span>
+                            <span>{{ student.school }}</span>
+                        </div>
+                        {% endif %}
+                        {% if student.level %}
+                        <div class="field">
+                            <span class="label">Уровень</span>
+                            <span>{{ student.level }}</span>
+                        </div>
+                        {% endif %}
+                        {% if student.timezone %}
+                        <div class="field">
+                            <span class="label">Часовой пояс</span>
+                            <span>{{ student.timezone }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if student.notes %}
+                    <div class="field mt-4">
+                        <span class="label">Заметки</span>
+                        <p class="card__desc">{{ student.notes }}</p>
+                    </div>
+                    {% endif %}
+                </section>
+
+                <section class="card">
+                    <h2 class="card__title">Контакты</h2>
+                    {% if card.contacts %}
+                    <ul class="student-contacts mt-4">
+                        {% for item in card.contacts %}
+                        <li class="student-contact">
+                            <i data-lucide="user-round"></i>
+                            <span class="truncate">
+                                {{ item.contact.full_name }}{% if item.link.relation %} — {{ item.link.relation }}{% endif %}
+                            </span>
+                            {% if item.contact.phone %}<span class="student-contact__meta">{{ item.contact.phone }}</span>{% endif %}
+                            {% if receives_reminders(item.link) %}
+                            <span class="chip">напоминания</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="card__desc mt-4">Контакты не добавлены.</p>
+                    {% endif %}
+
+                    <div class="field mt-4">
+                        <span class="label">Плательщик</span>
+                        <span>{% if card.payer %}{{ card.payer.full_name }}{% else %}платит сам ученик{% endif %}</span>
+                    </div>
+                </section>
+            </div>
+
+            <section class="card mt-4">
+                <h2 class="card__title">Напоминания</h2>
+                <div class="flex flex-wrap gap-2 mt-4">
+                    <span class="chip">{% if student.remind_lesson %}Об уроке: включено{% else %}Об уроке: выключено{% endif %}</span>
+                    <span class="chip">{% if student.remind_homework %}О домашке: включено{% else %}О домашке: выключено{% endif %}</span>
+                    <span class="chip">{% if student.remind_cancel %}Об отмене: включено{% else %}Об отмене: выключено{% endif %}</span>
+                </div>
+            </section>
+
+            {# Заглушка будущих модулей: без чисел и без ссылок на несуществующие
+               маршруты уроков и отчётов. #}
+            <section class="card mt-4">
+                <h2 class="card__title">Уроки и оплаты</h2>
+                <div class="student-metrics mt-4">
+                    <p class="student-metrics__text">
+                        Уроки, оплаты и задолженность появятся в следующих обновлениях.
+                    </p>
+                </div>
+            </section>
+
+            <div id="modal"></div>
+        </div>
+    </main>
+{% endblock %}

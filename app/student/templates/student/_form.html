@@ -1,0 +1,277 @@
+{# Модальная форма ученика: создание и редактирование.
+
+   Модалка состоит из шапки, скроллящегося тела (`.modal-body`) и футера
+   с кнопками (`.modal-actions`) — кнопки «Отмена»/«Сохранить» не уезжают
+   за пределы экрана вместе с контентом. Внутри тела — вкладки: «Общее»
+   (все поля, контакты и плательщик), «Платежи» (заглушка) и «Настройки»
+   (напоминания). Панели переключаются через `x-show`, поэтому поля всех
+   вкладок остаются в DOM и уходят в POST.
+
+   Контекст: form, contact_rows, contact_rows_count, contact_rows_open,
+   contact_options_json, errors, student, student_id, action, title,
+   from_card, statuses, status_label, timezone_options_json. #}
+<div class="modal-root"
+     x-data="studentForm('{{ form.kind }}')"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     @student-saved.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="student-form-title">
+        <div class="modal-header">
+            <h2 id="student-form-title">{{ title }}</h2>
+            <button class="btn btn--ghost btn--icon" type="button" @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-post="{{ action }}"
+              hx-target="#modal"
+              hx-swap="innerHTML"
+              @submit="revealInvalidField">
+            <input type="hidden" name="from_card" value="{{ '1' if from_card else '' }}">
+
+            <div class="modal-body">
+                {% if errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="tabs modal-tabs" role="tablist" aria-label="Разделы формы ученика">
+                    <button class="tab" type="button" role="tab"
+                            id="student-tab-general"
+                            aria-controls="student-panel-general"
+                            :aria-selected="tab === 'general' ? 'true' : 'false'"
+                            :class="tab === 'general' ? 'tab--active' : ''"
+                            @click="tab = 'general'">
+                        Общее
+                    </button>
+                    <button class="tab" type="button" role="tab"
+                            id="student-tab-payments"
+                            aria-controls="student-panel-payments"
+                            :aria-selected="tab === 'payments' ? 'true' : 'false'"
+                            :class="tab === 'payments' ? 'tab--active' : ''"
+                            @click="tab = 'payments'">
+                        Платежи
+                    </button>
+                    <button class="tab" type="button" role="tab"
+                            id="student-tab-settings"
+                            aria-controls="student-panel-settings"
+                            :aria-selected="tab === 'settings' ? 'true' : 'false'"
+                            :class="tab === 'settings' ? 'tab--active' : ''"
+                            @click="tab = 'settings'">
+                        Настройки
+                    </button>
+                </div>
+
+                {# Вкладка «Общее»: все поля, контакты и плательщик. #}
+                <div class="tab-panel"
+                     id="student-panel-general"
+                     data-tab-panel="general"
+                     role="tabpanel" aria-labelledby="student-tab-general"
+                     x-show="tab === 'general'" x-cloak>
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Общее</legend>
+
+                        <div class="field">
+                            <span class="label" id="kind-label">Кто ученик</span>
+                            <div class="tabs" role="radiogroup" aria-labelledby="kind-label">
+                                <label class="tab" :class="kind === 'child' ? 'tab--active' : ''">
+                                    <input class="sr-only" type="radio" name="kind" value="child"
+                                           x-model="kind" {% if form.kind != 'adult' %}checked{% endif %}>
+                                    Ребёнок
+                                </label>
+                                <label class="tab" :class="kind === 'adult' ? 'tab--active' : ''">
+                                    <input class="sr-only" type="radio" name="kind" value="adult"
+                                           x-model="kind" {% if form.kind == 'adult' %}checked{% endif %}>
+                                    Взрослый
+                                </label>
+                            </div>
+                        </div>
+
+                        {# Статус — рядом с подтипом: это такие же «переключатели»
+                           карточки, а имя и фамилия идут следующей строкой. #}
+                        <div class="field">
+                            <label class="label" for="student-status">Статус</label>
+                            <select class="input" id="student-status" name="status">
+                                {% for value in statuses %}
+                                <option value="{{ value }}"
+                                        {% if form.status == value %}selected{% endif %}>
+                                    {{ status_label(value) }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="student-first-name">Имя</label>
+                            <input class="input" id="student-first-name" type="text" name="first_name"
+                                   value="{{ form.first_name }}" required>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="student-last-name">Фамилия</label>
+                            <input class="input" id="student-last-name" type="text" name="last_name"
+                                   value="{{ form.last_name }}">
+                        </div>
+                        <div class="field">
+                            <label class="label" for="student-phone">Телефон</label>
+                            <input class="input" id="student-phone" type="tel" name="phone"
+                                   value="{{ form.phone }}" inputmode="tel"
+                                   placeholder="+7 555 555-55-55"
+                                   data-phone-mask>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="student-email">Email</label>
+                            <input class="input" id="student-email" type="email" name="email"
+                                   value="{{ form.email }}">
+                        </div>
+
+                        {# Класс и школа относятся только к ребёнку: для взрослого
+                           поля скрыты и не сохраняются. #}
+                        <div class="field" data-depends-on-kind="child" x-show="kind === 'child'">
+                            <label class="label" for="student-grade">Класс</label>
+                            <input class="input" id="student-grade" type="number" name="grade"
+                                   min="1" max="11" value="{{ form.grade }}">
+                        </div>
+                        <div class="field" data-depends-on-kind="child" x-show="kind === 'child'">
+                            <label class="label" for="student-school">Школа</label>
+                            <input class="input" id="student-school" type="text" name="school"
+                                   value="{{ form.school }}">
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="student-level">Уровень</label>
+                            <input class="input" id="student-level" type="text" name="level"
+                                   value="{{ form.level }}">
+                        </div>
+                        {# Часовой пояс — селект с поиском: поле остаётся текстовым,
+                           чтобы значение уходило в форму как есть, а варианты зон
+                           (IANA TZDB) лежат в `data-options` и фильтруются вводом. #}
+                        <div class="field">
+                            <label class="label" for="student-timezone">Часовой пояс</label>
+                            <div class="combobox"
+                                 x-data="combobox()"
+                                 data-options="{{ timezone_options_json }}">
+                                <div class="combobox__control">
+                                    <input class="input" id="student-timezone" type="text" name="timezone"
+                                           value="{{ form.timezone }}" placeholder="Europe/Moscow"
+                                           autocomplete="off" spellcheck="false"
+                                           x-ref="input"
+                                           role="combobox" aria-autocomplete="list"
+                                           aria-controls="student-timezone-listbox"
+                                           :aria-expanded="open ? 'true' : 'false'"
+                                           @input="onInput($event.target.value)"
+                                           @focus="openList()"
+                                           @blur="closeList()"
+                                           @keydown="onKeydown($event)">
+                                    <button class="combobox__clear" type="button"
+                                            x-show="query !== ''" x-cloak
+                                            @mousedown.prevent @click="clear()"
+                                            aria-label="Очистить часовой пояс">&times;</button>
+                                </div>
+                                <ul class="combobox__list" id="student-timezone-listbox"
+                                    role="listbox" x-ref="list" x-show="open" x-cloak>
+                                    <template x-for="(item, index) in shown" :key="item.value">
+                                        <li class="combobox__option" role="option"
+                                            :class="index === active ? 'combobox__option--active' : ''"
+                                            :aria-selected="index === active ? 'true' : 'false'"
+                                            @mousedown.prevent @click="choose(item)">
+                                            <span class="combobox__name" x-text="item.value"></span>
+                                            <span class="combobox__offset" x-text="item.label"></span>
+                                        </li>
+                                    </template>
+                                    <li class="combobox__note" x-show="matches.length === 0" x-cloak>
+                                        Ничего не найдено
+                                    </li>
+                                    <li class="combobox__note" x-show="hiddenCount > 0" x-cloak
+                                        x-text="'… и ещё ' + hiddenCount + ': уточните поиск'"></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="field span-2">
+                            <label class="label" for="student-notes">Заметки</label>
+                            <textarea class="input" id="student-notes" name="notes" rows="3">{{ form.notes }}</textarea>
+                        </div>
+                    </fieldset>
+
+                    {% include "student/_contacts.html" %}
+
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Плательщик</legend>
+                        <div class="field">
+                            <label class="label" for="student-payer">Кто оплачивает занятия</label>
+                            <select class="input" id="student-payer" name="payer_contact_id">
+                                <option value="" {% if not form.payer_contact_id %}selected{% endif %}>
+                                    Сам ученик
+                                </option>
+                                {% for row in contact_rows %}
+                                {% if row.contact_id %}
+                                <option value="{{ row.contact_id }}"
+                                        {% if form.payer_contact_id == row.contact_id %}selected{% endif %}>
+                                    {{ row.full_name }}{% if row.relation %} — {{ row.relation }}{% endif %}
+                                </option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                            <p class="card__desc">Выбрать можно только контакт, привязанный к ученику.</p>
+                        </div>
+                    </fieldset>
+                </div>
+
+                {# Вкладка «Платежи»: заглушка до появления счетов и оплат. #}
+                <div class="tab-panel"
+                     id="student-panel-payments"
+                     data-tab-panel="payments"
+                     role="tabpanel" aria-labelledby="student-tab-payments"
+                     x-show="tab === 'payments'" x-cloak>
+                    <div class="tab-panel__empty">
+                        <i data-lucide="wallet"></i>
+                        <p>Счета, оплаты и баланс ученика появятся здесь позже.</p>
+                    </div>
+                </div>
+
+                {# Вкладка «Настройки»: уведомления, которые раньше жили
+                   внизу общей формы. #}
+                <div class="tab-panel"
+                     id="student-panel-settings"
+                     data-tab-panel="settings"
+                     role="tabpanel" aria-labelledby="student-tab-settings"
+                     x-show="tab === 'settings'" x-cloak>
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Напоминания ученику</legend>
+                        <div class="flex flex-wrap gap-2">
+                            <label class="checkbox">
+                                <input type="checkbox" name="remind_lesson"
+                                       {% if form.remind_lesson %}checked{% endif %}>
+                                <span>Об уроке</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" name="remind_homework"
+                                       {% if form.remind_homework %}checked{% endif %}>
+                                <span>О домашнем задании</span>
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" name="remind_cancel"
+                                       {% if form.remind_cancel %}checked{% endif %}>
+                                <span>Об отмене урока</span>
+                            </label>
+                        </div>
+                    </fieldset>
+                </div>
+            </div>
+
+            {# Футер вне скроллящейся области: кнопки всегда на виду. #}
+            <div class="modal-actions">
+                <button class="btn btn--ghost" type="button" @click="close()">Отмена</button>
+                <button class="btn btn--primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>

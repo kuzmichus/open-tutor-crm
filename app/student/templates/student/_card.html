@@ -1,0 +1,89 @@
+{# Карточка одного ученика. Контекст: card = {student, contacts, payer}. #}
+{% set student = card.student %}
+<article class="student-card" id="student-card-{{ student.id }}">
+    <div class="student-head">
+        <span class="avatar" aria-hidden="true">{{ student_initials(student) }}</span>
+        <div class="student-id">
+            <a class="student-name" href="/tutor/students/{{ student.id }}">
+                {{ student_full_name(student) }}
+            </a>
+            <span class="student-meta">
+                {{ kind_label(student.kind) }}{% if student.grade %}, {{ student.grade }} класс{% endif %}
+            </span>
+        </div>
+        <span class="chip chip--{{ student.status }}">{{ status_label(student.status) }}</span>
+    </div>
+
+    {% if student.phone or student.email or student.school %}
+    <ul class="student-contacts">
+        {% if student.phone %}
+        <li class="student-contact">
+            <i data-lucide="phone"></i>
+            <span>{{ student.phone }}</span>
+        </li>
+        {% endif %}
+        {% if student.email %}
+        <li class="student-contact">
+            <i data-lucide="mail"></i>
+            <span class="truncate">{{ student.email }}</span>
+        </li>
+        {% endif %}
+        {% if student.kind == 'child' and student.school %}
+        <li class="student-contact">
+            <i data-lucide="school"></i>
+            <span class="truncate">{{ student.school }}</span>
+        </li>
+        {% endif %}
+    </ul>
+    {% endif %}
+
+    {% if card.contacts %}
+    <ul class="student-contacts">
+        {% for item in card.contacts %}
+        <li class="student-contact">
+            <i data-lucide="user-round"></i>
+            <span class="truncate">
+                {{ item.contact.full_name }}{% if item.link.relation %} — {{ item.link.relation }}{% endif %}
+            </span>
+            {% if receives_reminders(item.link) %}
+            <span class="chip">напоминания</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <p class="student-payer">
+        <span class="label">Плательщик</span>
+        {% if card.payer %}
+            <span>{{ card.payer.full_name }}</span>
+        {% else %}
+            <span>платит сам ученик</span>
+        {% endif %}
+    </p>
+
+    {# Заглушка будущих модулей: без чисел и без ссылок на несуществующие
+       маршруты — иначе «0 ₽» читалось бы как утверждение об отсутствии долга. #}
+    <div class="student-metrics">
+        <p class="student-metrics__text">
+            Уроки, оплаты и задолженность появятся в следующих обновлениях.
+        </p>
+    </div>
+
+    <div class="student-actions">
+        <button class="btn btn--ghost btn--sm" type="button"
+                hx-get="/tutor/students/{{ student.id }}/edit"
+                hx-target="#modal"
+                hx-swap="innerHTML">
+            <i data-lucide="pencil"></i>
+            Редактировать
+        </button>
+        <button class="btn btn--ghost btn--sm" type="button"
+                hx-post="/tutor/students/{{ student.id }}/archive"
+                hx-target="#student-card-{{ student.id }}"
+                hx-swap="outerHTML">
+            <i data-lucide="archive"></i>
+            {% if student.status == 'archived' %}Вернуть из архива{% else %}В архив{% endif %}
+        </button>
+    </div>
+</article>
