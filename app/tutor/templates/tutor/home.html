@@ -80,21 +80,38 @@
                     </button>
                 </form>
             </section>
+
+            <!-- Заглушка дашборда: приветствие и часы (hx-get /time) -->
+            <section class="card mt-5">
+                <h2 class="card__title">Hello world</h2>
+                <p class="card__desc">Дата и время (обновляется каждую секунду):</p>
+                <div id="clock"
+                     hx-get="/time"
+                     hx-trigger="every 1s"
+                     hx-swap="innerHTML">{{ now }}</div>
+
+                <div class="flex flex-wrap gap-2 mt-4">
+                    <span class="chip chip--regular">Обычный урок</span>
+                    <span class="chip chip--cancelled">Отменён</span>
+                    <span class="chip chip--unplanned">Незапланирован</span>
+                    <span class="chip chip--rescheduled">Перенесён</span>
+                </div>
+            </section>
         </div>
     </main>
 
     <!-- Нижний таб-бар (мобилка) -->
     <nav class="bottom-bar" aria-label="Быстрая навигация">
-        <a href="/calendar" class="bottom-bar__item">
+        <a href="/tutor/calendar" class="bottom-bar__item">
             <i data-lucide="calendar"></i><span>Календарь</span>
         </a>
         <a href="/tutor/" class="bottom-bar__item bottom-bar__item--active" aria-current="page">
             <i data-lucide="layout-dashboard"></i><span>Главная</span>
         </a>
-        <a href="/bookings" class="bottom-bar__item">
+        <a href="/tutor/bookings" class="bottom-bar__item">
             <i data-lucide="calendar-check"></i><span>Брони</span>
         </a>
-        <a href="/tasks" class="bottom-bar__item">
+        <a href="/tutor/tasks" class="bottom-bar__item">
             <i data-lucide="square-check-big"></i><span>Задачи</span>
         </a>
         <a href="#" class="bottom-bar__item" data-sidebar-open>

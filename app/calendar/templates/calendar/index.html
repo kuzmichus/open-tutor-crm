@@ -1,0 +1,39 @@
+{# Полная страница календаря: сайдбар + карточка с областью календаря. #}
+{% extends "base.html" %}
+{% block title %}Календарь — Open Tutor CRM{% endblock %}
+
+{# Клиентская интерактивность (hover четвертей, модалка, drag). Подключается
+   до alpine.min.js — см. комментарий к {% block head %} в base.html. #}
+{% block head %}
+    <script src="/static/calendar.js" defer></script>
+{% endblock %}
+
+{% block body %}
+    {% set active_page = 'calendar' %}
+    {% set user_name = tutor.name if tutor else 'Репетитор' %}
+    {% set user_role = 'Владелец' %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <!-- Основной контент: карточка календаря на всю высоту -->
+    <main class="main">
+        <div class="main__container cal-page">
+            <section class="card cal-card">
+                {# Корень Alpine-компонента живёт вне области подмены: htmx
+                   меняет только содержимое #calendar-swap, состояние
+                   (hover, модалка, drag) переживает листание недель. #}
+                <div id="calendar-swap" x-data="calendarGrid"
+                     data-students='{{ demo_students | tojson }}'>
+                    {% include "calendar/_area.html" %}
+                </div>
+            </section>
+        </div>
+    </main>
+{% endblock %}

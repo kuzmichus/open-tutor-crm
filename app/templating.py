@@ -17,6 +17,7 @@ TEMPLATE_DIRS = [
     _APP_DIR / "templates",  # общие шаблоны
     _APP_DIR / "tutor" / "templates",  # модуль tutor
     _APP_DIR / "student" / "templates",  # модуль student
+    _APP_DIR / "calendar" / "templates",  # модуль calendar
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)

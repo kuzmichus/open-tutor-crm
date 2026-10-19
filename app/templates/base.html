@@ -12,6 +12,12 @@
 
     {# Дизайн-система + иконки Lucide (локально) + минимальный JS #}
     <link rel="stylesheet" href="/static/styles.css">
+
+    {# Страниценные скрипты (Alpine-компоненты) — строго ДО загрузки Alpine:
+       `alpine:init` должен быть подписан раньше, чем Alpine начнёт обход DOM,
+       а defer-скрипты выполняются в порядке документа. #}
+    {% block head %}{% endblock %}
+
     <script src="/static/htmx.min.js"></script>
     {# Фабрики состояния страниц учеников (Alpine.data). Файл идёт до Alpine:
        `alpine:init` должен быть подписан раньше, чем Alpine начнёт обход DOM. #}
@@ -24,8 +30,6 @@
     <script src="/static/alpine.min.js" defer></script>
     <script src="/static/lucide.min.js" defer></script>
     <script src="/static/app.js" defer></script>
-
-    {% block head %}{% endblock %}
 
     {# Ранняя инициализация сворачивания сайдбара: класс на <html> ставится
        до отрисовки, иначе сайдбар «прыгает» из развёрнутого в свёрнутый. #}

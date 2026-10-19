@@ -1,4 +1,6 @@
-"""Личный кабинет репетитора: карточка вошедшего."""
+"""Личный кабинет репетитора: карточка вошедшего и заглушка дашборда."""
+
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -27,6 +29,7 @@ def home(request: Request, db: Session = Depends(get_db)):
         _sessions.delete(db, request.cookies.get(COOKIE_NAME))
         return RedirectResponse(url="/tutor/login", status_code=303)
 
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return templates.TemplateResponse(
-        request, "tutor/home.html", {"tutor": tutor}
+        request, "tutor/home.html", {"tutor": tutor, "now": now}
     )
