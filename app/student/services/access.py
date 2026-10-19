@@ -1,41 +1,19 @@
-"""Доступ к страницам учеников: сессия репетитора и скоуп по `tutor_id`.
+"""Доступ к страницам учеников: ри-экспорт общего доступа и скоуп по `tutor_id`.
 
-Все вьюхи модуля получают `tutor_id` только отсюда — никогда из формы или
-query-параметра. Отсутствие сессии прерывает запрос редиректом на вход.
+`require_tutor_id` и `LoginRequired` переехали в `app/common/access.py`
+(общий код) и здесь ри-экспортируются, чтобы не менять импорты во всех
+вьюхах модуля. Вьюхи получают `tutor_id` только отсюда — никогда из формы
+или query-параметра.
 """
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.common.access import LOGIN_URL, LoginRequired, require_tutor_id
 from app.student.models.student import Student
-from app.tutor.services.sessions import SessionService
 
-LOGIN_URL = "/tutor/login"
-
-_sessions = SessionService()
-
-
-class LoginRequired(HTTPException):
-    """Нет действующей сессии: запрос прерывается редиректом на вход."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": LOGIN_URL},
-        )
-
-
-def require_tutor_id(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> str:
-    """FastAPI-зависимость: `tutor_id` вошедшего репетитора либо редирект."""
-    tutor_id = _sessions.get_tutor_id_from_request(db, request)
-    if tutor_id is None:
-        raise LoginRequired()
-    return tutor_id
+__all__ = ["LOGIN_URL", "LoginRequired", "get_owned_student", "require_tutor_id"]
 
 
 def get_owned_student(db: Session, student_id: str, tutor_id: str) -> Student:

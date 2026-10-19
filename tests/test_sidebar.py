@@ -39,6 +39,20 @@ def test_tutor_home_has_sidebar_when_authorized(client):
     assert "Настройки" in response.text
 
 
+def test_sidebar_links_are_namespaced_under_tutor(client):
+    """Локальные пункты сайдбара ведут на маршруты `/tutor/*`."""
+    _login(client, email="namespaced-user@example.com")
+    page = client.get("/tutor/").text
+    start = page.index('<aside class="sidebar"')
+    sidebar_html = page[start : page.index("</aside>", start)]
+
+    assert 'href="/tutor/calendar"' in sidebar_html  # Календарь
+    assert 'href="/tutor/"' in sidebar_html  # Главная
+    # Старых «голых» ссылок в неймспейсе не осталось.
+    assert 'href="/calendar"' not in sidebar_html
+    assert 'href="/"' not in sidebar_html
+
+
 def test_sidebar_header_uses_brand_logo(client):
     """В шапке сайдбара — SVG-логотип (облако + шестерёнка), а не lucide-иконка."""
     _login(client, email="logo-user@example.com")

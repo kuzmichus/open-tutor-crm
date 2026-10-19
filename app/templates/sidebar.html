@@ -56,44 +56,44 @@
     <nav class="sidebar__nav" id="sidebar-nav">
 
         {# Группа 1 — операционка #}
-        {{ nav_link('calendar', '/calendar', 'calendar', 'Календарь') }}
-        {{ nav_link('home', '/', 'layout-dashboard', 'Главная') }}
-        {{ nav_link('bookings', '/bookings', 'calendar-check', 'Брони') }}
-        {{ nav_link('tasks', '/tasks', 'square-check-big', 'Задачи') }}
+        {{ nav_link('calendar', '/tutor/calendar', 'calendar', 'Календарь') }}
+        {{ nav_link('home', '/tutor/', 'layout-dashboard', 'Главная') }}
+        {{ nav_link('bookings', '/tutor/bookings', 'calendar-check', 'Брони') }}
+        {{ nav_link('tasks', '/tutor/tasks', 'square-check-big', 'Задачи') }}
 
         <hr class="nav-divider">
 
         {# Группа 3 — ученики и коммуникации #}
         {{ nav_link('students', '/tutor/students', 'users', 'Ученики') }}
-        {{ nav_link('mailings', '/mailings', 'send', 'Рассылки') }}
-        {{ nav_link('groups', '/groups', 'graduation-cap', 'Группы') }}
+        {{ nav_link('mailings', '/tutor/mailings', 'send', 'Рассылки') }}
+        {{ nav_link('groups', '/tutor/groups', 'graduation-cap', 'Группы') }}
 
         <hr class="nav-divider">
 
         {# Группа 4 — аналитика #}
-        {{ nav_link('lessons', '/lessons', 'book-open', 'Уроки') }}
+        {{ nav_link('lessons', '/tutor/lessons', 'book-open', 'Уроки') }}
 
         <hr class="nav-divider">
 
-        {{ nav_link('finance', '/finance', 'credit-card', 'Финансы') }}
-        {{ nav_link('stats', '/stats', 'chart-column', 'Статистика') }}
+        {{ nav_link('finance', '/tutor/finance', 'credit-card', 'Финансы') }}
+        {{ nav_link('stats', '/tutor/stats', 'chart-column', 'Статистика') }}
 
         <hr class="nav-divider">
 
         {# Группа 5 — сервисное #}
-        {{ nav_link('changelog', '/changelog', 'sparkles', 'Что нового') }}
+        {{ nav_link('changelog', '/tutor/changelog', 'sparkles', 'Что нового') }}
         {{ nav_link('feedback', 'https://t.me/opentutorcrm', 'message-circle', 'Обратная связь', external=True) }}
     </nav>
 
     <!-- Нижний блок сайдбара -->
     <div class="sidebar__section">
-        {{ nav_link('settings', '/settings', 'settings', 'Настройки') }}
+        {{ nav_link('settings', '/tutor/settings', 'settings', 'Настройки') }}
     </div>
 
     <!-- Футер сайдбара: пользователь -->
     <div class="sidebar__footer">
         <div class="user-row-wrap flex items-center">
-            <a href="/profile" class="user-row user-row--grow">
+            <a href="/tutor/profile" class="user-row user-row--grow">
                 <span class="user-avatar" aria-hidden="true">{{ _user_name[:1]|upper }}</span>
                 <span class="user-row__meta">
                     <span class="user-row__name truncate">{{ _user_name }}</span>

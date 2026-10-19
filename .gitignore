@@ -225,3 +225,5 @@ __marimo__/
 .idea
 # Node / дизайн-система (Tailwind v4)
 node_modules/
+/test-result/
+/.playwright-cli/

@@ -1,17 +1,12 @@
-"""Главная страница: «Hello world» и часы, обновляемые каждую секунду через htmx."""
+"""Корень приложения: редирект на личный кабинет репетитора."""
 
-from datetime import datetime
-
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
-
-from app.templating import templates
+from fastapi import APIRouter
+from fastapi.responses import RedirectResponse
 
 router = APIRouter()
 
 
-@router.get("/", response_class=HTMLResponse)
-def index(request: Request) -> HTMLResponse:
-    """Главная страница приложения."""
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return templates.TemplateResponse(request, "index.html", {"now": now})
+@router.get("/", response_class=RedirectResponse)
+def index() -> RedirectResponse:
+    """Главная страница: 303 на `/tutor/`."""
+    return RedirectResponse(url="/tutor/", status_code=303)

@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app.calendar.views import router as calendar_router
 from app.common.views import router as common_router
 from app.common.views.not_found import not_found
 from app.database import init_db
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Open Tutor CRM", version="0.1.0", lifespan=lifespan)
     app.include_router(common_router)
     app.include_router(tutor_router)
+    app.include_router(calendar_router)
     app.include_router(student_router)
     # Кастомная страница 404 вместо стандартного JSON/Not Found.
     app.add_exception_handler(404, not_found)
