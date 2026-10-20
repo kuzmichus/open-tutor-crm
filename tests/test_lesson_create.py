@@ -115,12 +115,16 @@ def test_new_lesson_form_renders(owner, client):
 
     assert "Новый урок" in page
 
-    # Вкладки: «Урок» активна, «ДЗ» — неактивная заглушка (спека).
+    # Вкладки: «Урок» активна, «ДЗ» — видимая, но неактивная заглушка
+    # с подсказкой: клик не активирует её, панели ДЗ нет (спека).
     hw_tab = re.search(r'<button class="tab tab--disabled"[^>]*>', page)
     assert hw_tab is not None
     assert 'id="lesson-tab-hw"' in hw_tab.group(0)
     assert "disabled" in hw_tab.group(0)
+    assert 'title="Домашнее задание задаётся после урока"' in hw_tab.group(0)
     assert "panel-hw" not in page  # панели ДЗ нет
+    assert 'name="assignment"' not in page  # полей ДЗ в создании нет
+    assert "Сохранить ДЗ" not in page
 
     # Поля создания (спека «Создание урока»).
     for marker in (

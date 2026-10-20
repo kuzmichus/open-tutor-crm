@@ -1,13 +1,23 @@
 {# Модальная форма урока: создание «Новый урок» и редактирование
-   (спека lesson-management, «Создание урока» / «Редактирование урока»).
+   (спека lesson-management, «Создание урока» / «Вкладка "ДЗ" в форме
+   урока»).
 
    Общий шаблон на оба режима (`lesson_form_context`):
    - создание — панель расписания («Повторять урок»);
    - редактирование — статус, блок «Для семьи», переключатель серии
      и двухшаговые кнопки удаления (паттерн `group/_manage.html`).
 
-   Вкладка «ДЗ» — неактивная заглушка (спека): клик не активирует её,
-   полей ДЗ нет. Полей предмета, места, оплаты учителя и выбора учителя
+   Две вкладки — две независимые формы (вложенные <form> в HTML
+   запрещены): панель «Урок» — форма с `hx-post` на урок и кнопкой
+   «Сохранить» внутри; панель «ДЗ» — отдельная форма `homework/_panel.html`
+   со своей кнопкой «Сохранить ДЗ» (спека homework-management). Заголовок
+   и футер («Удалить», «Серию», «Закрыть») — вне обеих форм, поэтому
+   футер остаётся видимым на любой вкладке. Переключение вкладок —
+   Alpine-состояние `activeTab` модалки (`lessonForm`, lessons.js).
+
+   В создании вкладка «ДЗ» видна, но `disabled`: клик не активирует её,
+   панели ДЗ нет, запросы по ДЗ не отправляются (спека).
+   Полей предмета, места, оплаты учителя и выбора учителя
    форма не содержит осознанно (спека «Форма урока без игнорируемых полей»).
 
    Смена «Типа урока» переключает цель (ученик ↔ группа) и скрывает
@@ -47,41 +57,59 @@
             </button>
         </div>
 
-        <form class="modal-form"
-              hx-post="{{ action }}"
-              hx-target="#modal"
-              hx-swap="innerHTML">
-            <div class="modal-body">
-                {% if errors %}
-                <div class="error" role="alert">
-                    <ul>
-                        {% for message in errors %}
-                        <li>{{ message }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
+        <div class="modal-body">
+            {% if errors %}
+            <div class="error" role="alert">
+                <ul>
+                    {% for message in errors %}
+                    <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <div class="tabs modal-tabs" role="tablist" aria-label="Разделы формы урока">
+                <button class="tab" type="button" role="tab"
+                        id="lesson-tab-lesson"
+                        aria-controls="lesson-panel-lesson"
+                        :aria-selected="activeTab === 'lesson' ? 'true' : 'false'"
+                        :class="activeTab === 'lesson' ? 'tab--active' : ''"
+                        @click="activeTab = 'lesson'">
+                    Урок
+                </button>
+                {% if lesson %}
+                {# В редактировании «ДЗ» — активная вкладка: Alpine
+                   показывает/скрывает панели по `activeTab` (спека). #}
+                <button class="tab" type="button" role="tab"
+                        id="lesson-tab-hw"
+                        aria-controls="lesson-panel-hw"
+                        :aria-selected="activeTab === 'hw' ? 'true' : 'false'"
+                        :class="activeTab === 'hw' ? 'tab--active' : ''"
+                        @click="activeTab = 'hw'">
+                    ДЗ
+                </button>
+                {% else %}
+                {# «ДЗ» в создании — неактивная заглушка: `disabled`
+                   глушит клик, панели ДЗ нет, запросы по ДЗ не
+                   отправляются (спека). #}
+                <button class="tab tab--disabled" type="button" role="tab"
+                        id="lesson-tab-hw"
+                        aria-disabled="true" disabled
+                        title="Домашнее задание задаётся после урока">
+                    ДЗ
+                </button>
                 {% endif %}
+            </div>
 
-                <div class="tabs modal-tabs" role="tablist" aria-label="Разделы формы урока">
-                    <button class="tab tab--active" type="button" role="tab"
-                            id="lesson-tab-lesson"
-                            aria-selected="true"
-                            aria-controls="lesson-panel-lesson">
-                        Урок
-                    </button>
-                    {# «ДЗ» — неактивная заглушка: `disabled` глушит клик,
-                       панели ДЗ нет, запросы по ДЗ не отправляются. #}
-                    <button class="tab tab--disabled" type="button" role="tab"
-                            id="lesson-tab-hw"
-                            aria-disabled="true" disabled
-                            title="Домашнее задание появится позже">
-                        ДЗ
-                    </button>
-                </div>
-
+            {# Форма урока: панель «Урок» со своей кнопкой «Сохранить»;
+               общие поля серии (series_all) уходят именно сюда. #}
+            <form hx-post="{{ action }}"
+                  hx-target="#modal"
+                  hx-swap="innerHTML">
                 <div class="tab-panel"
                      id="lesson-panel-lesson"
-                     role="tabpanel" aria-labelledby="lesson-tab-lesson">
+                     role="tabpanel" aria-labelledby="lesson-tab-lesson"
+                     x-show="activeTab === 'lesson'" x-cloak>
                     <fieldset class="form-section">
                         <legend class="form-section__title">Урок</legend>
 
@@ -296,42 +324,59 @@
                     </div>
                     {% endif %}
                     {% endif %}
-                </div>
-            </div>
 
-            <div class="modal-actions">
-                {% if lesson %}
-                {# Двухшаговое подтверждение удаления (паттерн _manage.html):
-                   первый клик переводит кнопку в состояние «Точно …» и ничего
-                   не отправляет, второй — POST. #}
-                <button class="btn btn--destructive" type="button"
-                        x-show="!confirmingDelete"
-                        @click="confirmingDelete = true">
-                    Удалить
-                </button>
-                <button class="btn btn--destructive" type="button"
-                        hx-post="/tutor/lessons/{{ lesson.id }}/delete"
-                        hx-target="#modal" hx-swap="innerHTML"
-                        x-show="confirmingDelete" x-cloak>
-                    Точно удалить?
-                </button>
-                {% if series_id %}
-                <button class="btn btn--destructive" type="button"
-                        x-show="!confirmingSeriesDelete"
-                        @click="confirmingSeriesDelete = true">
-                    Серию
-                </button>
-                <button class="btn btn--destructive" type="button"
-                        hx-post="/tutor/lessons/{{ lesson.id }}/delete-series"
-                        hx-target="#modal" hx-swap="innerHTML"
-                        x-show="confirmingSeriesDelete" x-cloak>
-                    Точно серию?
-                </button>
-                {% endif %}
-                {% endif %}
-                <button class="btn btn--ghost" type="button" @click="close()">Закрыть</button>
-                <button class="btn btn--primary" type="submit">Сохранить</button>
+                    <div class="field field--full">
+                        {# Кнопка submit — внутри формы урока: футер модалки
+                           («Удалить», «Серию», «Закрыть») — вне обеих форм. #}
+                        <button class="btn btn--primary" type="submit">Сохранить</button>
+                    </div>
+                </div>
+            </form>
+
+            {% if lesson %}
+            {# Панель ДЗ — отдельная форма (спека homework-management):
+               своп возвращает только её фрагмент, поля вкладки «Урок»
+               в своей форме остаются нетронутыми. #}
+            <div class="tab-panel"
+                 id="lesson-panel-hw"
+                 role="tabpanel" aria-labelledby="lesson-tab-hw"
+                 x-show="activeTab === 'hw'" x-cloak>
+                {% include "homework/_panel.html" %}
             </div>
-        </form>
+            {% endif %}
+        </div>
+
+        <div class="modal-actions">
+            {% if lesson %}
+            {# Двухшаговое подтверждение удаления (паттерн _manage.html):
+               первый клик переводит кнопку в состояние «Точно …» и ничего
+               не отправляет, второй — POST. #}
+            <button class="btn btn--destructive" type="button"
+                    x-show="!confirmingDelete"
+                    @click="confirmingDelete = true">
+                Удалить
+            </button>
+            <button class="btn btn--destructive" type="button"
+                    hx-post="/tutor/lessons/{{ lesson.id }}/delete"
+                    hx-target="#modal" hx-swap="innerHTML"
+                    x-show="confirmingDelete" x-cloak>
+                Точно удалить?
+            </button>
+            {% if series_id %}
+            <button class="btn btn--destructive" type="button"
+                    x-show="!confirmingSeriesDelete"
+                    @click="confirmingSeriesDelete = true">
+                Серию
+            </button>
+            <button class="btn btn--destructive" type="button"
+                    hx-post="/tutor/lessons/{{ lesson.id }}/delete-series"
+                    hx-target="#modal" hx-swap="innerHTML"
+                    x-show="confirmingSeriesDelete" x-cloak>
+                Точно серию?
+            </button>
+            {% endif %}
+            {% endif %}
+            <button class="btn btn--ghost" type="button" @click="close()">Закрыть</button>
+        </div>
     </div>
 </div>

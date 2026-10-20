@@ -1,0 +1,119 @@
+{# Панель домашнего задания — отдельная форма вкладки «ДЗ» модалки
+   редактирования урока (спека homework-management).
+
+   Форма сама себе и цель свопа (hx-target — на саму себя,
+   hx-swap="outerHTML"): сервер возвращает этот же фрагмент — при
+   ошибке валидации со списком ошибок, при успехе переотрендеренный с
+  сохранёнными значениями. Поля вкладки «Урок» в своей форме при этом
+   не трогаются (design D3).
+
+   Ключи контекста — с префиксом `hw_`: при вставке в модалку урока
+   (`{% include %}`) панель не должна подменять контекст полей урока
+   (`form`, `statuses`, `errors`).
+
+   «Прикрепить файл» — визуальная заглушка без `name`: файлы в этой
+   итерации не загружаются и не сохраняются (спека «Поля ДЗ без файлов
+   и автоматики»). Чекбокс дедлайна сохраняется, но напоминания и
+   автостатус по дедлайну пока не выполняются.
+
+   Контекст: lesson, hw_form (assignment, due_at_value, deadline_enabled,
+   status, recording_url, teacher_note, teacher_comment), hw_errors,
+   hw_saved (кнопка в состоянии успеха, design D8), hw_statuses,
+   hw_status_labels. #}
+<form id="homework-panel"
+      hx-post="/tutor/lessons/{{ lesson.id }}/homework"
+      hx-target="#homework-panel"
+      hx-swap="outerHTML">
+    {% if hw_errors %}
+    <div class="error" role="alert">
+        <ul>
+            {% for message in hw_errors %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <fieldset class="form-section">
+        <legend class="form-section__title">Домашнее задание</legend>
+
+        <div class="field field--full">
+            <label class="label" for="hw-assignment">Задание *</label>
+            <textarea class="input" id="hw-assignment" name="assignment"
+                      rows="4">{{ hw_form.assignment or "" }}</textarea>
+        </div>
+
+        <div class="field">
+            <label class="label" for="hw-due-at">Срок сдачи</label>
+            <input class="input" id="hw-due-at" type="datetime-local"
+                   name="due_at" value="{{ hw_form.due_at_value }}">
+        </div>
+
+        <div class="field">
+            <label class="label" for="hw-status">Статус</label>
+            <select class="input" id="hw-status" name="status">
+                {% for value in hw_statuses %}
+                <option value="{{ value }}"
+                        {% if hw_form.status == value %}selected{% endif %}>
+                    {{ hw_status_labels[value] }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="field field--full">
+            <label class="checkbox">
+                {# Включён по умолчанию; значение сохраняется, поведения
+                   от флага в этой итерации нет (спека, решение D5). #}
+                <input type="checkbox" name="deadline_enabled" value="on"
+                       {% if hw_form.deadline_enabled %}checked{% endif %}>
+                <span>Учитывать дедлайн (напоминания и автоматический статус)</span>
+            </label>
+        </div>
+
+        <div class="field">
+            <span class="label" id="hw-files-label">Файлы</span>
+            {# Заглушка: без name и без обработчика — клик ничего не
+               загружает и не отправляет (спека). #}
+            <button class="btn btn--outline btn--sm" type="button"
+                    aria-describedby="hw-files-label">
+                Прикрепить файл
+            </button>
+        </div>
+
+        <div class="field field--full">
+            <label class="label" for="hw-recording-url">Ссылка на запись урока</label>
+            <input class="input" id="hw-recording-url" type="url"
+                   name="recording_url"
+                   value="{{ hw_form.recording_url }}"
+                   placeholder="https://...">
+            <p class="form-hint">Увидит ученик в кабинете</p>
+        </div>
+
+        <div class="field field--full">
+            <label class="label" for="hw-teacher-note">Заметка педагога</label>
+            <textarea class="input" id="hw-teacher-note" name="teacher_note"
+                      rows="3">{{ hw_form.teacher_note or "" }}</textarea>
+            <p class="form-hint">Ученику не видна</p>
+        </div>
+
+        <div class="field field--full">
+            <label class="label" for="hw-teacher-comment">Комментарий педагога</label>
+            <textarea class="input" id="hw-teacher-comment"
+                      name="teacher_comment"
+                      rows="2">{{ hw_form.teacher_comment or "" }}</textarea>
+        </div>
+    </fieldset>
+
+    <div class="field field--full">
+        {# Успех (design D8): кнопка на пару секунд становится зелёной и
+           неактивной с надписью «Успешно сохранено»; lessons.js по
+           `htmx:afterSwap` возвращает ей обычный вид и надпись. #}
+        <button class="btn {% if hw_saved %}btn--success{% else %}btn--primary{% endif %}"
+                type="submit"
+                data-hw-save
+                {% if hw_saved %}disabled{% endif %}>
+            {% if hw_saved %}Успешно сохранено{% else %}Сохранить ДЗ{% endif %}
+        </button>
+    </div>
+</form>

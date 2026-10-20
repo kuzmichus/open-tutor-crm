@@ -32,6 +32,8 @@
     --secondary-foreground: #3F3F46;    /* not specified — chosen: тёплый тёмно-серый */
     --destructive: #DE3B3D;
     --destructive-foreground: #FFFFFF;  /* not specified — chosen: белый */
+    --success: #1E8E5A;                 /* подтверждение сохранения (ДЗ) */
+    --success-foreground: #FFFFFF;      /* not specified — chosen: белый */
     --overlay: rgba(23, 23, 27, 0.45);  /* not specified — chosen: тёмный veil для off-canvas */
 
     /* Границы, фокус */
@@ -130,6 +132,8 @@
     --secondary-foreground: #D4D4D8;
     --destructive: #F2555A;
     --destructive-foreground: #17171A;
+    --success: #3FB37A;               /* подтверждение сохранения: светлее для тёмного фона */
+    --success-foreground: #0E0E11;
     --overlay: rgba(0, 0, 0, 0.6);
 
     --border: #26262B;
@@ -594,6 +598,19 @@
     color: var(--destructive-foreground);
 
     &:hover { background: color-mix(in srgb, var(--destructive) 90%, transparent); }
+  }
+
+  /* Подтверждение сохранения (ДЗ, design D8): кнопка на пару секунд
+     становится зелёной и неактивной, затем lessons.js возвращает ей
+     обычный вид. Заливка остаётся плотной в disabled-состоянии. */
+  .btn--success {
+    background: var(--success);
+    color: var(--success-foreground);
+
+    &:disabled {
+      opacity: 1; /* иначе общая disabled-прозрачность гасит зелёный */
+      cursor: default;
+    }
   }
 
   .btn--icon {

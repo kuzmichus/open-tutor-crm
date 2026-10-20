@@ -219,7 +219,9 @@
     };
   };
 
-  /* Модалка формы урока (создание и редактирование): тип урока
+  /* Модалка формы урока (создание и редактирование): вкладки «Урок» и
+     «ДЗ» (панели — два отдельных `<form>`, переключение по `activeTab`;
+     в создании вкладка «ДЗ» disabled и остаётся неактивной), тип урока
      (переключает цель и скрывает оплату у группового), поле «Начало»
      (подсказка об окончании, минуты по умолчанию 00), панель
      расписания серии, предупреждение о пересчёте списания и
@@ -227,6 +229,7 @@
   window.lessonForm = function () {
     return {
       open: true,
+      activeTab: "lesson", /* активная вкладка: 'lesson' | 'hw' */
       type: "individual",
       repeat: false,
       slots: [], /* [{weekday: 0..6, start: "HH:MM", end: "HH:MM"}] */
@@ -364,18 +367,41 @@
     Alpine.data("lessonForm", window.lessonForm);
   });
 
-  /* После подмены фрагмента мини-формы передаём данные полю селекта
-     событием: Alpine слушает его на корне поля
-     (`@lesson-target-created.window`). Так не нужны внутренности Alpine. */
+  /* Подтверждение сохранения ДЗ (design D8): сервер отдаёт кнопку в
+     состоянии успеха — зелёную и неактивную с надписью «Успешно
+     сохранено». Через пару секунд возвращаем ей обычный вид и надпись,
+     чтобы панель снова можно было сохранить. Таймер вешаем на узел,
+     пришедший свопом: повторное сохранение подменяет кнопку, поэтому
+     сработавший позже таймер старого узла уже ни на что не влияет. */
+  var HW_SUCCESS_MS = 2000;
+  var HW_IDLE_LABEL = "Сохранить ДЗ";
+
+  function restoreHwButtons(root) {
+    var scope = root && root.querySelectorAll ? root : document;
+    var buttons = scope.querySelectorAll("[data-hw-save]");
+    Array.prototype.forEach.call(buttons, function (button) {
+      if (!button.disabled) return;
+      setTimeout(function () {
+        if (!button.isConnected) return;
+        button.disabled = false;
+        button.classList.remove("btn--success");
+        button.classList.add("btn--primary");
+        button.textContent = HW_IDLE_LABEL;
+      }, HW_SUCCESS_MS);
+    });
+  }
+
   document.addEventListener("htmx:afterSwap", function (event) {
     // `event.target` — подменённый элемент; `detail.elt` — то же значение
     // в htmx 1.x, берём его как запасной вариант.
     var swapped = (event.detail && event.detail.elt) || event.target;
     var payload = readTargetUpdate(swapped);
-    if (!payload) return;
-    document.dispatchEvent(
-      new CustomEvent("lesson-target-created", { detail: payload, bubbles: true })
-    );
+    if (payload) {
+      document.dispatchEvent(
+        new CustomEvent("lesson-target-created", { detail: payload, bubbles: true })
+      );
+    }
+    restoreHwButtons(document.getElementById("homework-panel"));
     if (typeof window.renderIcons === "function") window.renderIcons();
   });
 })();

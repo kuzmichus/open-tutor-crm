@@ -19,6 +19,7 @@ from datetime import date, datetime, time
 from sqlalchemy.orm import Session
 
 from app.group.models.group import Group
+from app.homework.services.homework_context import homework_panel_context
 from app.lesson.models.lesson import (
     LESSON_DURATIONS,
     LESSON_STATUS_LABELS,
@@ -287,6 +288,13 @@ def lesson_form_context(
             "type": values["type"],
             "priceInitial": values["price"],
         },
+        # Контекст панели ДЗ (ключи `hw_*`) — только в редактировании:
+        # вкладка «ДЗ» и её форма в создании отсутствуют (спека).
+        **(
+            homework_panel_context(db, lesson=lesson)
+            if lesson is not None
+            else {}
+        ),
     }
 
 

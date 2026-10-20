@@ -158,9 +158,23 @@ def test_edit_form_renders(owner, client, student_factory):
     assert 'name="series_all"' not in page
     assert "Серию" not in page
     assert "Удалить" in page
-    # Вкладка «ДЗ» — неактивная заглушка и в редактировании.
-    hw_tab = re.search(r'<button class="tab tab--disabled"[^>]*>', page)
-    assert hw_tab is not None and "disabled" in hw_tab.group(0)
+    # Вкладка «ДЗ» в редактировании активна: без disabled, переключение
+    # Alpine по activeTab, панель ДЗ присутствует (спека lesson-management).
+    hw_tab = re.search(r'<button class="tab"[^>]*id="lesson-tab-hw"[^>]*>', page)
+    assert hw_tab is not None
+    assert "disabled" not in hw_tab.group(0)
+    assert ':aria-selected="activeTab === \'hw\' ? \'true\' : \'false\'"' in hw_tab.group(0)
+    assert '@click="activeTab = \'hw\'"' in hw_tab.group(0)
+    assert 'id="lesson-panel-hw"' in page
+    assert 'x-show="activeTab === \'hw\'"' in page
+    # Панель ДЗ — отдельная форма со своими полями и кнопкой.
+    assert 'name="assignment"' in page
+    assert re.search(r">\s*Сохранить ДЗ\s*</button>", page)
+    assert 'hx-post="/tutor/lessons/%s/homework"' % lesson_id in page
+    # Общий футер («Удалить», «Серию», «Закрыть») — после закрытия обеих форм.
+    assert re.search(
+        r"</form>\s*</div>\s*</div>\s*<div class=\"modal-actions\">", page
+    )
 
 
 def test_list_row_opens_edit_modal(owner, client, student_factory):
