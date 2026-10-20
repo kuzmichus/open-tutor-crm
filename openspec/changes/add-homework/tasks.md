@@ -1,0 +1,26 @@
+# Tasks
+
+## 1. Модель и миграция
+
+- [x] 1.1 Создать `app/homework/__init__.py`, `app/homework/models/__init__.py`, `app/homework/models/homework.py`: класс `Homework` (таблица `homework`, `lesson_id` FK → `lessons.id` NOT NULL UNIQUE ON DELETE CASCADE, `assignment` Text NOT NULL, `due_at` DateTime(timezone=True) NULL, `deadline_enabled` Boolean NOT NULL default `true`, `status` String(12) NOT NULL default `not_assigned` + CHECK по `HOMEWORK_STATUSES`, `recording_url` String(500) NULL, `teacher_note` Text NULL, `teacher_comment` Text NULL, `created_at`/`updated_at` как у `Lesson`), кортежи `HOMEWORK_STATUSES` и `HOMEWORK_STATUS_LABELS` (паттерн `LESSON_STATUSES`); зарегистрировать импорт в `app/models.py` — проверка: тест в `tests/test_homework.py` создаёт урок с ДЗ, статус по умолчанию «not_assigned», а недопустимый статус падает на CHECK
+- [x] 1.2 Миграция `uv run alembic revision --autogenerate -m "add homework"` и применение `uv run alembic upgrade head` — проверка: таблица `homework` существует, `uv run alembic downgrade -1` и повторный upgrade проходят без ошибок
+
+## 2. Сервисы ДЗ
+
+- [x] 2.1 `app/homework/services/homework_form.py`: `parse_homework_form(form)` → очищенные значения (`assignment`, `due_at`, `deadline_enabled`, `status`, `recording_url`, `teacher_note`, `teacher_comment`) + ошибки: пустое/пробельное «Задание» — «Укажите задание.», статус вне `HOMEWORK_STATUSES`, кривой `due_at` — проверка: `tests/test_homework.py` — пустое задание даёт ошибку и пустой `due_at` не ошибка, кривой — ошибка
+- [x] 2.2 `app/homework/services/homework_writer.py`: `save_homework(db, lesson, data)` — лениво создаёт `Homework` при отсутствии, иначе обновляет; при ошибках — `rollback`, ничего не меняется, возвращается список ошибок — проверка: тест — повторное сохранение обновляет ту же строку (UNIQUE на `lesson_id`), ошибка не изменяет существующее ДЗ
+- [x] 2.3 `app/homework/views/save.py` — `router`, `POST /tutor/lessons/{lesson_id}/homework`: `require_tutor_id` + `get_owned_lesson` (чужой/несуществующий урок — 404, без сессии — redirect на `/tutor/login`); и успех, и ошибка — фрагмент панели ДЗ (при успехе — переотрендеренный с сохранёнными значениями, без ошибок; пустое тело невозможно: `outerHTML` по самому себя удалил бы панель), без `HX-Trigger` — проверка: тесты на чужой урок (404), без сессии (redirect), успех (200, тело содержит панель с сохранёнными значениями, ДЗ в БД); собрать роутер в `app/homework/views/__init__.py` и подключить в `main.py`
+- [x] 2.4 `app/homework/templates/homework/_panel.html`: панель полей ДЗ по макету («Задание» textarea, «Срок сдачи» datetime-local, чекбокс «Учитывать дедлайн (напоминания и автоматический статус)» включён по умолчанию, «Статус» селект из пяти лейблов, «Файлы» — кнопка «Прикрепить файл» как заглушка без `name`, «Ссылка на запись урока» с подсказкой «Увидит ученик в кабинете», «Заметка педагога» с подсказкой «Ученику не видна», «Комментарий педагога», кнопка «Сохранить ДЗ»); форма `hx-post` на `/tutor/lessons/{id}/homework` с `hx-target` на саму себя, `hx-swap="outerHTML"`, блок ошибок внутри панели; зарегистрировать каталог шаблонов в `app/templating.py` — проверка: тест SSR — панель содержит все поля, подписи и кнопку «Сохранить ДЗ»
+- [x] 2.5 Контекст панели: `app/homework/services/homework_context.py` (значения полей из `Homework` или дефолты, лейблы статусов) — проверка: тест — открытие редактирования урока с сохранённым ДЗ показывает предзаполненные поля и выбранный статус
+
+- [x] 2.6 Индикация успеха на кнопке (design D8): при успехе сервер отдаёт кнопку `disabled` с классом `.btn--success` (токены `--success`/`--success-foreground` в обеих темах) и надписью «Успешно сохранено», `lessons.js` по `htmx:afterSwap` через ~2 с возвращает обычный вид и надпись «Сохранить ДЗ» — проверка: тест — ответ на успешное сохранение содержит кнопку с `disabled`, классом `btn--success` и текстом «Успешно сохранено»; при ошибке кнопка обычная и активная
+
+## 3. Модалка урока: две формы
+
+- [x] 3.1 `app/lesson/templates/lesson/_form.html`: разрезать на две формы — панель «Урок» в текущей форме (кнопка «Сохранить» внутри), панель ДЗ отдельной формой (include `homework/_panel.html`, только в режиме редактирования), заголовок и футер («Удалить», «Серию», «Закрыть») — вне обеих форм — проверка: `uv run pytest tests/test_lesson_update.py tests/test_lesson_create.py` — точечные правки разметки в тестах, поведение POST не меняется
+- [x] 3.2 Вкладка «ДЗ»: в редактировании активна (aria-selected, переключение Alpine в `lessonForm` — `activeTab`, скрытие/показ панелей), в создании — видна, но `disabled` с подсказкой «Домашнее задание задаётся после урока» — проверка: тест в `tests/test_lesson_create.py` — клик/разметка создания содержит disabled-вкладку и панель ДЗ отсутствует; тест в `tests/test_lesson_update.py` — вкладка активна, панель присутствует, старая проверка «заглушка в редактировании» заменена
+- [x] 3.3 Удаление урока/серии с ДЗ: проверить каскад (`delete_lesson`, `delete_series`) — записи `homework` удаляются — проверка: тест — урок с ДЗ удалён, строк в `homework` не осталось
+
+## 4. Интеграция
+
+- [x] 4.1 Полный прогон `uv run pytest` — все тесты зелёные, включая обновлённые проверки вкладки и новые `tests/test_homework.py`
