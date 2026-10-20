@@ -1,0 +1,337 @@
+{# Модальная форма урока: создание «Новый урок» и редактирование
+   (спека lesson-management, «Создание урока» / «Редактирование урока»).
+
+   Общий шаблон на оба режима (`lesson_form_context`):
+   - создание — панель расписания («Повторять урок»);
+   - редактирование — статус, блок «Для семьи», переключатель серии
+     и двухшаговые кнопки удаления (паттерн `group/_manage.html`).
+
+   Вкладка «ДЗ» — неактивная заглушка (спека): клик не активирует её,
+   полей ДЗ нет. Полей предмета, места, оплаты учителя и выбора учителя
+   форма не содержит осознанно (спека «Форма урока без игнорируемых полей»).
+
+   Смена «Типа урока» переключает цель (ученик ↔ группа) и скрывает
+   оплату урока для группового: у каждого селекта свой Alpine-компонент
+   (`lessonTarget`), у модалки — `lessonForm` (см. app/static/lessons.js).
+
+   Поле «Начало» управляет формой: под ним показывается подсказка
+   «Урок закончится в ЧЧ:ММ» (при изменении «Начала» или «Длительности»),
+   пустое значение блокирует «Повторять урок» и «Добавить время», а при
+   открытии нативного пикера минуты по умолчанию равны 00.
+
+   Контекст: title, subtitle, action, errors, form (type, duration_min,
+   note, meeting_url, starts_at_value, price, until_date, status, rating,
+   family_comment), student_id, student_name, group_id, group_name,
+   lesson, series_id, type_labels, durations, statuses, status_labels,
+   weekdays, rating_stars, form_config, show_repeat, show_price_warning. #}
+{% from "lesson/_target_select.html" import target_select %}
+<div class="modal-root"
+     x-data="lessonForm()"
+     data-config='{{ form_config | tojson }}'
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     @lesson-saved.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="lesson-form-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="lesson-form-title">{{ title }}</h2>
+                {% if subtitle %}
+                <p class="modal-subtitle">{{ subtitle }}</p>
+                {% endif %}
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button" @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-post="{{ action }}"
+              hx-target="#modal"
+              hx-swap="innerHTML">
+            <div class="modal-body">
+                {% if errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="tabs modal-tabs" role="tablist" aria-label="Разделы формы урока">
+                    <button class="tab tab--active" type="button" role="tab"
+                            id="lesson-tab-lesson"
+                            aria-selected="true"
+                            aria-controls="lesson-panel-lesson">
+                        Урок
+                    </button>
+                    {# «ДЗ» — неактивная заглушка: `disabled` глушит клик,
+                       панели ДЗ нет, запросы по ДЗ не отправляются. #}
+                    <button class="tab tab--disabled" type="button" role="tab"
+                            id="lesson-tab-hw"
+                            aria-disabled="true" disabled
+                            title="Домашнее задание появится позже">
+                        ДЗ
+                    </button>
+                </div>
+
+                <div class="tab-panel"
+                     id="lesson-panel-lesson"
+                     role="tabpanel" aria-labelledby="lesson-tab-lesson">
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Урок</legend>
+
+                        {# Цель урока: единый селект — поле меняется по типу. #}
+                        {{ target_select("student", student_id, student_name) }}
+                        {{ target_select("group", group_id, group_name) }}
+
+                        <div class="field field--full">
+                            <label class="label" for="lesson-note">Заметка к занятию</label>
+                            <textarea class="input" id="lesson-note" name="note"
+                                      rows="4">{{ form.note or "" }}</textarea>
+                        </div>
+
+                        <div class="field field--full">
+                            <label class="label" for="lesson-meeting-url">Ссылка на встречу</label>
+                            <input class="input" id="lesson-meeting-url" type="url"
+                                   name="meeting_url"
+                                   value="{{ form.meeting_url or '' }}"
+                                   placeholder="https://...">
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="lesson-starts-at">Начало *</label>
+                            <input class="input" id="lesson-starts-at" type="datetime-local"
+                                   name="starts_at" value="{{ form.starts_at_value }}" required
+                                   @input="onStartInput($event.target.value)"
+                                   @focus="onStartFocus()"
+                                   @blur="onStartBlur()">
+                            {# Подсказка обновляется при изменении «Начала»
+                               или «Длительности» (см. lessonForm в lessons.js). #}
+                            <p class="form-hint" x-cloak
+                               x-show="endTimeLabel()"
+                               x-text="'Урок закончится в ' + endTimeLabel()"></p>
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="lesson-duration">Длительность</label>
+                            <select class="input" id="lesson-duration" name="duration_min"
+                                    @change="onDurationChange($event.target.value)">
+                                {% for minutes in durations %}
+                                <option value="{{ minutes }}"
+                                        {% if form.duration_min == minutes %}selected{% endif %}>
+                                    {{ minutes }} мин
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        {% if show_repeat %}
+                        <div class="field">
+                            <label class="checkbox">
+                                {# Повтор включается только с заполненным
+                                   «Началом»: из него предзаполняются слоты. #}
+                                <input type="checkbox" name="repeat"
+                                       x-model="repeat"
+                                       :disabled="!startsAt"
+                                       @change="onRepeatChange()">
+                                <span>Повторять урок</span>
+                            </label>
+                            <p class="form-hint" x-show="!startsAt" x-cloak>
+                                Сначала укажите начало урока.
+                            </p>
+                        </div>
+
+                        {# Панель настройки расписания серии (спека «Панель
+                           настройки расписания серии»): слоты с «Добавить
+                           время» (предзаполнение из «Начало» и «Длительности»),
+                           интервал недель и дата окончания. Слоты уходят одним
+                           скрытым полем JSON (решение D1). #}
+                        <div class="schedule-panel" x-show="repeat" x-cloak>
+                            <p class="schedule-panel__title">Расписание повтора</p>
+
+                            <template x-for="(slot, index) in slots" :key="index">
+                                <div class="schedule-slot">
+                                    <select class="input schedule-slot__weekday"
+                                            x-model.number="slot.weekday"
+                                            :aria-label="'День недели слота ' + (index + 1)">
+                                        {% for label in weekdays %}
+                                        <option value="{{ loop.index0 }}">{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <input class="input schedule-slot__time" type="time"
+                                           x-model="slot.start"
+                                           :aria-label="'Начало слота ' + (index + 1)">
+                                    <span class="schedule-slot__dash" aria-hidden="true">–</span>
+                                    <input class="input schedule-slot__time" type="time"
+                                           x-model="slot.end"
+                                           :aria-label="'Окончание слота ' + (index + 1)">
+                                    <button class="btn btn--ghost btn--icon" type="button"
+                                            @click="removeSlot(index)"
+                                            :aria-label="'Убрать время слота ' + (index + 1)">
+                                        <i data-lucide="x"></i>
+                                    </button>
+                                </div>
+                            </template>
+
+                            <button class="btn btn--outline btn--sm" type="button"
+                                    :disabled="!startsAt"
+                                    @click="addSlot()">
+                                <i data-lucide="plus"></i>
+                                Добавить время
+                            </button>
+
+                            <input type="hidden" name="slots" :value="slotsValue()">
+
+                            <div class="schedule-panel__row">
+                                <div class="field">
+                                    <label class="label" for="lesson-interval">Интервал (нед.)</label>
+                                    <input class="input schedule-panel__interval"
+                                           id="lesson-interval" type="number"
+                                           name="interval_weeks" min="1" step="1" value="1">
+                                </div>
+                                <div class="field">
+                                    <label class="label" for="lesson-until">Дата окончания</label>
+                                    <input class="input schedule-panel__until"
+                                           id="lesson-until" type="date"
+                                           name="until_date" value="{{ form.until_date }}">
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="field">
+                            <label class="label" for="lesson-type">Тип урока</label>
+                            <select class="input" id="lesson-type" name="type" x-model="type">
+                                {% for value, label in type_labels.items() %}
+                                <option value="{{ value }}"
+                                        {% if form.type == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="field" x-show="type !== 'group'" x-cloak>
+                            <label class="label" for="lesson-price">Оплата ученика</label>
+                            <input class="input" id="lesson-price" type="number" name="price"
+                                   min="0" step="1"
+                                   :disabled="type === 'group'"
+                                   value="{{ form.price }}"
+                                   placeholder="1200"
+                                   {% if show_price_warning %}@input="markPriceDirty($event.target.value)"{% endif %}>
+                            {% if show_price_warning %}
+                            {# Предупреждение видно до сохранения, как только
+                               оплата проведённого урока изменена (спека
+                               «Цены проведённого урока»). #}
+                            <p class="form-hint form-hint--warning"
+                               x-show="priceDirty" x-cloak>
+                                Оплата урока изменена: система проверит и пересчитает списание.
+                            </p>
+                            {% endif %}
+                        </div>
+                    </fieldset>
+
+                    {% if lesson %}
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Проведение</legend>
+                        <div class="field">
+                            <label class="label" for="lesson-status">Статус</label>
+                            <select class="input" id="lesson-status" name="status">
+                                {% for value in statuses %}
+                                <option value="{{ value }}"
+                                        {% if form.status == value %}selected{% endif %}>
+                                    {{ status_labels[value] }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Для семьи</legend>
+                        <div class="field">
+                            <span class="label" id="lesson-rating-label">Оценка</span>
+                            <div class="rating-stars" role="radiogroup"
+                                 aria-labelledby="lesson-rating-label">
+                                {% for star in rating_stars %}
+                                <label class="rating-star">
+                                    <input class="sr-only" type="radio" name="rating"
+                                           value="{{ star }}"
+                                           {% if form.rating == star %}checked{% endif %}>
+                                    <span class="rating-star__view" aria-hidden="true">★</span>
+                                    <span class="sr-only">{{ star }}</span>
+                                </label>
+                                {% endfor %}
+                                <label class="rating-star">
+                                    <input class="sr-only" type="radio" name="rating" value=""
+                                           {% if not form.rating %}checked{% endif %}>
+                                    <span class="rating-star__view rating-star__view--clear"
+                                          aria-hidden="true">—</span>
+                                    <span class="sr-only">Без оценки</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="lesson-family-comment">Комментарий для семьи</label>
+                            <textarea class="input" id="lesson-family-comment"
+                                      name="family_comment"
+                                      rows="2">{{ form.family_comment or "" }}</textarea>
+                        </div>
+                    </fieldset>
+
+                    {% if series_id %}
+                    <div class="field">
+                        <label class="checkbox">
+                            <input type="checkbox" name="series_all" value="1">
+                            <span>Применить ко всей серии</span>
+                        </label>
+                        <p class="form-hint">
+                            Тип, цель, длительность, ссылка и оплата изменятся у всех
+                            уроков серии, включая прошедшие. Статус, оценка, комментарий
+                            и заметка — только у этого урока.
+                        </p>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                {% if lesson %}
+                {# Двухшаговое подтверждение удаления (паттерн _manage.html):
+                   первый клик переводит кнопку в состояние «Точно …» и ничего
+                   не отправляет, второй — POST. #}
+                <button class="btn btn--destructive" type="button"
+                        x-show="!confirmingDelete"
+                        @click="confirmingDelete = true">
+                    Удалить
+                </button>
+                <button class="btn btn--destructive" type="button"
+                        hx-post="/tutor/lessons/{{ lesson.id }}/delete"
+                        hx-target="#modal" hx-swap="innerHTML"
+                        x-show="confirmingDelete" x-cloak>
+                    Точно удалить?
+                </button>
+                {% if series_id %}
+                <button class="btn btn--destructive" type="button"
+                        x-show="!confirmingSeriesDelete"
+                        @click="confirmingSeriesDelete = true">
+                    Серию
+                </button>
+                <button class="btn btn--destructive" type="button"
+                        hx-post="/tutor/lessons/{{ lesson.id }}/delete-series"
+                        hx-target="#modal" hx-swap="innerHTML"
+                        x-show="confirmingSeriesDelete" x-cloak>
+                    Точно серию?
+                </button>
+                {% endif %}
+                {% endif %}
+                <button class="btn btn--ghost" type="button" @click="close()">Закрыть</button>
+                <button class="btn btn--primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>

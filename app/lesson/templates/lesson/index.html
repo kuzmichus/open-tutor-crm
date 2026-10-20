@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Уроки — Open Tutor CRM{% endblock %}
+
+{# Клиентский селект цели урока (Alpine.data `lessonTarget`). Подключается
+   только на странице уроков и до alpine.min.js — `{% block head %}`
+   в base.html (решение D5/D8). #}
+{% block head %}
+    <script src="/static/lessons.js" defer></script>
+{% endblock %}
+
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            <div class="page-header page-header--row">
+                <div>
+                    <h1>Уроки</h1>
+                    <p>История и управление уроками</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button class="btn btn--primary" type="button"
+                            hx-get="/tutor/lessons/new" hx-target="#modal" hx-swap="innerHTML">
+                        <i data-lucide="plus"></i>
+                        Создать урок
+                    </button>
+                </div>
+            </div>
+
+            <section class="card lessons-card">
+                <div class="card-header">
+                    {# Фильтры (задача 4.2): чипы периода, ученик и поиск
+                       комбинируются одним запросом к партиалу. #}
+                    <form id="lessons-filters"
+                          class="filters"
+                          role="search"
+                          hx-get="/tutor/lessons/list"
+                          hx-target="#lessons-table"
+                          hx-swap="innerHTML"
+                          hx-trigger="input changed delay:300ms from:input[name='q'], change from:select[name='student'], change from:input[name='period'], submit">
+                        <label class="sr-only" for="lessons-search">Поиск уроков</label>
+                        <input class="input filters__search"
+                               id="lessons-search"
+                               type="search"
+                               name="q"
+                               value="{{ q }}"
+                               placeholder="Ученик, группа или заметка">
+
+                        <label class="sr-only" for="lessons-student">Ученик</label>
+                        <select class="input filters__status"
+                                id="lessons-student"
+                                name="student">
+                            <option value="" {% if not student_id %}selected{% endif %}>Все ученики</option>
+                            {% for option in student_options %}
+                            <option value="{{ option.id }}" {% if student_id == option.id %}selected{% endif %}>{{ option.name }}</option>
+                            {% endfor %}
+                        </select>
+
+                        <div class="period-chips" role="group" aria-label="Период">
+                            <label class="period-chip">
+                                <input class="period-chip__input" type="radio"
+                                       name="period" value=""
+                                       {% if not period %}checked{% endif %}>
+                                <span class="period-chip__view">Все</span>
+                            </label>
+                            <label class="period-chip">
+                                <input class="period-chip__input" type="radio"
+                                       name="period" value="today"
+                                       {% if period == 'today' %}checked{% endif %}>
+                                <span class="period-chip__view">Сегодня</span>
+                            </label>
+                            <label class="period-chip">
+                                <input class="period-chip__input" type="radio"
+                                       name="period" value="week"
+                                       {% if period == 'week' %}checked{% endif %}>
+                                <span class="period-chip__view">На этой неделе</span>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="lessons-table"
+                     hx-get="/tutor/lessons/list"
+                     hx-trigger="lesson-saved from:body"
+                     hx-include="#lessons-filters"
+                     hx-swap="innerHTML">
+                    {% include "lesson/_table.html" %}
+                </div>
+            </section>
+
+            <div id="modal"></div>
+        </div>
+    </main>
+{% endblock %}

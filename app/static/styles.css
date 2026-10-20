@@ -560,6 +560,12 @@
                 color var(--duration-fast) var(--ease);
 
     & [data-lucide] { width: 16px; height: 16px; } /* 16px в кнопках */
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none; /* без hover-эффектов в неактивном состоянии */
+    }
   }
 
   .btn--primary {
@@ -733,6 +739,12 @@
     gap: calc(var(--space) * 2);
   }
 
+  /* Поле формы на обе колонки сетки `form-section` (секция — двухколоночная
+     сетка, по умолчанию поле занимает одну колонку). */
+  .field--full {
+    grid-column: 1 / -1;
+  }
+
   .label {
     font-size: var(--text-sm);
     font-weight: 500;
@@ -757,6 +769,20 @@
       border-color: var(--ring);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
     }
+
+    &:disabled {
+      background: var(--muted);
+      color: var(--muted-foreground);
+      cursor: not-allowed;
+    }
+  }
+
+  /* Текстовые поля: высоту задаёт `rows`, поэтому фиксированные 36px
+     от `.input` им не подходят. */
+  textarea.input {
+    height: auto;
+    min-height: 72px;
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
   }
 
   /* ==========================================================================
@@ -884,6 +910,183 @@
   .chip--new      { background: var(--status-regular);     color: var(--status-regular-fg); }
   .chip--active   { background: var(--status-unplanned);   color: var(--status-unplanned-fg); }
   .chip--archived { background: var(--muted);              color: var(--muted-foreground); }
+
+  /* Типы урока (спека lesson-management) */
+  .chip--individual { background: var(--status-regular);     color: var(--status-regular-fg); }
+  .chip--group      { background: var(--status-rescheduled); color: var(--status-rescheduled-fg); }
+  .chip--trial      { background: var(--status-cancelled);   color: var(--status-cancelled-fg); }
+  .chip--practice   { background: var(--muted);              color: var(--muted-foreground); }
+
+  /* Статусы урока: «Проведён» — зелёным (спека), «Запланирован» — нейтрально */
+  .chip--planned   { background: var(--muted);            color: var(--muted-foreground); }
+  .chip--completed { background: var(--status-unplanned); color: var(--status-unplanned-fg); }
+
+  /* ==========================================================================
+     Уроки: чипы фильтра периода («Все / Сегодня / На этой неделе»)
+     ========================================================================== */
+  .period-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  .period-chip {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .period-chip__input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .period-chip__view {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--card);
+    color: var(--secondary-foreground);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease),
+                border-color var(--duration-fast) var(--ease);
+  }
+
+  .period-chip__input:hover + .period-chip__view {
+    background: var(--brand-soft);
+  }
+
+  .period-chip__input:checked + .period-chip__view {
+    background: var(--brand);
+    border-color: transparent;
+    color: #fff;
+  }
+
+  .period-chip__input:focus-visible + .period-chip__view {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
+  /* ==========================================================================
+     Уроки: модальная форма — вкладки, панель расписания, оценка-звёзды,
+     подсказки и предупреждение о пересчёте списания
+     ========================================================================== */
+  .tab--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .schedule-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--muted);
+
+    /* Панель занимает обе колонки секции формы урока. */
+    grid-column: 1 / -1;
+  }
+
+  .schedule-panel__title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .schedule-slot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    width: 100%;
+  }
+
+  .schedule-slot__weekday {
+    width: auto;
+    min-width: 96px;
+  }
+
+  .schedule-slot__time {
+    width: auto;
+    min-width: 124px;
+  }
+
+  .schedule-slot__dash {
+    color: var(--muted-foreground);
+  }
+
+  /* Интервал и дата окончания — в одну строку, на всю ширину панели. */
+  .schedule-panel__row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 3);
+    width: 100%;
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .schedule-panel__interval,
+  .schedule-panel__until {
+    min-width: 160px;
+  }
+
+  .rating-stars {
+    display: inline-flex;
+    gap: calc(var(--space) * 0.5);
+  }
+
+  .rating-star {
+    display: inline-flex;
+    cursor: pointer;
+  }
+
+  .rating-star__view {
+    font-size: 1.2rem;
+    line-height: 1;
+    color: var(--muted-foreground);
+    transition: color var(--duration-fast) var(--ease);
+  }
+
+  .rating-star__view--clear {
+    font-size: var(--text-sm);
+  }
+
+  .rating-star input:checked + .rating-star__view {
+    color: var(--brand);
+  }
+
+  .rating-star input:focus-visible + .rating-star__view {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .form-hint {
+    margin-top: calc(var(--space));
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .form-hint--warning {
+    color: var(--status-cancelled);
+    font-weight: 500;
+  }
 
   /* ==========================================================================
      Страница учеников: сетка карточек, фильтры, вид «список»
@@ -1053,6 +1256,103 @@
 
     .students-table__th,
     .students-table__cell {
+      padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    }
+  }
+
+  /* ==========================================================================
+     Уроки: таблица списка (спека lesson-management)
+     ========================================================================== */
+  .lessons-card {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+
+  .lessons-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    color: var(--card-foreground);
+    box-shadow: var(--shadow-card);
+  }
+
+  .lessons-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .lessons-table__head {
+    background: var(--muted);
+  }
+
+  .lessons-table__th {
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  .lessons-table__th--status {
+    text-align: right;
+  }
+
+  .lessons-table__row {
+    /* Клик по строке открывает модалку редактирования (задачи 6.1–6.3). */
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    /* Зебра: чётные строки на втором фоне */
+    &:nth-child(even) {
+      background: var(--muted);
+    }
+  }
+
+  .lessons-table__cell {
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    vertical-align: middle;
+  }
+
+  .lessons-table__cell--status {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .lessons-table__target {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(var(--space) * 1.5);
+  }
+
+  .lessons-table__name {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .lessons-table__rating {
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  /* На телефоне таблица теснеет: компактные отступы и шрифт. */
+  @media (max-width: 639.98px) {
+    .lessons-table {
+      font-size: var(--text-xs);
+    }
+
+    .lessons-table__th,
+    .lessons-table__cell {
       padding: calc(var(--space) * 2) calc(var(--space) * 3);
     }
   }
@@ -1641,6 +1941,11 @@
     gap: calc(var(--space) * 2);
     font-size: var(--text-sm);
     color: var(--foreground);
+
+    &:has(input:disabled) {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   }
 
   /* Контакты в форме ученика: аккордеон привязанных строк и поле добавления

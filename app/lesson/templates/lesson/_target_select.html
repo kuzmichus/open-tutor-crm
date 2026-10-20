@@ -1,0 +1,144 @@
+{# Селект цели урока: ученик и группа — один компонент
+   (спека lesson-management, «Единый селект ученика и группы»).
+
+   Поведение (см. `app/static/lessons.js`):
+   - список открывается по клику/фокусу сразу — lookup-эндпоинт отвечает
+     на открытие пустым `q` (весь список выбора);
+   - ввод фильтрует открытый список (debounce → тот же lookup с `q`);
+   - в конце списка — разделитель и пункт «Добавить ученика» /
+     «Добавить группу»: он подменяет поле мини-формой;
+   - «Отменить» возвращает поле без изменений, ничего не создавая;
+   - ответ мини-формы (`_target_update.html`) приходит транспортом
+     `data-selected` / `data-error` и применяется событием
+     `lesson-target-created` (паттерн `group/_member_update.html`).
+
+   Видимость привязана к полю «Тип урока» модалки (`lessonForm.type`):
+   для «Группового» показывается селект группы, для остальных типов —
+   селект ученика; скрытое значение формы отключается (`:disabled`),
+   чтобы в POST не уехала цель «не того» вида.
+
+   Параметры макроса: `kind` ("student" | "group"), `selected_id`,
+   `selected_name` — значения для повторной отрисовки поля.
+
+   Поля мини-формы намеренно без `name`: они не должны уходить в POST
+   формы урока (у группового поля, например, цена называется иначе). #}
+{% macro target_select(kind, selected_id="", selected_name="") %}
+{% set is_student = kind == "student" %}
+{% set lookup_url = "/tutor/lessons/lookup/students" if is_student else "/tutor/lessons/lookup/groups" %}
+{% set create_url = "/tutor/lessons/students" if is_student else "/tutor/lessons/groups" %}
+{% set add_label = "Добавить ученика" if is_student else "Добавить группу" %}
+{% set placeholder = "Выберите ученика..." if is_student else "Выберите группу..." %}
+{% set config = {
+    "kind": kind,
+    "lookupUrl": lookup_url,
+    "createUrl": create_url,
+    "optionsId": "lesson-options-" ~ kind,
+    "updateId": "lesson-target-update-" ~ kind,
+    "selectedId": selected_id,
+    "selectedName": selected_name
+} %}
+<div class="person-picker lesson-target"
+     x-data="lessonTarget()"
+     data-config='{{ config | tojson }}'
+     data-lesson-target="{{ kind }}"
+     {% if is_student %}x-show="type !== 'group'"{% else %}x-show="type === 'group'"{% endif %} x-cloak
+     @click.outside="closeList()"
+     @lesson-target-created.window="onTargetCreated($event.detail)">
+
+    {# Поле выбора: скрытое значение формы + текстовый индикатор.
+       Обёртка — `field`, чтобы подпись была над строкой, а ввод
+       занял всю ширину селекта. #}
+    <div class="field" x-show="!miniOpen" x-cloak>
+        <input type="hidden" name="{{ kind }}_id" :value="selectedId"
+               {% if is_student %}:disabled="type === 'group'"{% else %}:disabled="type !== 'group'"{% endif %}>
+        <label class="label" for="lesson-target-{{ kind }}-input">
+            {{ "Ученик" if is_student else "Группа" }}
+        </label>
+        <input class="input" id="lesson-target-{{ kind }}-input"
+               type="text" x-ref="input"
+               autocomplete="off" spellcheck="false"
+               placeholder="{{ placeholder }}"
+               :value="selectedName"
+               @focus="openList()"
+               @click="openList()"
+               @input="onInput($event.target.value)"
+               @keydown.enter.prevent="enterChoose()"
+               @keydown.escape="closeList()">
+
+        <div class="combobox__list lesson-target__list" x-show="listOpen" x-cloak
+             @click="choose($event.target)">
+            <div class="lesson-target__options" id="{{ config.optionsId }}"></div>
+            <div class="combobox__divider"></div>
+            <div class="combobox__option combobox__option--action" role="button"
+                 tabindex="0"
+                 @mousedown.prevent @click="openMiniForm()">
+                <span class="combobox__name">
+                    <i data-lucide="plus"></i>
+                    {{ add_label }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {# Мини-форма создания подменяет поле; стили — общие с мини-формой
+       группы (`group-mini`, решение D7). #}
+    <div class="group-mini lesson-target__mini" x-show="miniOpen" x-cloak>
+        <p class="group-mini__title">{{ "Новый ученик" if is_student else "Новая группа" }}</p>
+        <div class="group-mini__fields">
+            {% if is_student %}
+            <label class="field">
+                <span class="label">Имя *</span>
+                <input class="input" type="text" x-ref="miniFirst"
+                       autocomplete="off"
+                       :class="miniError ? 'input--invalid' : ''"
+                       @keydown.enter.prevent="submitMiniForm()"
+                       @input="miniError = ''">
+            </label>
+            <label class="field">
+                <span class="label">Фамилия</span>
+                <input class="input" type="text" x-ref="miniLast"
+                       autocomplete="off"
+                       @keydown.enter.prevent="submitMiniForm()">
+            </label>
+            <label class="field">
+                <span class="label">Телефон</span>
+                <input class="input" type="tel" inputmode="tel"
+                       placeholder="+7 555 555-55-55"
+                       data-phone-mask x-ref="miniPhone"
+                       @keydown.enter.prevent="submitMiniForm()">
+            </label>
+            {% else %}
+            <label class="field">
+                <span class="label">Название *</span>
+                <input class="input" type="text" x-ref="miniName"
+                       autocomplete="off"
+                       :class="miniError ? 'input--invalid' : ''"
+                       @keydown.enter.prevent="submitMiniForm()"
+                       @input="miniError = ''">
+            </label>
+            <label class="field">
+                <span class="label">Цена за урок</span>
+                <input class="input" type="number" min="0" step="1"
+                       inputmode="numeric" placeholder="1200"
+                       x-ref="miniPrice"
+                       @keydown.enter.prevent="submitMiniForm()">
+            </label>
+            {% endif %}
+        </div>
+        <p class="error" x-show="miniError" x-cloak x-text="miniError"></p>
+        <div class="group-mini__actions">
+            <button class="btn btn--ghost btn--sm" type="button"
+                    @click="cancelMiniForm()">
+                Отменить
+            </button>
+            <button class="btn btn--primary btn--sm" type="button"
+                    @click="submitMiniForm()">
+                Создать
+            </button>
+        </div>
+    </div>
+
+    {# Транспорт ответа мини-формы: подменяется сам, id — по виду записи. #}
+    <div id="{{ config.updateId }}" class="hidden" aria-hidden="true"></div>
+</div>
+{% endmacro %}

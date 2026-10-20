@@ -1,0 +1,15 @@
+{# Ответ мини-форм создания селекта (ученик и группа).
+
+   Контекст: kind ("student" | "group"), selected ({id, name} | None),
+   error (str | None).
+
+   Транспорт данных, а не видимый фрагмент: Alpine читает
+   `data-selected` / `data-error` после подмены и применяет их к полю
+   селекта (см. `htmx:afterSwap` в `app/static/lessons.js`, как в
+   `group/_member_update.html`). Разметка пустая, id — по виду записи,
+   чтобы ответ попал в контейнер своего поля. #}
+<div id="lesson-target-update-{{ kind }}"
+     class="hidden"
+     aria-hidden="true"
+     data-selected='{{ selected | tojson }}'
+     {% if error %}data-error="{{ error }}"{% endif %}></div>

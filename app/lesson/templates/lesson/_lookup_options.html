@@ -1,0 +1,17 @@
+{# Фрагмент списка выбора цели урока — ответ lookup-эндпоинтов.
+
+   Контекст: options = [{id, name}, ...].
+
+   Опции — серверные элементы с классами `combobox`: контейнер подменяется
+   HTMX при открытии списка (пустой `q` — весь список) и при вводе в поле
+   (фильтр), Alpine читает `data-id` / `data-name` по клику (см.
+   `app/static/lessons.js`). Пустой результат — пояснение, как в общем
+   виджете `_person_picker.html`. #}
+{% for option in options %}
+<div class="combobox__option" role="option"
+     data-id="{{ option.id }}" data-name="{{ option.name }}">
+    <span class="combobox__name">{{ option.name }}</span>
+</div>
+{% else %}
+<div class="combobox__note">Ничего не найдено</div>
+{% endfor %}
