@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Группы — Open Tutor CRM{% endblock %}
+
+{# Клиентское состояние форм групп (Alpine.data `groupForm`). Подключается
+   только на странице групп и до alpine.min.js — см. `{% block head %}`
+   в base.html (решение D5). #}
+{% block head %}
+    <script src="/static/groups.js" defer></script>
+{% endblock %}
+
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            <div class="page-header page-header--row">
+                <div>
+                    <h1>Группы</h1>
+                    <p>Управление группами учеников</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button class="btn btn--primary" type="button"
+                            hx-get="/tutor/groups/new"
+                            hx-target="#modal"
+                            hx-swap="innerHTML">
+                        <i data-lucide="plus"></i>
+                        Создать группу
+                    </button>
+                </div>
+            </div>
+
+            {# Сетка перезапрашивается по событию `group-saved`: после создания
+               или удаления группы страница не перезагружается. #}
+            <div id="groups-grid"
+                 class="groups-grid"
+                 hx-get="/tutor/groups/list"
+                 hx-trigger="group-saved from:body"
+                 hx-swap="innerHTML">
+                {% include "group/_grid.html" %}
+            </div>
+
+            <!-- Сюда htmx вставляет модалки создания и управления -->
+            <div id="modal"></div>
+        </div>
+    </main>
+{% endblock %}

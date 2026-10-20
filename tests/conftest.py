@@ -108,6 +108,68 @@ def student_factory(tutor_factory):
 
 
 @pytest.fixture()
+def group_factory(tutor_factory):
+    """Создаёт группу в тестовой БД и возвращает её id.
+
+    `tutor_id` по умолчанию берётся у свежесозданного репетитора; имя по
+    умолчанию уникально, чтобы фабрику можно было звать подряд.
+    """
+
+    def _create(
+        tutor_id: str | None = None,
+        name: str | None = None,
+        **extra,
+    ):
+        from uuid import uuid4
+
+        from app.database import SessionLocal
+        from app.group.models.group import Group
+
+        if tutor_id is None:
+            tutor_id = tutor_factory()
+        if name is None:
+            name = f"Группа {uuid4().hex[:8]}"
+
+        with SessionLocal() as session:
+            group = Group(tutor_id=tutor_id, name=name, **extra)
+            session.add(group)
+            session.commit()
+            return group.id
+
+    return _create
+
+
+@pytest.fixture()
+def group_member_factory(group_factory, student_factory):
+    """Создаёт членство «ученик ∈ группа» и возвращает его id."""
+
+    def _create(
+        group_id: str | None = None,
+        student_id: str | None = None,
+        **extra,
+    ):
+        from app.database import SessionLocal
+        from app.group.models.group import Group
+        from app.group.models.group_member import GroupMember
+
+        if group_id is None:
+            group_id = group_factory()
+        if student_id is None:
+            # Ученик по умолчанию — тот же репетитор, что и у группы.
+            with SessionLocal() as session:
+                group = session.get(Group, group_id)
+            student_id = student_factory(tutor_id=group.tutor_id)
+
+        with SessionLocal() as session:
+            member = GroupMember(group_id=group_id, student_id=student_id, **extra)
+            session.add(member)
+            session.commit()
+            return member.id
+
+    return _create
+
+
+@pytest.fixture()
 def contact_factory(tutor_factory):
     """Создаёт контакт взрослого в тестовой БД и возвращает его id.
 

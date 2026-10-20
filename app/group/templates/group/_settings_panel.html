@@ -1,0 +1,34 @@
+{# Вкладка «Настройки» модалки управления группой.
+
+   Контекст: form, member_rows, max_members, options_json, errors.
+
+   Поля «Педагог», «Предмет» и «Ставка педагога» отсутствуют осознанно:
+   в проекте один репетитор, сущности предмета нет (спека group-management).
+   Состав редактируется общим блоком `_members_form.html` (задачи 4.4–4.6). #}
+<div class="tab-panel"
+     id="group-settings-panel"
+     data-tab-panel="settings"
+     role="tabpanel" aria-labelledby="group-tab-settings"
+     x-show="tab === 'settings'" x-cloak>
+
+    <div class="field">
+        <label class="label" for="group-settings-name">Название группы *</label>
+        <input class="input" id="group-settings-name" type="text" name="name"
+               value="{{ form.name }}" required maxlength="100">
+    </div>
+
+    <div class="field">
+        <label class="label" for="group-settings-price">Цена за урок (с чел.)</label>
+        <input class="input" id="group-settings-price" type="number" name="price"
+               min="0" step="1" value="{{ form.price }}"
+               placeholder="Например, 1200">
+    </div>
+
+    <div class="field">
+        <label class="label" for="group-settings-description">Описание</label>
+        <textarea class="input" id="group-settings-description" name="description"
+                  rows="2">{{ form.description }}</textarea>
+    </div>
+
+    {% include "group/_members_form.html" %}
+</div>

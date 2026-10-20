@@ -1,0 +1,123 @@
+{# Блок состава формы группы — общий для создания и вкладки «Настройки».
+
+   Контекст: member_rows (id, name, grade, joined, price), max_members,
+   options_json.
+
+   Строки состава живут в Alpine-состоянии `members` (см. groups.js):
+   добавление идёт списком выбора, «Убрать» переносит id в `removed`.
+   Именованные поля `member_joined_<id>` / `member_price_<id>` (решение D4)
+   уходят в POST вместе с `members[]` и `removed_members`.
+
+   Поле «Добавить ученика» — общий виджет `_person_picker.html`: он же
+   используется в форме ученика («Добавить контакт»), поэтому выглядит и
+   ведёт себя одинаково. Список открывается сразу по клику, не дожидаясь
+   ввода.
+
+   Мини-форма создания ученика (D9) — `div`, а не `<form>`: вложенная форма
+   внутри формы группы недопустима. Отправку делает Alpine через
+   `htmx.ajax`, поэтому пустое имя блокируется до запроса. #}
+{% from "_person_picker.html" import person_picker with context %}
+<fieldset class="form-section">
+    <legend class="form-section__title">
+        <span class="label-row">
+            <span>Ученики</span>
+            <span class="label-row__note">Макс: {{ max_members }}</span>
+        </span>
+    </legend>
+
+    <div class="span-2 group-members"
+         data-options="{{ options_json }}"
+         data-max-members="{{ max_members }}">
+        <p class="group-members__empty" x-show="members.length === 0" x-cloak>
+            Нет добавленных учеников
+        </p>
+
+        <ul class="group-members__list">
+            <template x-for="member in members" :key="member.id">
+                <li class="group-members__row">
+                    <input type="hidden" name="members" :value="member.id">
+                    <div class="group-members__main">
+                        <span class="group-members__name" x-text="member.name"></span>
+                        <span class="group-members__meta"
+                              x-text="member.grade ? member.grade + ' класс' : ''"></span>
+                    </div>
+                    <label class="group-members__field">
+                        <span class="sr-only" x-text="'Дата вступления: ' + member.name"></span>
+                        <input class="input input--sm" type="date"
+                               :name="'member_joined_' + member.id"
+                               x-model="member.joined">
+                    </label>
+                    <label class="group-members__field">
+                        <span class="sr-only" x-text="'Индивидуальная цена: ' + member.name"></span>
+                        <input class="input input--sm" type="number" min="0" step="1"
+                               placeholder="По цене группы"
+                               :name="'member_price_' + member.id"
+                               x-model="member.price">
+                    </label>
+                    <button class="btn btn--ghost btn--sm" type="button"
+                            @click="removeMember(member)"
+                            :aria-label="'Убрать ' + member.name">
+                        <i data-lucide="x"></i>
+                        Убрать
+                    </button>
+                </li>
+            </template>
+        </ul>
+
+        {# Список выбора: только свои активные/новые ученики, уже состоящие
+           исключены сервером (`exclude_ids`) и клиентом. #}
+        <div class="group-members__add" x-show="!miniOpen" x-cloak>
+            {{ person_picker(
+                "group-member-search", "group-member-listbox",
+                placeholder="Добавить ученика...",
+                name_expr="item.name",
+                meta_expr="item.grade ? item.grade + ' класс' : ''",
+                empty_note="Ничего не найдено",
+                full_note="Макс: " ~ max_members ~ " участников",
+                action={"label": "Добавить ученика", "icon": "plus",
+                        "click": "openMiniForm()"}
+            ) }}
+        </div>
+
+        <div class="group-mini" x-show="miniOpen" x-cloak>
+            <p class="group-mini__title">Новый ученик</p>
+            <div class="group-mini__fields">
+                <label class="field">
+                    <span class="label">Имя *</span>
+                    <input class="input" type="text" name="first_name"
+                           x-ref="miniFirst"
+                           :class="miniError ? 'input--invalid' : ''"
+                           @keydown.enter.prevent="submitMiniForm()"
+                           @input="miniError = ''">
+                </label>
+                <label class="field">
+                    <span class="label">Фамилия</span>
+                    <input class="input" type="text" name="last_name" x-ref="miniLast"
+                           @keydown.enter.prevent="submitMiniForm()">
+                </label>
+                <label class="field">
+                    <span class="label">Телефон</span>
+                    <input class="input" type="tel" name="phone" inputmode="tel"
+                           placeholder="+7 555 555-55-55"
+                           data-phone-mask
+                           x-ref="miniPhone"
+                           @keydown.enter.prevent="submitMiniForm()">
+                </label>
+            </div>
+            <p class="error" x-show="miniError" x-cloak x-text="miniError"></p>
+            <div class="group-mini__actions">
+                <button class="btn btn--ghost btn--sm" type="button" @click="cancelMiniForm()">
+                    Отменить
+                </button>
+                <button class="btn btn--primary btn--sm" type="button"
+                        @click="submitMiniForm()">
+                    Создать
+                </button>
+            </div>
+        </div>
+
+        {# Ответ мини-формы: строка участника и обновлённые опции выбора.
+           Alpine читает данные после подмены (D9) и кладёт строку в `members`. #}
+        <div id="group-members-update" class="hidden" aria-hidden="true"></div>
+    </div>
+</fieldset>

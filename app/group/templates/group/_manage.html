@@ -1,0 +1,130 @@
+{# Модалка управления группой: пять вкладок (спека group-management).
+
+   Контекст: group, form, member_rows, max_members, options_json, action,
+   title, subtitle, active_tab, errors.
+
+   Вкладки переключаются Alpine через `x-show` (решение D3): все панели
+   остаются в DOM, поэтому поля «Общего» и «Настроек» уходят в один POST.
+   Футер вне скроллящегося тела: «Удалить», «Отмена», «Сохранить». #}
+<div class="modal-root"
+     x-data="groupManage('{{ active_tab }}')"
+     data-members='{{ member_rows | tojson }}'
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     @group-saved.window="close()"
+     @group-deleted.window="close()"
+     @group-member-created.window="applyMemberUpdate($event.detail)">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="group-manage-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="group-manage-title">{{ title }}</h2>
+                <p class="modal-subtitle">{{ subtitle }}</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button" @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-post="{{ action }}"
+              hx-target="#modal"
+              hx-swap="innerHTML">
+            <input type="hidden" name="members_form" value="1">
+            <input type="hidden" name="removed_members" :value="removedIds">
+
+            <div class="modal-body">
+                {% if errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="tabs modal-tabs" role="tablist" aria-label="Разделы группы">
+                    {% for key, label in [
+                        ('general', 'Общее'),
+                        ('schedule', 'Расписание'),
+                        ('lessons', 'Занятия'),
+                        ('payments', 'Оплаты'),
+                        ('settings', 'Настройки')
+                    ] %}
+                    <button class="tab" type="button" role="tab"
+                            id="group-tab-{{ key }}"
+                            aria-controls="group-{{ key }}-panel"
+                            :aria-selected="tab === '{{ key }}' ? 'true' : 'false'"
+                            :class="tab === '{{ key }}' ? 'tab--active' : ''"
+                            @click="tab = '{{ key }}'">
+                        {{ label }}
+                    </button>
+                    {% endfor %}
+                </div>
+
+                {% include "group/_general_panel.html" %}
+
+                {# Заглушки будущих разделов: пояснение есть, действий,
+                   ведущих в 404, нет (правило спеки календаря). #}
+                <div class="tab-panel"
+                     id="group-schedule-panel"
+                     data-tab-panel="schedule"
+                     role="tabpanel" aria-labelledby="group-tab-schedule"
+                     x-show="tab === 'schedule'" x-cloak>
+                    <div class="tab-panel__empty">
+                        <i data-lucide="calendar-days"></i>
+                        <p>Расписание группы появится позже.</p>
+                    </div>
+                </div>
+
+                <div class="tab-panel"
+                     id="group-lessons-panel"
+                     data-tab-panel="lessons"
+                     role="tabpanel" aria-labelledby="group-tab-lessons"
+                     x-show="tab === 'lessons'" x-cloak>
+                    <div class="tab-panel__empty">
+                        <i data-lucide="book-open"></i>
+                        <p>Занятия группы появятся позже.</p>
+                    </div>
+                </div>
+
+                <div class="tab-panel"
+                     id="group-payments-panel"
+                     data-tab-panel="payments"
+                     role="tabpanel" aria-labelledby="group-tab-payments"
+                     x-show="tab === 'payments'" x-cloak>
+                    <div class="tab-panel__empty">
+                        <i data-lucide="wallet"></i>
+                        <p>Оплаты группы появятся позже.</p>
+                    </div>
+                </div>
+
+                {% include "group/_settings_panel.html" %}
+            </div>
+
+            <div class="modal-actions">
+                {# Двухшаговое подтверждение удаления (D7): первый клик переводит
+                   кнопку в состояние «Точно удалить?» и ничего не отправляет,
+                   второй — POST. Ответ подменяет сетку и закрывает модалку. #}
+                <button class="btn btn--destructive grow" type="button"
+                        x-show="!confirmingDelete"
+                        @click="confirmingDelete = true">
+                    Удалить
+                </button>
+                <button class="btn btn--destructive grow" type="button"
+                        hx-post="/tutor/groups/{{ group.id }}/delete"
+                        hx-target="#groups-grid"
+                        hx-swap="innerHTML"
+                        x-show="confirmingDelete" x-cloak
+                        @click="close()">
+                    Точно удалить?
+                </button>
+                <button class="btn btn--ghost" type="button" @click="close()">Отмена</button>
+                <button class="btn btn--primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>

@@ -8,6 +8,8 @@
 только импорты-регистраторы.
 """
 
+from app.group.models.group import Group  # noqa: F401
+from app.group.models.group_member import GroupMember  # noqa: F401
 from app.student.models.contact import Contact  # noqa: F401
 from app.student.models.student import Student  # noqa: F401
 from app.student.models.student_contact import StudentContact  # noqa: F401

@@ -255,169 +255,49 @@
     /* Поле добавления контакта: список из `data-options` (контакты
        репетитора) фильтруется по ФИО/телефону/email по мере ввода,
        Enter без совпадений создаёт новый контакт через `appendContactRow`
-       и раскрывает его форму (строка в шаблоне создаётся с `open=true`). */
+       и раскрывает его форму (строка в шаблоне создаётся с `open=true`).
+
+       Виджет списка — общий `createPersonPicker` (`picker.js`): то же поле
+       в форме группы выглядит и ведёт себя так же. Здесь — только домен:
+       какие контакты исключить и что сделать с выбранным. */
     Alpine.data("contactAdd", function () {
-      /* Сколько контактов показывать за раз: контактов у репетитора
-         десятки, ограничение держит выпадающий список компактным. */
-      var OPTION_LIMIT = 8;
-
-      return {
-        open: false,
-        query: "",
-        active: -1,
-        all: [],
-
-        init: function () {
-          try {
-            this.all = JSON.parse(this.$root.dataset.options || "[]");
-          } catch (e) {
-            this.all = [];
-          }
-        },
-
-        /* Контакты, уже привязанные к открытой форме (по hidden-полю
-           `contact_id`): их повторный выбор добавил бы дубль строки. */
-        linkedIds: function () {
-          var linked = {};
-          var ids = document.querySelectorAll(
-            "[data-contact-row] input[data-field=\"contact_id\"]"
-          );
-          for (var i = 0; i < ids.length; i++) {
-            if (ids[i].value) linked[ids[i].value] = true;
-          }
-          return linked;
-        },
-
-        /* Фильтр по подстроке без учёта регистра: ФИО и email целиком,
-           телефон — по цифрам (набор без форматирования). */
-        get matches() {
-          var query = this.query.trim().toLowerCase();
-          if (!query) return [];
-          var digits = query.replace(/\D/g, "");
-          var linked = this.linkedIds();
-          return this.all.filter(function (item) {
-            if (linked[item.id]) return false;
-            if (item.full_name.toLowerCase().indexOf(query) !== -1) return true;
-            if ((item.email || "").toLowerCase().indexOf(query) !== -1) return true;
-            if (
-              digits.length >= 3 &&
-              (item.phone || "").replace(/\D/g, "").indexOf(digits) !== -1
-            ) {
-              return true;
+      return window.mergePersonPicker(
+        window.createPersonPicker({
+          searchFields: ["full_name", "phone", "email"],
+          /* Контакты, уже привязанные к открытой форме (по hidden-полю
+             `contact_id`): их повторный выбор добавил бы дубль строки. */
+          exclude: function () {
+            var linked = {};
+            var ids = document.querySelectorAll(
+              "[data-contact-row] input[data-field=\"contact_id\"]"
+            );
+            for (var i = 0; i < ids.length; i++) {
+              if (ids[i].value) linked[ids[i].value] = true;
             }
-            return false;
-          });
-        },
-
-        get shown() {
-          return this.matches.slice(0, OPTION_LIMIT);
-        },
-
-        get hiddenCount() {
-          return Math.max(this.matches.length - OPTION_LIMIT, 0);
-        },
-
-        openList: function () {
-          // Список выпадает при начале ввода, а не при одном фокусе.
-          if (this.query.trim()) this.open = true;
-        },
-
-        closeList: function () {
-          this.open = false;
-          this.active = -1;
-        },
-
-        onInput: function (value) {
-          this.query = value;
-          this.open = value.trim() !== "";
-          this.active = -1;
-        },
-
-        choose: function (item) {
-          appendContactRow({
-            contact_id: item.id,
-            full_name: item.full_name,
-            phone: item.phone,
-            email: item.email,
-          });
-          this.reset();
-        },
-
-        createNew: function () {
-          var name = this.query.trim();
-          if (!name) return;
-          appendContactRow({ full_name: name });
-          this.reset();
-        },
-
-        reset: function () {
-          this.query = "";
-          this.active = -1;
-          this.open = false;
-          if (this.$refs.input) this.$refs.input.value = "";
-        },
-
-        onKeydown: function (event) {
-          var key = event.key;
-
-          if (key === "Escape") {
-            // Escape сначала закрывает список, а не модалку целиком.
-            if (this.open) {
-              event.preventDefault();
-              event.stopPropagation();
-              this.closeList();
-            }
-            return;
-          }
-
-          if (key === "ArrowDown" || key === "ArrowUp") {
-            event.preventDefault();
-            if (!this.query.trim()) return;
-            if (!this.open) {
-              this.open = true;
-              this.active = this.shown.length ? 0 : -1;
-              this.scrollActiveIntoView();
-              return;
-            }
-            if (!this.shown.length) return;
-            var step = key === "ArrowDown" ? 1 : -1;
-            var next = this.active + step;
-            if (next < 0) next = this.shown.length - 1;
-            if (next > this.shown.length - 1) next = 0;
-            this.active = next;
-            this.scrollActiveIntoView();
-            return;
-          }
-
-          if (key === "Enter") {
-            // Enter в текстовом поле отправил бы форму — гасим всегда.
-            event.preventDefault();
-            if (!this.query.trim()) return;
-            // Список открыт и что-то нашлось — выбираем подсвеченный или
-            // первый вариант; иначе (нет совпадений, список закрыт Escape)
-            // создаём новый контакт с введённым ФИО.
-            if (this.open && this.matches.length) {
-              this.choose(
-                this.active >= 0 && this.active < this.shown.length
-                  ? this.shown[this.active]
-                  : this.matches[0]
-              );
-            } else {
-              this.createNew();
-            }
-            return;
-          }
-
-          if (key === "Tab") this.closeList();
-        },
-
-        scrollActiveIntoView: function () {
-          var list = this.$refs.list;
-          if (!list) return;
-          var item = list.querySelector('[aria-selected="true"]');
-          if (item && item.scrollIntoView) item.scrollIntoView({ block: "nearest" });
-        },
-      };
+            return linked;
+          },
+          choose: function (item) {
+            appendContactRow({
+              contact_id: item.id,
+              full_name: item.full_name,
+              phone: item.phone,
+              email: item.email,
+            });
+          },
+          /* Enter без совпадений — создать новый контакт с введённым ФИО. */
+          onEnter: function () {
+            var name = this.query.trim();
+            if (!name) return;
+            appendContactRow({ full_name: name });
+            this.reset();
+          },
+        }),
+        {
+          init: function () {
+            this.initPicker();
+          },
+        }
+      );
     });
   });
 })();

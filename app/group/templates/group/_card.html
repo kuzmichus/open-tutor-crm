@@ -1,0 +1,81 @@
+{# Карточка группы. Контекст: option = {group, member_count}. #}
+{% set group = option.group %}
+<article class="group-card" id="group-card-{{ group.id }}">
+    <div class="group-card__head">
+        <div class="group-card__id">
+            <h3 class="group-card__name">{{ group.name }}</h3>
+            {% if group.description %}
+            <p class="group-card__desc">{{ group.description }}</p>
+            {% endif %}
+        </div>
+
+        {# Меню «...»: те же два действия, что и кнопки карточки. #}
+        <div class="group-card__menu" x-data="{ open: false, confirming: false }"
+             @click.outside="open = false; confirming = false">
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="open = !open; if (!open) confirming = false"
+                    :aria-expanded="open ? 'true' : 'false'"
+                    aria-haspopup="menu"
+                    aria-label="Действия с группой">
+                <i data-lucide="ellipsis"></i>
+            </button>
+            <div class="group-card__menu-list" role="menu" x-show="open" x-cloak>
+                <button class="group-card__menu-item" type="button" role="menuitem"
+                        hx-get="/tutor/groups/{{ group.id }}/edit"
+                        hx-target="#modal"
+                        hx-swap="innerHTML"
+                        @click="open = false">
+                    <i data-lucide="settings"></i>
+                    Управление
+                </button>
+                {# Двухшаговое подтверждение без системного диалога (D7):
+                   первый клик переводит пункт в «Точно удалить?», второй
+                   отправляет POST — ответ подменяет сетку. #}
+                <button class="group-card__menu-item group-card__menu-item--danger"
+                        type="button" role="menuitem"
+                        data-group-delete="{{ group.id }}"
+                        x-show="!confirming"
+                        @click="confirming = true">
+                    <i data-lucide="trash-2"></i>
+                    Удалить
+                </button>
+                <button class="group-card__menu-item group-card__menu-item--danger"
+                        type="button" role="menuitem"
+                        data-group-delete-confirm="{{ group.id }}"
+                        x-show="confirming" x-cloak
+                        hx-post="/tutor/groups/{{ group.id }}/delete"
+                        hx-target="#groups-grid"
+                        hx-swap="innerHTML"
+                        @click="open = false; confirming = false">
+                    <i data-lucide="trash-2"></i>
+                    Точно удалить?
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="group-card__metrics">
+        <span class="group-card__metric">
+            <i data-lucide="users"></i>
+            {{ group_members_label(option.member_count) }}
+        </span>
+        {# Цена показывается только если задана: «0 ₽» читалось бы как
+           утверждение о бесплатных занятиях. #}
+        {% if group.price_per_lesson is not none %}
+        <span class="group-card__metric">
+            <i data-lucide="wallet"></i>
+            {{ group_price(group.price_per_lesson) }}
+        </span>
+        {% endif %}
+    </div>
+
+    <div class="group-card__actions">
+        <button class="btn btn--outline btn--sm" type="button"
+                hx-get="/tutor/groups/{{ group.id }}/edit"
+                hx-target="#modal"
+                hx-swap="innerHTML">
+            <i data-lucide="settings"></i>
+            Управление
+        </button>
+    </div>
+</article>

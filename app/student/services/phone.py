@@ -31,6 +31,16 @@ def normalize_phone(value: str | None) -> str:
     return _NON_DIGITS_RE.sub("", value or "")
 
 
+def is_phone_like(value: str | None) -> bool:
+    """Похоже ли значение на запись телефона: пусто или только цифры и знаки.
+
+    Буквы, `доб. 12` и прочие посторонние символы телефоном не считаются —
+    форма может отклонить такое значение (мини-форма группы, D9).
+    """
+    raw = (value or "").strip()
+    return not raw or bool(_PHONE_CHARS_RE.match(raw))
+
+
 def format_phone(value: str | None) -> str:
     """Приводит номер к виду `+7 555 555-55-55`.
 
