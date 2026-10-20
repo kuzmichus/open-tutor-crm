@@ -1,0 +1,15 @@
+{# Партиал сетки групп: используется страницей списка и htmx-ответом
+   после создания или удаления группы. Контекст: options, total. #}
+{% if options %}
+    {% for option in options %}
+        {% include "group/_card.html" %}
+    {% endfor %}
+{% else %}
+    <div class="empty-state">
+        <i data-lucide="graduation-cap"></i>
+        <p class="empty-state__title">Групп пока нет</p>
+        <p class="empty-state__text">
+            Создайте первую группу — карточка появится здесь.
+        </p>
+    </div>
+{% endif %}

@@ -369,7 +369,9 @@ def test_students_js_syncs_contact_summary():
     assert "syncContactSummary" in STUDENTS_JS
     assert "data-summary" in STUDENTS_JS
     # Escape в пикере гасится, чтобы не закрыть модалку целиком.
-    assert "stopPropagation" in STUDENTS_JS
+    # Само поведение живёт в общем виджете списка выбора (picker.js).
+    picker_js = (STATIC_DIR / "picker.js").read_text(encoding="utf-8")
+    assert "stopPropagation" in picker_js
 
 def test_suggestion_fragment_has_both_actions(client, owner):
     with SessionLocal() as db:

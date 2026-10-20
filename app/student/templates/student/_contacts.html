@@ -2,12 +2,17 @@
 
    Список уже привязанных (или введённых) контактов: строка-сводка с ФИО,
    ролью и телефоном, клик раскрывает форму редактирования. Ниже — поле
-   добавления: при вводе выпадает список контактов из базы (`data-options`),
-   Enter без совпадений создаёт новый контакт и раскрывает его форму.
+   добавления: список контактов из базы (`data-options`) открывается сразу
+   по клику, ввод фильтрует его, Enter без совпадений создаёт новый контакт
+   и раскрывает его форму.
+
+   Поле добавления — общий виджет `_person_picker.html`: то же поле в форме
+   группы («Добавить ученика») выглядит и ведёт себя так же.
 
    Контекст: contact_rows, contact_rows_count, contact_rows_open,
    contact_options_json. #}
 {% from "student/_contact_row.html" import contact_row with context %}
+{% from "_person_picker.html" import person_picker with context %}
 <fieldset class="form-section">
     <legend class="form-section__title">Контакты</legend>
     <p class="card__desc">
@@ -27,39 +32,16 @@
 
     {# Добавление контакта: поиск по ФИО/телефону/email фильтруется по мере
        ввода, Enter без совпадений создаёт новый контакт (см. contactAdd). #}
-    <div class="contact-add"
-         x-data="contactAdd()"
-         data-options="{{ contact_options_json }}">
-        <label class="label" for="contact-add-input">Добавить контакт</label>
-        <input class="input" id="contact-add-input" type="text"
-               placeholder="ФИО, телефон или email"
-               autocomplete="off" spellcheck="false"
-               x-ref="input"
-               role="combobox" aria-autocomplete="list"
-               aria-controls="contact-add-list"
-               :aria-expanded="open ? 'true' : 'false'"
-               @input="onInput($event.target.value)"
-               @focus="openList()"
-               @blur="closeList()"
-               @keydown="onKeydown($event)">
-        <ul class="contact-add__list" id="contact-add-list" role="listbox"
-            x-ref="list" x-show="open" x-cloak>
-            <template x-for="(item, index) in shown" :key="item.id">
-                <li class="contact-add__option" role="option"
-                    :class="index === active ? 'contact-add__option--active' : ''"
-                    :aria-selected="index === active ? 'true' : 'false'"
-                    @mousedown.prevent @click="choose(item)">
-                    <span class="contact-add__name" x-text="item.full_name"></span>
-                    <span class="contact-add__phone" x-text="item.phone || item.email"></span>
-                </li>
-            </template>
-            <li class="contact-add__note" x-show="matches.length === 0" x-cloak>
-                Ничего не найдено: Enter создаст новый контакт.
-            </li>
-            <li class="contact-add__note" x-show="hiddenCount > 0" x-cloak
-                x-text="'… и ещё ' + hiddenCount + ': уточните поиск'"></li>
-        </ul>
-    </div>
+    {{ person_picker(
+        "contact-add-input", "contact-add-list",
+        placeholder="ФИО, телефон или email",
+        name_expr="item.full_name",
+        meta_expr="item.phone || item.email",
+        x_data="contactAdd()",
+        options_json=contact_options_json,
+        label="Добавить контакт",
+        empty_note="Ничего не найдено: Enter создаст новый контакт."
+    ) }}
 
     {# Инертный шаблон для Alpine: индекс подставляет students.js, чтобы имена
        полей новой строки не совпадали с уже введёнными. `open=true` — новая

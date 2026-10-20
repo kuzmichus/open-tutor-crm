@@ -1,0 +1,77 @@
+{# Модалка «Новая группа» (спека group-management, «Создание группы»).
+
+   Контекст: form (name, price, description), member_rows, options_json,
+   max_members, action, title, subtitle, errors.
+
+   Поля «Педагог», «Предмет» и «Ставка педагога» отсутствуют осознанно:
+   в проекте один репетитор, сущности предмета нет. #}
+<div class="modal-root"
+     x-data="groupForm()"
+     data-members='{{ member_rows | tojson }}'
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     @group-saved.window="close()"
+     @group-member-created.window="applyMemberUpdate($event.detail)">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="group-form-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="group-form-title">{{ title }}</h2>
+                <p class="modal-subtitle">{{ subtitle }}</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button" @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-post="{{ action }}"
+              hx-target="#modal"
+              hx-swap="innerHTML">
+            {# Маркер: блок состава отправлен. Без него POST только с полями
+               группы не трогает участников (см. group_form.py). #}
+            <input type="hidden" name="members_form" value="1">
+            <input type="hidden" name="removed_members" :value="removedIds">
+
+            <div class="modal-body">
+                {% if errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="field">
+                    <label class="label" for="group-name">Название группы *</label>
+                    <input class="input" id="group-name" type="text" name="name"
+                           value="{{ form.name }}" required maxlength="100">
+                </div>
+
+                <div class="field">
+                    <label class="label" for="group-price">Цена за урок (с чел.)</label>
+                    <input class="input" id="group-price" type="number" name="price"
+                           min="0" step="1" value="{{ form.price }}"
+                           placeholder="Например, 1200">
+                </div>
+
+                <div class="field">
+                    <label class="label" for="group-description">Описание</label>
+                    <textarea class="input" id="group-description" name="description"
+                              rows="2">{{ form.description }}</textarea>
+                </div>
+
+                {% include "group/_members_form.html" %}
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn--ghost" type="button" @click="close()">Отмена</button>
+                <button class="btn btn--primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>

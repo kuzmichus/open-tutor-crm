@@ -1,0 +1,94 @@
+{# Вкладка «Общее» модалки управления группой.
+
+   Контекст: group, member_rows, max_members, notes_saved (необязательно).
+
+   Панель отдаётся и страницей модалки, и ответом `POST /tutor/groups/{id}/notes`
+   (задача 5.6), поэтому вынесена отдельным шаблоном: после сохранения заметок
+   подменяется только она, вкладки и футер остаются на месте. #}
+<div class="tab-panel"
+     id="group-general-panel"
+     data-tab-panel="general"
+     role="tabpanel" aria-labelledby="group-tab-general"
+     x-show="tab === 'general'" x-cloak>
+
+    {# Сводка: числа участников и заглушки будущих разделов (расписание и
+       занятия появятся вместе с моделями уроков). #}
+    <dl class="group-summary">
+        <div class="group-summary__row">
+            <dt class="group-summary__label">Участники</dt>
+            <dd class="group-summary__value">
+                {{ member_rows | length }} из {{ max_members }}
+            </dd>
+        </div>
+        <div class="group-summary__row">
+            <dt class="group-summary__label">Расписание</dt>
+            <dd class="group-summary__value">—</dd>
+        </div>
+        <div class="group-summary__row">
+            <dt class="group-summary__label">Ближайшее занятие</dt>
+            <dd class="group-summary__value">—</dd>
+        </div>
+    </dl>
+
+    <fieldset class="form-section">
+        <legend class="form-section__title">Встреча</legend>
+        <div class="field span-2">
+            <label class="label" for="group-meeting-url">Постоянная ссылка на встречу</label>
+            <input class="input" id="group-meeting-url" type="url" name="meeting_url"
+                   value="{{ form.meeting_url }}" placeholder="https://..."
+                   maxlength="500">
+            <p class="card__desc">
+                Одна ссылка на все занятия группы — её получат ученики.
+            </p>
+        </div>
+    </fieldset>
+
+    <fieldset class="form-section">
+        <legend class="form-section__title">Ближайшие занятия</legend>
+        <div class="tab-panel__empty span-2">
+            <i data-lucide="calendar"></i>
+            <p>Занятия группы появятся здесь позже.</p>
+        </div>
+    </fieldset>
+
+    <fieldset class="form-section">
+        <legend class="form-section__title">Состав ({{ member_rows | length }})</legend>
+        {% if member_rows %}
+        <ul class="group-roster span-2">
+            {% for row in member_rows %}
+            <li class="group-roster__row">
+                <span class="group-roster__name">{{ row.name }}</span>
+                <span class="group-roster__meta">
+                    {% if row.joined %}{{ group_joined_label(row.joined) }}{% endif %}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="group-roster__empty span-2">В группе пока нет учеников.</p>
+        {% endif %}
+    </fieldset>
+
+    {# Заметки видны только репетитору. Сохраняются отдельным HTMX-POST
+       с подменой этой панели (задача 5.6). #}
+    <fieldset class="form-section">
+        <legend class="form-section__title">Заметки</legend>
+        <div class="field span-2 group-notes">
+            <label class="label" for="group-notes">Заметки к группе</label>
+            <textarea class="input" id="group-notes" name="notes" rows="3">{{ form.notes }}</textarea>
+            <p class="card__desc">Ученики заметки не видят.</p>
+            <div class="group-notes__actions">
+                {% if notes_saved %}
+                <span class="group-notes__saved" role="status">Заметки сохранены</span>
+                {% endif %}
+                <button class="btn btn--outline btn--sm" type="button"
+                        hx-post="/tutor/groups/{{ group.id }}/notes"
+                        hx-include="closest .group-notes"
+                        hx-target="#group-general-panel"
+                        hx-swap="outerHTML">
+                    Сохранить заметки
+                </button>
+            </div>
+        </div>
+    </fieldset>
+</div>

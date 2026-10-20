@@ -89,3 +89,53 @@ def test_student_template_classes_have_css_rules(template: str):
     assert not missing, (
         f"{template}: классы без CSS-правил: {', '.join(missing)}"
     )
+
+
+GROUP_TEMPLATES_DIR = ROOT / "app" / "group" / "templates" / "group"
+
+
+@pytest.mark.parametrize(
+    "template",
+    sorted(p.name for p in GROUP_TEMPLATES_DIR.glob("*.html")),
+)
+def test_group_template_classes_have_css_rules(template: str):
+    """Каждый класс из шаблонов групп описан в styles.css."""
+    html = (GROUP_TEMPLATES_DIR / template).read_text(encoding="utf-8")
+    missing = sorted(c for c in _literal_classes(html) if f".{c}" not in STYLES)
+    assert not missing, (
+        f"{template}: классы без CSS-правил: {', '.join(missing)}"
+    )
+
+
+def test_groups_grid_is_responsive():
+    """Сетка групп: одна колонка на телефоне, больше — на широких экранах."""
+    block = re.search(r"\.groups-grid\s*\{(.*?)\n  \}", STYLES, flags=re.S)
+    assert block, "В styles.css нет правила .groups-grid"
+    body = block.group(1)
+    assert "grid-template-columns: 1fr" in body
+    # Узкие экраны не ломают сетку: колонки добавляются только по min-width.
+    assert "@media (min-width: 640px)" in body
+    assert "@media (min-width: 1024px)" in body
+
+
+def test_group_card_uses_theme_tokens():
+    """Карточка группы не хардкодит цвета: только токены тёмной/светлой темы."""
+    block = re.search(r"\.group-card\s*\{(.*?)\n  \}", STYLES, flags=re.S)
+    assert block, "В styles.css нет правила .group-card"
+    body = block.group(1)
+    for prop in ("background: var(--card)", "color: var(--card-foreground)",
+                 "border: 1px solid var(--border)"):
+        assert prop in body, f".group-card без токена темы: {prop}"
+    # Никаких литеральных цветов (#fff, rgb(...)) в карточке.
+    assert not re.search(r"#[0-9a-fA-F]{3,6}\b", body)
+
+
+def test_group_menu_is_styled():
+    """Меню «...» карточки описано: кнопка, список, опасный пункт."""
+    for selector in (
+        ".group-card__menu",
+        ".group-card__menu-list",
+        ".group-card__menu-item",
+        ".group-card__menu-item--danger",
+    ):
+        assert selector in STYLES, f"нет правила {selector}"

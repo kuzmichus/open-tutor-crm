@@ -125,3 +125,20 @@ def test_sidebar_collapse_state_has_css_and_js(client):
     assert "html.sidebar-collapsed .sidebar" in css
     assert "sidebar-collapsed" in js
     assert "data-sidebar-toggle" in js
+
+
+def test_sidebar_groups_link_opens_working_page(client):
+    """Пункт «Группы» сайдбара ведёт на работающую страницу, а не на 404."""
+    _login(client, email="groups-nav-user@example.com")
+
+    page = client.get("/tutor/").text
+    start = page.index('<aside class="sidebar"')
+    sidebar_html = page[start : page.index("</aside>", start)]
+    assert 'href="/tutor/groups"' in sidebar_html
+    assert "Группы" in sidebar_html
+
+    response = client.get("/tutor/groups")
+    assert response.status_code == 200
+    assert "<h1>Группы</h1>" in response.text
+    # Пункт подсвечен как активный.
+    assert 'nav-item nav-item--active' in response.text

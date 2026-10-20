@@ -18,6 +18,7 @@ TEMPLATE_DIRS = [
     _APP_DIR / "tutor" / "templates",  # модуль tutor
     _APP_DIR / "student" / "templates",  # модуль student
     _APP_DIR / "calendar" / "templates",  # модуль calendar
+    _APP_DIR / "group" / "templates",  # модуль group
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
@@ -29,3 +30,11 @@ from app.student.services.presentation import (  # noqa: E402
 )
 
 register_template_helpers()
+
+# Функции отображения модуля групп (цена «1 200 ₽», счётчик участников,
+# подпись даты вступления).
+from app.group.services.presentation import (  # noqa: E402
+    register_template_helpers as register_group_template_helpers,
+)
+
+register_group_template_helpers()

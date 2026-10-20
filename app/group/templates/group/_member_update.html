@@ -1,0 +1,11 @@
+{# Ответ мини-формы создания ученика (D9).
+
+   Alpine читает `data-member` / `data-options` / `data-error` после подмены
+   (см. `htmx:afterSwap` в groups.js) и обновляет состав формы. Разметка
+   намеренно пустая: это транспорт данных, а не видимый фрагмент. #}
+<div id="group-members-update"
+     class="hidden"
+     aria-hidden="true"
+     data-member='{{ member | tojson }}'
+     data-options='{{ options | tojson }}'
+     {% if error %}data-error="{{ error }}"{% endif %}></div>

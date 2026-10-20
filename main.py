@@ -13,6 +13,7 @@ from app.calendar.views import router as calendar_router
 from app.common.views import router as common_router
 from app.common.views.not_found import not_found
 from app.database import init_db
+from app.group.views import router as group_router
 from app.student.views import router as student_router
 from app.tutor.views import router as tutor_router
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(tutor_router)
     app.include_router(calendar_router)
     app.include_router(student_router)
+    app.include_router(group_router)
     # Кастомная страница 404 вместо стандартного JSON/Not Found.
     app.add_exception_handler(404, not_found)
     # Статические ассеты (htmx и т.п.) отдаются локально, без CDN.
