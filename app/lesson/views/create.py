@@ -19,6 +19,7 @@ from app.database import get_db
 from app.lesson.services.lesson_form import (
     lesson_form_context,
     parse_lesson_form,
+    parse_starts_at,
     validate_targets,
 )
 from app.lesson.services.lesson_writer import create_series, create_single_lesson
@@ -39,12 +40,19 @@ def _saved_response(request: Request):
 @router.get(f"{LESSONS_URL}/new", response_class=HTMLResponse)
 def new_lesson_form(
     request: Request,
+    starts_at: str | None = None,
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 ) -> HTMLResponse:
-    """Пустая форма создания для вставки в контейнер `#modal`."""
+    """Пустая форма создания для вставки в контейнер `#modal`.
+
+    `?starts_at=` (из календаря) предзаполняет «Начало»; некорректное
+    значение просто игнорируется — форма открывается пустой.
+    """
+    prefill = parse_starts_at(starts_at)
+    data = {"starts_at": prefill} if prefill is not None else None
     return templates.TemplateResponse(
-        request, "lesson/_form.html", lesson_form_context(db)
+        request, "lesson/_form.html", lesson_form_context(db, data=data)
     )
 
 

@@ -439,6 +439,42 @@ def test_create_group_full_cycle(tutor_factory, student_factory):
         assert db.get(Student, second) is not None
 
 
+def test_create_group_assigns_color_from_palette(tutor_factory):
+    """Новая группа получает цвет из палитры (1.4)."""
+    from app.common.colors import PALETTE
+
+    owner = tutor_factory(email="group-color@example.com")
+    data, errors = parse_group_form(_form())
+    assert errors == []
+    with SessionLocal() as db:
+        group, save_errors = create_group(db, owner, data)
+        assert save_errors == []
+        assert group.color in PALETTE
+        saved = db.get(Group, group.id)
+        assert saved.color in PALETTE
+
+
+def test_update_group_keeps_color(tutor_factory, group_factory):
+    """Редактирование названия, цены и описания не меняет цвет (1.5)."""
+    from app.common.colors import PALETTE
+
+    owner = tutor_factory(email="group-color-update@example.com")
+    group_id = group_factory(tutor_id=owner, name="Старое имя", color=PALETTE[7])
+
+    data, errors = parse_group_form(
+        _form(name="Новое имя", price="1500", description="10 класс")
+    )
+    assert errors == []
+    with SessionLocal() as db:
+        assert update_group(db, db.get(Group, group_id), owner, data) == []
+
+    with SessionLocal() as db:
+        saved = db.get(Group, group_id)
+        assert saved.name == "Новое имя"
+        assert saved.price_per_lesson == 1500
+        assert saved.color == PALETTE[7]
+
+
 def test_create_group_rejects_foreign_student(tutor_factory, student_factory):
     """Чужой ученик не принимается сервером (защита поверх фильтра опций)."""
     owner = tutor_factory(email="foreign-member@example.com")

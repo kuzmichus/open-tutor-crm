@@ -108,23 +108,6 @@ def lessons_word(count: int) -> str:
     return f"{count} уроков"
 
 
-def demo_students() -> tuple[dict, ...]:
-    """Демо-ученики для формы создания (спека «Клик по четверти»).
-
-    Список собирается из паттерна расписания без дублей и в порядке
-    появления: имя, цена, цвет акцента и пометка группового занятия —
-    ровно те данные, которыми заполняется карточка нового урока.
-    """
-    students: dict[str, dict] = {}
-    for slots in _LESSONS_BY_WEEKDAY.values():
-        for _, _, name, price, color, is_group in slots:
-            students.setdefault(
-                name,
-                {"name": name, "price": price, "color": color, "is_group": is_group},
-            )
-    return tuple(students.values())
-
-
 def _day_events(day: date, *, vacation: bool, gap: bool) -> tuple[ScheduleEvent, ...]:
     """События одного дня по демо-правилам недели."""
     if gap:

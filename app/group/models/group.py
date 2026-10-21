@@ -39,6 +39,9 @@ class Group(Base):
     meeting_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Заметки к группе: видит только репетитор, ученикам не показываются.
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Цвет цели для календаря: назначается при создании из палитры
+    # `app/common/colors.py` и далее не меняется.
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

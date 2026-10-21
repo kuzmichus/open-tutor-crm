@@ -281,6 +281,39 @@ def test_create_student_accepts_linked_payer(tutor_factory):
         assert db.query(StudentContact).filter_by(student_id=student.id).count() == 1
 
 
+def test_create_student_assigns_color_from_palette(tutor_factory):
+    """Новый ученик получает непустой цвет из палитры (1.3)."""
+    from app.common.colors import PALETTE
+
+    tutor_id = tutor_factory()
+    with SessionLocal() as db:
+        student, errors = create_student(db, tutor_id, _student_data(), [])
+        assert errors == []
+        assert student.color in PALETTE
+        saved = db.get(Student, student.id)
+        assert saved.color in PALETTE
+
+
+def test_update_student_keeps_color(tutor_factory, student_factory):
+    """Редактирование полей не меняет назначенный цвет (1.5)."""
+    from app.common.colors import PALETTE
+
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id, color=PALETTE[5])
+
+    with SessionLocal() as db:
+        student = db.get(Student, student_id)
+        errors = update_student(
+            db,
+            student,
+            tutor_id,
+            _student_data(first_name="Мария", last_name="Петрова", phone="+7 999 111-22-33"),
+            [],
+        )
+        assert errors == []
+        assert db.get(Student, student_id).color == PALETTE[5]
+
+
 # --------------------------------------------------------------------------
 # Поиск контакта (5.2)
 # --------------------------------------------------------------------------

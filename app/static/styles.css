@@ -2558,7 +2558,10 @@
     transform: translateY(-4px);
   }
 
-  /* Карточка занятия: позиция и размер — в часах от 6:00, наложение — в % */
+  /* Карточка занятия: позиция и размер — в часах от 6:00, наложение — в %.
+     `container-type: size` превращает карточку в контейнер запросов: от её
+     высоты зависит, какие строки помещаются (см. .cal-event__time ниже).
+     Высота у карточки задана явно, поэтому size-контейнмент безопасен. */
   .cal-event {
     position: absolute;
     top: calc(var(--top) * var(--cal-hour-h));
@@ -2566,16 +2569,18 @@
     left: var(--left);
     width: var(--width);
     box-sizing: border-box;
+    container-type: size;
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    padding: calc(var(--space)) calc(var(--space) * 2);
+    gap: 0;
+    padding: 1px calc(var(--space) * 2);
     border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
     border-left: 3px solid var(--accent);
     border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--accent) 12%, var(--card));
     color: var(--card-foreground);
     font-size: var(--text-xs);
+    line-height: 1.15;                /* две строки влезают в 40-минутный урок */
     overflow: hidden;
     cursor: grab;
     touch-action: none;               /* drag без конфликта со скроллом */
@@ -2597,6 +2602,12 @@
     cursor: default;
   }
 
+  /* Просроченный урок: запланирован, но время прошло (design.md D5) —
+     акцент остаётся цветом цели, красной становится только рамка. */
+  .cal-event--overdue {
+    border-color: color-mix(in srgb, #ef4444 55%, transparent);
+  }
+
   /* Карточка в процессе перетаскивания: transform двигает calendar.js;
      сам hit-тест по сетке делает calendar.js (elementUnder), поэтому
      pointer-events здесь не трогаем — они нужны для pointer capture. */
@@ -2616,19 +2627,57 @@
 
   .cal-event__strip { display: none; }  /* полоса — через border-left */
 
+  /* Имя цели (ученик или группа) — главная строка карточки: она не сжимается
+     и не исчезает даже в самом коротком уроке. */
   .cal-event__title {
+    flex: 0 0 auto;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
+  /* Вторая строка: цена и интервал времени. Обрезается первой, когда
+     высоты карточки не хватает (см. @container ниже). */
+  .cal-event__meta {
+    flex: 0 0 auto;
+    display: flex;
+    gap: var(--space);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .cal-event__price {
+    color: var(--muted-foreground);
+  }
+
   .cal-event__time {
+    flex: 0 0 auto;
     font-family: var(--font-mono);
     color: var(--muted-foreground);
   }
 
+  /* Короткий урок (30 минут, карточка 24 px): вторая строка целиком не
+     помещается — остаётся только имя. Иначе сжимались обе строки и карточка
+     читалась как «одно время» без ученика. Полный текст всегда доступен во
+     всплывающей подсказке `title`. Порог — по content-box контейнера:
+     30 минут ≈ 20 px, 40 минут ≈ 28 px. */
+  @container (max-height: 24px) {
+    .cal-event__meta {
+      display: none;
+    }
+  }
+
+  /* Пометка «Группа» — третья строка: она появляется только там, где есть
+     запас высоты (урок от 50 минут). Название группы говорит о ней и так. */
+  @container (max-height: 38px) {
+    .cal-event__tag {
+      display: none;
+    }
+  }
+
   .cal-event__tag {
+    flex: 0 0 auto;
     align-self: flex-start;
     padding: 0 calc(var(--space));
     border-radius: var(--radius-full);
@@ -2659,10 +2708,24 @@
     cursor: default;
   }
 
-  /* Подпись состояния: «Свободен · запись по ссылке» / «Занят: <имя>» */
+  /* Подпись состояния: «Свободен · запись по ссылке» / «Занят: <имя>».
+     Как и имя цели у урока, она не сжимается: без `flex: 0 0 auto`
+     подпись схлопывалась до нуля, и слот читался как одно время. */
   .cal-event__state {
+    flex: 0 0 auto;
     font-weight: 600;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Слот ниже 48 px (40 минут ≈ 32 px): три строки не помещаются —
+     убираем интервал времени, оставляя подпись состояния и кнопку записи,
+     то есть то, по чему слот и опознаётся (спека slot-booking). */
+  @container (max-height: 47px) {
+    .cal-event--slot .cal-event__meta {
+      display: none;
+    }
   }
 
   /* Кнопка «Записаться» — только на карточке свободного слота */
@@ -2752,6 +2815,12 @@
     background: var(--muted);
   }
 
+  /* Активный режим раскраски в меню «Цвет» (design.md D5) */
+  .cal-color__menu button.is-active {
+    background: var(--muted);
+    font-weight: 600;
+  }
+
   /* Тост подтверждений демо-режима */
   .cal-toast {
     position: fixed;
@@ -2804,14 +2873,6 @@
   .cal-modal__title {
     font-size: var(--text-base);
     font-weight: 700;
-  }
-
-  /* Дата и время, подставленные из четверти часа */
-  .cal-modal__slot {
-    margin: calc(var(--space) * -2) 0 0;
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--muted-foreground);
   }
 
   .cal-modal__actions {

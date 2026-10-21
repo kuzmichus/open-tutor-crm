@@ -9,19 +9,19 @@
 #}
 <div class="cal-toolbar">
     <button class="btn btn--ghost btn--icon" type="button"
-            hx-get="/tutor/calendar?start={{ prev_start }}"
+            hx-get="/tutor/calendar?start={{ prev_start }}&color={{ color_mode }}"
             hx-target="#calendar-swap"
             aria-label="Предыдущая неделя">
         <i data-lucide="chevron-left"></i>
     </button>
     <button class="btn btn--ghost btn--icon" type="button"
-            hx-get="/tutor/calendar?start={{ next_start }}"
+            hx-get="/tutor/calendar?start={{ next_start }}&color={{ color_mode }}"
             hx-target="#calendar-swap"
             aria-label="Следующая неделя">
         <i data-lucide="chevron-right"></i>
     </button>
     <button class="btn btn--ghost" type="button"
-            hx-get="/tutor/calendar"
+            hx-get="/tutor/calendar?color={{ color_mode }}"
             hx-target="#calendar-swap">
         Сегодня
     </button>
@@ -37,21 +37,33 @@
     </span>
     {% endif %}
 
-    {# Кнопки-заглушки демо-режима: без href/action — битых ссылок нет.
-       «Ссылка на окна» копирует ссылку на текущую неделю и показывает
-       тост «демо»; «Цвет: ученик» раскрывает выпадающий список с
-       подсказкой о демо-режиме (спека «Кнопки-заглушки»). #}
+    {# Кнопки панели: «Ссылка на окна» копирует ссылку на текущую неделю и
+       показывает тост «демо»; «Цвет» — работающий контрол режима раскраски
+       (design.md D5): «По ученику» / «По статусу». Активный режим приходит
+       с сервера (`?color=`), выбор запоминается в localStorage.
+
+       Иконка палитры стоит рядом с подписью, а не внутри неё: подпись
+       обновляет `x-text`, и он заменил бы содержимое кнопки вместе с
+       иконкой, поэтому `x-text` живёт на отдельном `<span>`. #}
     <button class="btn btn--ghost" type="button" id="cal-link"
             @click="copyWeekLink()">Ссылка на окна</button>
     <div class="cal-color">
         <button class="btn btn--ghost" type="button" id="cal-color"
                 aria-haspopup="true"
                 :aria-expanded="colorOpen ? 'true' : 'false'"
-                @click="colorOpen = !colorOpen">Цвет: ученик</button>
-        <ul class="cal-color__menu" x-cloak x-show="colorOpen"
-            @click.outside="colorOpen = false">
-            <li><button type="button" @click="pickColor('Ученик')">Ученик</button></li>
-            <li><button type="button" @click="pickColor('Группа')">Группа</button></li>
+                @click="colorOpen = !colorOpen">
+            <i data-lucide="palette" aria-hidden="true"></i>
+            <span x-text="colorMode === 'status' ? 'Цвет: по статусу' : 'Цвет: по ученику'">Цвет: по ученику</span>
+        </button>
+        <ul class="cal-color__menu" id="cal-color-menu" x-cloak x-show="colorOpen"
+            @click.outside="colorOpen = false"
+            @keydown.escape.window="colorOpen = false">
+            <li><button type="button" data-color-set="target"
+                        :class="colorMode === 'target' ? 'is-active' : ''"
+                        @click="setColorMode('target')">По ученику</button></li>
+            <li><button type="button" data-color-set="status"
+                        :class="colorMode === 'status' ? 'is-active' : ''"
+                        @click="setColorMode('status')">По статусу</button></li>
         </ul>
     </div>
     <button class="btn btn--primary" type="button" id="cal-add" @click="openForm()">Добавить</button>
@@ -136,19 +148,41 @@
             {% endfor %}
 
             {% for event in day.lessons %}
-            <div class="cal-event{% if event.is_past %} cal-event--past{% endif %}"
+            {# Карточка реального урока открывает его форму редактирования в
+               #modal (design.md D7). Демо-события (отпуск, слоты) id урока
+               не имеют и ссылку не получают. `data-completed` запрещает
+               перетаскивание проведённого урока (design.md D8).
+
+               Имя цели — отдельная строка без цены: в коротком уроке
+               (30–45 минут) карточка высотой 24–36 px вмещает одну строку,
+               и это должна быть цель, а не время (спека «Содержимое блока»).
+               Цена — второй строкой рядом со временем; полный текст всегда
+               доступен во всплывающей подсказке `title`. #}
+            <div class="cal-event{% if event.is_past %} cal-event--past{% endif %}{% if event.is_overdue %} cal-event--overdue{% endif %}"
+                 {% if event.lesson_id %}hx-get="/tutor/lessons/{{ event.lesson_id }}/edit"
+                 hx-target="#modal"
+                 hx-swap="innerHTML"{% endif %}
                  data-student="{{ event.title }}"
+                 data-lesson-id="{{ event.lesson_id }}"
+                 data-target-id="{{ event.target_id }}"
                  data-date="{{ event.date }}"
                  data-start-min="{{ event.start_min }}"
                  data-duration-min="{{ event.duration_min }}"
+                 {% if event.is_completed %}data-completed="true"{% endif %}
+                 title="{{ event.title }} · {{ event.time_label }}"
                  style="--top: {{ event.top_h }};
                         --dur: {{ event.height_h }};
                         --left: {{ event.left_pct }};
                         --width: {{ event.width_pct }};
                         --accent: {{ event.color }};">
                 <span class="cal-event__strip" aria-hidden="true"></span>
-                <span class="cal-event__title">{{ event.title }}</span>
-                <span class="cal-event__time">{{ event.time_label }}</span>
+                <span class="cal-event__title">{{ event.target_name }}</span>
+                <span class="cal-event__meta">
+                    {% if event.price_label %}
+                    <span class="cal-event__price">{{ event.price_label }}</span>
+                    {% endif %}
+                    <span class="cal-event__time">{{ event.time_label }}</span>
+                </span>
                 {% if event.is_group %}
                 <span class="cal-event__tag">Группа</span>
                 {% endif %}
@@ -164,42 +198,28 @@
 </div>
 
 {#
-  Модалка «Новый урок»/«Новый слот»: один экземпляр на все точки входа —
-  клик по пустой четверти (предзаполняет дату/время из data-* ячейки),
-  кнопка «Добавить», мобильная FAB и «Добавить слот» (design.md D1).
-  Режим `modal.mode`: «lesson» — статичная строка даты·времени и выбор
-  ученика; «slot» — редактируемые дата/время, выбор ученика скрыт
-  (спека slot-booking). Предмета в форме нет (спека); сохранение
-  в демо-режиме добавляет карточку только в DOM.
+   Модалка «Новый слот» (design.md D9: демо-форма урока удалена — урок
+   создаётся настоящей формой страницы Уроков в `#modal`).
+   Точка входа — пункт «Добавить слот» (design.md D1); поля даты/времени
+   редактируемые (спека slot-booking), сохранение добавляет карточку
+   только в DOM.
 #}
 <div class="cal-modal" x-cloak x-show="modal.open" role="dialog"
      aria-modal="true" aria-labelledby="cal-modal-title"
      @keydown.escape.window="closeModal()">
     <div class="cal-modal__backdrop" @click="closeModal()"></div>
     <div class="cal-modal__panel">
-        <h3 id="cal-modal-title" class="cal-modal__title"
-            x-text="modal.mode === 'slot' ? 'Новый слот' : 'Новый урок'">Новый урок</h3>
-        <p class="cal-modal__slot" x-show="modal.mode !== 'slot'"
-           x-text="modal.date + ' · ' + modal.time"></p>
+        <h3 id="cal-modal-title" class="cal-modal__title">Новый слот</h3>
 
-        {# Режим «слот»: редактируемые дата и время вместо статичной строки
-           (design.md D2), шаг времени 900 с = граница четверти часа #}
-        <div class="field" x-show="modal.mode === 'slot'">
+        {# Редактируемые дата и время (design.md D2), шаг времени
+           900 с = граница четверти часа #}
+        <div class="field">
             <label class="label" for="cal-slot-date">Дата</label>
             <input class="input" id="cal-slot-date" type="date" x-model="slotForm.date">
         </div>
-        <div class="field" x-show="modal.mode === 'slot'">
+        <div class="field">
             <label class="label" for="cal-slot-time">Время</label>
             <input class="input" id="cal-slot-time" type="time" step="900" x-model="slotForm.time">
-        </div>
-
-        <div class="field" id="cal-student-field" x-show="modal.mode !== 'slot'">
-            <label class="label" for="cal-student">Ученик</label>
-            <select class="input" id="cal-student" x-model="modal.student">
-                {% for student in demo_students %}
-                <option value="{{ student.name }}">{{ student.name }}</option>
-                {% endfor %}
-            </select>
         </div>
 
         <div class="field">
@@ -210,8 +230,7 @@
 
         <div class="cal-modal__actions">
             <button class="btn btn--ghost" type="button" @click="closeModal()">Отмена</button>
-            <button class="btn btn--primary" type="button" x-show="modal.mode !== 'slot'" @click="saveLesson()">Сохранить</button>
-            <button class="btn btn--primary" type="button" x-show="modal.mode === 'slot'" @click="createSlot()">Создать</button>
+            <button class="btn btn--primary" type="button" @click="createSlot()">Создать</button>
         </div>
     </div>
 </div>
@@ -276,11 +295,11 @@
     </form>
 </div>
 
-{# Единый рендерер карточки: серверные уроки и «Сохранить» в модалке
-   собираются из одной разметки, чтобы позиционирование не расходилось
-   (design.md D6). Inert-шаблон, в поток не выводится; класс `cal-event`
-   рендерер добавляет при клонировании — иначе шаблон читался бы как
-   карточка в «пустой неделе». #}
+{# Единый рендерер карточки: серверные уроки и демо-слоты собираются из
+   одной разметки, чтобы позиционирование не расходилось (design.md D6).
+   Inert-шаблон, в поток не выводится; класс `cal-event` рендерер
+   добавляет при клонировании — иначе шаблон читался бы как карточка
+   в «пустой неделе». #}
 <template id="cal-event-template">
     <div data-student=""
          data-date=""
@@ -289,7 +308,10 @@
          style="--top: 0; --dur: 1; --left: 0%; --width: 100%; --accent: #3b82f6;">
         <span class="cal-event__strip" aria-hidden="true"></span>
         <span class="cal-event__title"></span>
-        <span class="cal-event__time"></span>
+        <span class="cal-event__meta">
+            <span class="cal-event__price"></span>
+            <span class="cal-event__time"></span>
+        </span>
     </div>
 </template>
 

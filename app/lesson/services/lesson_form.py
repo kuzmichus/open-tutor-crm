@@ -123,6 +123,20 @@ def _parse_slots(raw: str) -> list[dict] | None:
     return slots
 
 
+def parse_starts_at(raw: str | None) -> datetime | None:
+    """Значение `?starts_at=` из календаря: дата-время или None.
+
+    Пустой или некорректный параметр — не ошибка: форма открывается с
+    пустым «Началом» (спека lesson-management, «Префилл из календаря»).
+    """
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
 def parse_lesson_form(form) -> tuple[dict, list[str]]:
     """Данные формы урока и ошибки разбора полей.
 

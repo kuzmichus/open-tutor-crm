@@ -11,6 +11,7 @@ from collections.abc import Mapping
 
 from sqlalchemy.orm import Session
 
+from app.common.colors import assign_color
 from app.student.models.student import Student
 from app.student.services.phone import format_phone, is_phone_like
 
@@ -65,6 +66,7 @@ def create_student(db: Session, tutor_id: str, data: dict) -> Student:
         phone=data["phone"] or None,
         kind="child",
         status="new",
+        color=assign_color(db, tutor_id),
     )
     db.add(student)
     db.commit()

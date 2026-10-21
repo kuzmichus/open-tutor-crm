@@ -461,3 +461,28 @@ def test_create_repeat_requires_slots(owner, client, student_factory):
     assert "Панель расписания пуста: добавьте хотя бы один слот." in response.text
     assert _all_lessons() == []
     assert _all_series() == []
+
+
+# --------------------------------------------------------------------------
+# Префилл «Начала» из календаря (change calendar-real-lessons, задача 3.1)
+# --------------------------------------------------------------------------
+
+def _starts_input(page: str) -> str:
+    """Тег поля «Начало» из разметки формы."""
+    match = re.search(r'<input class="input" id="lesson-starts-at".*?>', page, re.S)
+    assert match is not None, "Поля «Начало» нет в форме"
+    return match.group(0)
+
+
+def test_new_lesson_form_prefills_start_from_calendar(owner, client):
+    """`?starts_at=` заполняет «Начало» (спека «Префилл из календаря»)."""
+    page = client.get("/tutor/lessons/new?starts_at=2026-10-15T07:15").text
+    assert 'value="2026-10-15T07:15"' in _starts_input(page)
+
+
+def test_new_lesson_form_ignores_bad_start(owner, client):
+    """Некорректный `starts_at` — форма открыта, «Начало» пустое."""
+    response = client.get("/tutor/lessons/new?starts_at=abc")
+    assert response.status_code == 200
+    assert "Новый урок" in response.text
+    assert 'value=""' in _starts_input(response.text)

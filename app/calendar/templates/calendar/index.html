@@ -6,6 +6,10 @@
    до alpine.min.js — см. комментарий к {% block head %} в base.html. #}
 {% block head %}
     <script src="/static/calendar.js" defer></script>
+    {# Форма урока (Alpine.data `lessonForm`, селект цели) — тот же скрипт,
+       что на странице Уроков: календарь открывает её в `#modal`
+       (design.md D6). Идёт после calendar.js и до alpine.min.js. #}
+    <script src="/static/lessons.js" defer></script>
 {% endblock %}
 
 {% block body %}
@@ -28,12 +32,25 @@
             <section class="card cal-card">
                 {# Корень Alpine-компонента живёт вне области подмены: htmx
                    меняет только содержимое #calendar-swap, состояние
-                   (hover, модалка, drag) переживает листание недель. #}
+                   (hover, модалка, drag) переживает листание недель.
+                   `data-lesson-new` — адрес формы создания урока, которую
+                   открывают клик по четверти и «Добавить» (design.md D9).
+                   `lesson-saved` перерисовывает неделю с сервера, не теряя
+                   открытую неделю (design.md D6); `hx-get` синхронизируется
+                   с видимой неделей в calendar.js при листании. #}
                 <div id="calendar-swap" x-data="calendarGrid"
-                     data-students='{{ demo_students | tojson }}'>
+                     data-lesson-new="/tutor/lessons/new"
+                     data-color-mode="{{ color_mode }}"
+                     hx-get="/tutor/calendar?start={{ current_start }}&color={{ color_mode }}"
+                     hx-trigger="lesson-saved from:body"
+                     hx-target="#calendar-swap"
+                     hx-swap="innerHTML">
                     {% include "calendar/_area.html" %}
                 </div>
             </section>
+            {# Контейнер модалки формы урока — ВНЕ #calendar-swap: своп недели
+               не должен уничтожать открытую форму (design.md D6). #}
+            <div id="modal"></div>
         </div>
     </main>
 {% endblock %}
