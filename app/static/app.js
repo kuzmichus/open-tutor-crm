@@ -13,8 +13,20 @@
   var desktop = window.matchMedia("(min-width: 1024px)");
 
   /* --- Тема ------------------------------------------------------------- */
+  /* Переключатель — два сегмента (светлая/тёмная) с явным значением в
+     `data-theme-toggle`. Источник истины для подсветки — класс .dark на
+     <html>: CSS красит активный сегмент сам, поэтому состояние не зависит
+     от порядка инициализации скриптов. Здесь только синхронизируем
+     aria-pressed и запоминаем выбор. */
   function applyTheme(theme) {
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    var isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    document.querySelectorAll("[data-theme-toggle]").forEach(function (btn) {
+      btn.setAttribute(
+        "aria-pressed",
+        btn.getAttribute("data-theme-toggle") === theme ? "true" : "false"
+      );
+    });
   }
 
   var saved = null;
@@ -23,13 +35,14 @@
   } catch (e) {
     /* localStorage может быть недоступен (приватный режим) — используем light */
   }
-  if (saved === "dark" || saved === "light") applyTheme(saved);
+  applyTheme(saved === "dark" ? "dark" : "light");
 
   document.querySelectorAll("[data-theme-toggle]").forEach(function (btn) {
     btn.addEventListener("click", function () {
-      var isDark = document.documentElement.classList.toggle("dark");
+      var theme = btn.getAttribute("data-theme-toggle") === "dark" ? "dark" : "light";
+      applyTheme(theme);
       try {
-        localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+        localStorage.setItem(THEME_KEY, theme);
       } catch (e) {
         /* noop */
       }
