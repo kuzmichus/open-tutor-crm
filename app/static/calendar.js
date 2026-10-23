@@ -51,13 +51,43 @@
     return Math.round(minutes / STEP_MIN) * STEP_MIN;
   }
 
-  /* «2026-10-19» — сегодняшняя дата клиента в формате ISO. */
+  /* Части локального момента педагога из `data-now` на #calendar-swap.
+
+     Разбираем строку ISO компонентами, а не через `new Date()`: `getHours()`
+     отдал бы час в зоне устройства, и предзаполнение снова разошлось бы с
+     сервером (design.md D7). Значение приходит уже в зоне педагога, поэтому
+     `getFullYear/getMonth/...` не нужны. Если атрибута нет или строка кривая —
+     падаем на часы устройства (как раньше), чтобы разметка не ломалась. */
+  function serverNowParts() {
+    var root = document.getElementById("calendar-swap");
+    var raw = root ? (root.getAttribute("data-now") || "") : "";
+    var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(raw);
+    if (!match) {
+      var now = new Date();
+      return {
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+        day: now.getDate(),
+        hours: now.getHours(),
+        minutes: now.getMinutes()
+      };
+    }
+    return {
+      year: parseInt(match[1], 10),
+      month: parseInt(match[2], 10),
+      day: parseInt(match[3], 10),
+      hours: parseInt(match[4], 10),
+      minutes: parseInt(match[5], 10)
+    };
+  }
+
+  /* «2026-10-19» — сегодняшняя дата педагога в формате ISO. */
   function todayIso() {
-    var now = new Date();
-    var m = now.getMonth() + 1;
-    var d = now.getDate();
+    var parts = serverNowParts();
+    var m = parts.month;
+    var d = parts.day;
     return (
-      now.getFullYear() +
+      parts.year +
       "-" +
       (m < 10 ? "0" : "") + m +
       "-" +
@@ -65,7 +95,54 @@
     );
   }
 
+  /* «Успешно сохранено» панели недоступности (design.md D8): сервер отдаёт
+     кнопку зелёной и неактивной, через пару секунд возвращаем ей обычный
+     вид и надпись «Добавить» — иначе панель нельзя было бы использовать
+     повторно без перезагрузки. Таймер вешаем на узел, пришедший свопом:
+     следующее сохранение подменяет кнопку, и таймер старого узла уже ни на
+     что не влияет (тот же приём, что у кнопки «Сохранить ДЗ»). */
+  var UN_SUCCESS_MS = 2000;
+  var UN_IDLE_LABEL = "Добавить";
+
+  function restoreUnavailabilityButton(root) {
+    var scope = root && root.querySelectorAll ? root : document;
+    var buttons = scope.querySelectorAll("[data-un-save]");
+    Array.prototype.forEach.call(buttons, function (button) {
+      if (!button.disabled) return;
+      setTimeout(function () {
+        if (!button.isConnected) return;
+        button.disabled = false;
+        button.classList.remove("btn--success");
+        button.classList.add("btn--primary");
+        button.textContent = UN_IDLE_LABEL;
+      }, UN_SUCCESS_MS);
+    });
+  }
+
+  document.addEventListener("htmx:afterSwap", function (event) {
+    restoreUnavailabilityButton(event.target);
+  });
+
   document.addEventListener("alpine:init", function () {
+    /* Панель «Отпуск и выходные» (спека tutor-unavailability): переключение
+       режима «Период» / «Постоянный выходной». `template x-if` в шаблоне
+       убирает поля другого режима из DOM, поэтому в запрос уходят только
+       поля выбранного режима. Панель открывается в #modal уже отрисованной,
+       поэтому `open` сразу true — закрытие гасит её и опустошает контейнер
+       через htmx (следующий hx-get отрисует панель заново). */
+    Alpine.data("unavailabilityPanel", function (initialMode) {
+      return {
+        open: true,
+        mode: initialMode === "weekday" ? "weekday" : "period",
+
+        close: function () {
+          this.open = false;
+          var modal = document.getElementById("modal");
+          if (modal) modal.innerHTML = "";
+        },
+      };
+    });
+
     Alpine.data("calendarGrid", function () {
       return {
         /* Подсказка времени четверти: текст и позиция чипа в сетке. */
@@ -82,9 +159,6 @@
         lessonNewUrl: "/tutor/lessons/new",
         /* Поля диалога создания слота: дата и время (спека slot-booking). */
         slotForm: { date: "", time: "" },
-        /* Диалог «Новый отпуск»: открыт/дата начала/дата конца — только DOM
-           (спека vacation-creation, design.md D2). */
-        vacationForm: { open: false, start: "", end: "" },
         /* Диалог записи: открыт/имя/контакт; _bookingSlot — DOM-узел
            карточки конкретного слота, а не индекс в массиве (design.md D6). */
         booking: { open: false, name: "", contact: "" },
@@ -264,23 +338,45 @@
         openSlot: function (el) {
           var data = this.slotData(el);
           if (!data.date || data.startMin === null) return;
-          /* Клик в колонке дня с «Отпуском» не открывает форму урока
-             (спека vacation-creation): покрывает и клиентские блоки, и
-             серверную демо-заглушку — иначе клик утекал бы в четверть
-             под блоком с pointer-events: none (design.md D5). */
+          /* День с отметкой недоступности: спрашиваем подтверждение, но
+             форму не блокируем (спека calendar, «Клик по отмеченному дню»).
+             Причину читаем из `data-unavailable` — её посчитал сервер,
+             математики в JS нет (design.md D5). Подтверждение передаётся
+             в форму как `ack_unavailable=1`: сервер проверит снова, но
+             второй раз уже не спросит (D5, п. 4). */
           var day = el.closest(".cal-day");
-          if (day && day.querySelector(".cal-vacation")) return;
-          this.openLessonForm(data.date, data.time);
+          var reason = this.unavailableReason(day);
+          if (reason && !window.confirm(this.unavailableQuestion(reason))) {
+            return;
+          }
+          this.openLessonForm(data.date, data.time, reason ? "1" : "");
+        },
+
+        /* Причина недоступности дня из `data-unavailable` ("" — день доступен). */
+        unavailableReason: function (day) {
+          if (!day || !day.getAttribute) return "";
+          return (day.getAttribute("data-unavailable") || "").trim();
+        },
+
+        /* Текст подтверждения — тот же, что в серверном баннере формы. */
+        unavailableQuestion: function (reason) {
+          return (
+            "День отмечен как недоступный: " + reason + ". " +
+            "Всё равно поставить урок?"
+          );
         },
 
         /* Форма создания урока в контейнере #modal: `?starts_at=` заполняет
-           «Начало» (спека lesson-management «Префилл из календаря»). Запрос
-           шлёт htmx — форма со страницы Уроков сама закрывается по
-           `lesson-saved` (design.md D6/D9). */
-        openLessonForm: function (date, time) {
+           «Начало» (спека lesson-management «Префилл из календаря»), а
+           `?ack_unavailable=1` говорит серверу, что подтверждение уже
+           получено. Запрос шлёт htmx — форма со страницы Уроков сама
+           закрывается по `lesson-saved` (design.md D6/D9). */
+        openLessonForm: function (date, time, ack) {
           var url = this.lessonNewUrl;
           if (!date || !time) return;
-          window.htmx.ajax("GET", url + "?starts_at=" + date + "T" + time, {
+          var query = "?starts_at=" + date + "T" + time;
+          if (ack) query += "&ack_unavailable=" + ack;
+          window.htmx.ajax("GET", url + query, {
             target: "#modal",
             swap: "innerHTML",
           });
@@ -298,8 +394,9 @@
               break;
             }
           }
-          var now = new Date();
-          var minutes = now.getHours() * 60 + now.getMinutes();
+          /* Момент с сервера (`data-now`), а не часы устройства (design.md D7). */
+          var parts = serverNowParts();
+          var minutes = parts.hours * 60 + parts.minutes;
           minutes = snapToQuarter(minutes) + STEP_MIN;   /* ближайшая будущая */
           return { date: date, time: formatClock(minutes) };
         },
@@ -313,8 +410,8 @@
         },
 
         /* ------------------------------------------------------------------
-           Меню быстрого добавления «⋮» (спека vacation-creation): повторный
-           клик, клик вне меню и Escape закрывают меню — сам toggleMore и
+           Меню быстрого добавления «⋮» (спека calendar): повторный клик,
+           клик вне меню и Escape закрывают меню — сам toggleMore и
            атрибуты разметки (@click.outside, @keydown.escape.window).
            ------------------------------------------------------------------ */
         toggleMore: function () {
@@ -371,52 +468,10 @@
         },
 
         /* ------------------------------------------------------------------
-           Диалог «Новый отпуск» (спека vacation-creation, design.md D2/D3):
-           диапазон дат без времени и ученика, префилл общей ближайшей
-           видимой датой (однодневный отпуск по умолчанию), закрытие —
-           «Отмена», Escape и backdrop.
+           Диалог «Новый отпуск» удалён: недоступность хранится в БД и
+           управляется панелью «Отпуск и выходные» (пункт меню «⋯» открывает
+           её в #modal). Клиент отпусков больше не создаёт.
            ------------------------------------------------------------------ */
-
-        /* Открытие: пункт меню «Добавить отпуск» сначала закрывает меню,
-           обе даты = ближайшая видимая (сегодня в неделе, иначе первая). */
-        openVacationDialog: function () {
-          this.closeMore();
-          var moment = this.prefillMoment();
-          this.vacationForm.start = moment.date;
-          this.vacationForm.end = moment.date;
-          this.vacationForm.open = true;
-        },
-
-        /* Закрытие: окно закрывается, поля сбрасываются — сетка не меняется. */
-        closeVacation: function () {
-          this.vacationForm.open = false;
-          this.vacationForm.start = "";
-          this.vacationForm.end = "";
-        },
-
-        /* Демо-создание отпуска: пересечение диапазона с data-date колонок
-           сетки; блок «Отпуск» вставляется первым ребёнком дня — под
-           карточки занятий (design.md D4). Дни вне видимой недели
-           игнорируются, блоки переживают закрытие диалога и исчезают при
-           листании недели; ноль сетевых запросов.
-           end < start — defensive-отказ (нативная валидация уже не
-           пускает такую отправку): блоки не создаются, окно открыто. */
-        createVacation: function (event) {
-          event.preventDefault();
-          var start = this.vacationForm.start;
-          var end = this.vacationForm.end;
-          if (!start || !end || end < start) return;
-          var days = this.$root.querySelectorAll(".cal-day[data-date]");
-          for (var i = 0; i < days.length; i++) {
-            var iso = days[i].getAttribute("data-date");
-            if (iso < start || iso > end) continue;
-            var block = document.createElement("div");
-            block.className = "cal-vacation";
-            block.textContent = "Отпуск";
-            days[i].insertBefore(block, days[i].firstChild);
-          }
-          this.closeVacation();
-        },
 
         /* Рендер карточки из общего шаблона: позиция/высота — в часах от
            6:00, как у серверных уроков (services/presentation.py).
@@ -783,6 +838,15 @@
             Math.min(newMin, GRID_END_MIN - drag.duration)
           );
 
+          /* Отметка недоступности: подтверждаем до любой правки DOM — при
+             отказе карточка остаётся в исходном дне и с прежним временем
+             (спека lesson-management, «Отказ от переноса»). Причину дал
+             сервер в `data-unavailable`: математики в JS нет (design.md D5). */
+          var reason = this.unavailableReason(day);
+          if (reason && !window.confirm(this.unavailableQuestion(reason))) {
+            return;
+          }
+
           card.setAttribute("data-date", day.getAttribute("data-date"));
           day.appendChild(card);          /* в конец — поверх слотов */
           card.setAttribute("data-start-min", String(newMin));
@@ -796,23 +860,28 @@
           /* Перенос сохраняется на сервере (design.md D8): только начало,
              остальные поля не трогаются. Ответ несёт `lesson-saved`, и
              подписка на корне перерисовывает неделю — DOM-правка выше
-             нужна лишь чтобы не мигало до ответа. */
-          this.moveLesson(card, newMin);
+             нужна лишь чтобы не мигало до ответа. `ack` передаётся, когда
+             подтверждение в отмеченном дне уже получено. */
+          this.moveLesson(card, newMin, reason ? "1" : "");
         },
 
         /* Сохранить новое время урока; демо-слоты и события без id урока
-           на сервер не уходят (design.md D8). */
-        moveLesson: function (card, startMin) {
+           на сервер не уходят (design.md D8). `ack` — признак того, что
+           пользователь подтвердил постановку в отмеченный день: сервер
+           проверит снова, но предупреждение повторно не покажет. */
+        moveLesson: function (card, startMin, ack) {
           var lessonId = card.getAttribute("data-lesson-id") || "";
           if (!lessonId || !window.htmx) return;
           /* Клик, который браузер эмитит после pointerup, не должен
              открывать форму редактирования (design.md D7). */
           this._suppressClick = true;
+          var values = {
+            date: card.getAttribute("data-date"),
+            time: formatClock(startMin),
+          };
+          if (ack) values.ack_unavailable = ack;
           window.htmx.ajax("POST", "/tutor/lessons/" + lessonId + "/move", {
-            values: {
-              date: card.getAttribute("data-date"),
-              time: formatClock(startMin),
-            },
+            values: values,
             swap: "none",
           });
         },

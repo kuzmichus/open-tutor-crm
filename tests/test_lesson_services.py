@@ -1,9 +1,11 @@
 """Сервисы модуля lesson: генерация серии, запись, mass-update, презентация."""
 
 from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 
+from app.common.services.tutor_time import to_local
 from app.database import SessionLocal
 from app.lesson.models.lesson import Lesson
 from app.lesson.models.lesson_series import LessonSeries
@@ -17,6 +19,20 @@ from app.lesson.services.presentation import (
     type_chip_label,
 )
 from app.lesson.services.series_generator import generate_occurrences
+from app.tutor.models.tutor import Tutor
+from app.tutor.services.clock import as_utc
+
+
+def _tutor(tutor_id: str) -> SimpleNamespace:
+    """Карточка репетитора: сервисам нужен только её часовой пояс.
+
+    Простой объект, а не ORM-строка: значение читается внутри сессии и
+    переживает её закрытие (спека tutor-timezone — зона участвует в
+    разборе формы и записи серии).
+    """
+    with SessionLocal() as db:
+        tutor = db.get(Tutor, tutor_id)
+        return SimpleNamespace(timezone=tutor.timezone)
 
 # --------------------------------------------------------------------------
 # Генерация серии (2.1)
@@ -219,12 +235,15 @@ def _lesson_data(**overrides) -> dict:
 
 def test_create_single_lesson_saves_one_lesson(tutor_factory, student_factory):
     """Одиночный урок: создаётся один Lesson без серии, статус «Запланирован»."""
-    student_id = student_factory(tutor_id=tutor_factory())
+    tutor_id = tutor_factory()
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
 
     with SessionLocal() as db:
         lesson, errors = create_single_lesson(
             db,
             _lesson_data(student_id=student_id, price=1200, note="Квадратные уравнения"),
+            tutor,
         )
 
     assert errors == []
@@ -238,11 +257,13 @@ def test_create_single_lesson_saves_one_lesson(tutor_factory, student_factory):
 
 def test_create_single_lesson_requires_start(tutor_factory, student_factory):
     """Пустое начало: урок не создаётся, форма получает ошибку."""
-    student_id = student_factory(tutor_id=tutor_factory())
+    tutor_id = tutor_factory()
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
 
     with SessionLocal() as db:
         lesson, errors = create_single_lesson(
-            db, _lesson_data(student_id=student_id, starts_at=None)
+            db, _lesson_data(student_id=student_id, starts_at=None), tutor
         )
 
     assert lesson is None
@@ -254,12 +275,13 @@ def test_create_single_lesson_requires_start(tutor_factory, student_factory):
 def test_create_lesson_goal_must_match_type(tutor_factory, student_factory, group_factory):
     """Цель не по типу: групповому — группа, остальным — ученик."""
     tutor_id = tutor_factory()
+    tutor = _tutor(tutor_id)
     student_id = student_factory(tutor_id=tutor_id)
     group_id = group_factory(tutor_id=tutor_id)
 
     with SessionLocal() as db:
         lesson, errors = create_single_lesson(
-            db, _lesson_data(group_id=group_id)  # индивидуальный с группой
+            db, _lesson_data(group_id=group_id), tutor  # индивидуальный с группой
         )
     assert lesson is None
     assert "выберите ученика" in errors[0].lower()
@@ -268,6 +290,7 @@ def test_create_lesson_goal_must_match_type(tutor_factory, student_factory, grou
         lesson, errors = create_single_lesson(
             db,
             _lesson_data(type="group", student_id=student_id),  # групповой с учеником
+            tutor,
         )
     assert lesson is None
     assert "выберите группу" in errors[0].lower()
@@ -277,11 +300,13 @@ def test_create_lesson_duration_outside_closed_list_rejected(
     tutor_factory, student_factory
 ):
     """Длительность вне `LESSON_DURATIONS` (80) отклоняется валидацией."""
-    student_id = student_factory(tutor_id=tutor_factory())
+    tutor_id = tutor_factory()
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
 
     with SessionLocal() as db:
         lesson, errors = create_single_lesson(
-            db, _lesson_data(student_id=student_id, duration_min=80)
+            db, _lesson_data(student_id=student_id, duration_min=80), tutor
         )
 
     assert lesson is None
@@ -291,7 +316,9 @@ def test_create_lesson_duration_outside_closed_list_rejected(
 def test_create_series_materializes_all_lessons(tutor_factory, student_factory):
     """Спека: начало 19.10.2026 10:00, «Пн 10:00», 1 нед. до 09.11 —
     четыре понедельника одной серии."""
-    student_id = student_factory(tutor_id=tutor_factory())
+    tutor_id = tutor_factory()
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
     data = _lesson_data(
         student_id=student_id,
         repeat=True,
@@ -301,7 +328,7 @@ def test_create_series_materializes_all_lessons(tutor_factory, student_factory):
     )
 
     with SessionLocal() as db:
-        lessons, errors = create_series(db, data)
+        lessons, errors = create_series(db, data, tutor)
 
     assert errors == []
     assert len(lessons) == 4
@@ -325,7 +352,9 @@ def test_create_series_materializes_all_lessons(tutor_factory, student_factory):
 
 def test_create_series_without_until_date_rejected(tutor_factory, student_factory):
     """Повтор без даты окончания блокирует сохранение (спека)."""
-    student_id = student_factory(tutor_id=tutor_factory())
+    tutor_id = tutor_factory()
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
     data = _lesson_data(
         student_id=student_id,
         repeat=True,
@@ -334,7 +363,7 @@ def test_create_series_without_until_date_rejected(tutor_factory, student_factor
     )
 
     with SessionLocal() as db:
-        lessons, errors = create_series(db, data)
+        lessons, errors = create_series(db, data, tutor)
 
     assert lessons == []
     assert errors == ["Укажите дату окончания повтора."]
@@ -345,13 +374,15 @@ def test_create_series_without_until_date_rejected(tutor_factory, student_factor
 
 def test_create_series_empty_slots_rejected(tutor_factory, student_factory):
     """Включённый повтор с пустой панелью расписания не сохраняется."""
-    student_id = student_factory(tutor_id=tutor_factory())
+    tutor_id = tutor_factory()
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
     data = _lesson_data(
         student_id=student_id, repeat=True, slots=[], until_date=date(2026, 11, 9)
     )
 
     with SessionLocal() as db:
-        lessons, errors = create_series(db, data)
+        lessons, errors = create_series(db, data, tutor)
 
     assert lessons == []
     assert errors == ["Панель расписания пуста: добавьте хотя бы один слот."]
@@ -359,7 +390,9 @@ def test_create_series_empty_slots_rejected(tutor_factory, student_factory):
 
 def test_create_series_is_atomic_on_bad_slot(tutor_factory, student_factory):
     """Кривой слот: ни серия, ни уроки не сохранены (одна транзакция)."""
-    student_id = student_factory(tutor_id=tutor_factory())
+    tutor_id = tutor_factory()
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
     data = _lesson_data(
         student_id=student_id,
         repeat=True,
@@ -371,7 +404,7 @@ def test_create_series_is_atomic_on_bad_slot(tutor_factory, student_factory):
     )
 
     with SessionLocal() as db:
-        lessons, errors = create_series(db, data)
+        lessons, errors = create_series(db, data, tutor)
 
     assert lessons == []
     assert errors and "Слот №2" in errors[0]
@@ -380,12 +413,94 @@ def test_create_series_is_atomic_on_bad_slot(tutor_factory, student_factory):
         assert db.query(LessonSeries).count() == 0
 
 
+def test_create_series_keeps_tutor_weekday_in_utc_plus4(tutor_factory, student_factory):
+    """Спека (задача 4.2): серия «по четвергам 10:00» при зоне UTC+04.
+
+    Перевод начала в UTC не сдвигает день недели: каждая дата серии в
+    зоне педагога — четверг, и настенное время 10:00 сохраняется.
+    """
+    tutor_id = tutor_factory(timezone="Europe/Ulyanovsk")
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
+    data = _lesson_data(
+        student_id=student_id,
+        repeat=True,
+        slots=[{"weekday": _THURSDAY, "start_time": "10:00", "end_time": "11:00"}],
+        interval_weeks=1,
+        until_date=date(2026, 11, 5),
+    )
+
+    with SessionLocal() as db:
+        lessons, errors = create_series(db, data, tutor)
+
+    assert errors == []
+    with SessionLocal() as db:
+        saved = db.query(Lesson).order_by(Lesson.starts_at).all()
+    # В зоне педагога каждая дата — четверг и ровно 10:00 (UTC+04 без DST).
+    assert [to_local(lesson.starts_at, tutor).weekday() for lesson in saved] == [
+        _THURSDAY,
+        _THURSDAY,
+        _THURSDAY,
+    ]
+    assert [to_local(lesson.starts_at, tutor).strftime("%H:%M") for lesson in saved] == [
+        "10:00",
+        "10:00",
+        "10:00",
+    ]
+    # Хранение — UTC: 10:00 в UTC+04 это 06:00 UTC того же дня.
+    assert [as_utc(lesson.starts_at) for lesson in saved] == [
+        datetime(2026, 10, 22, 6, 0, tzinfo=UTC),
+        datetime(2026, 10, 29, 6, 0, tzinfo=UTC),
+        datetime(2026, 11, 5, 6, 0, tzinfo=UTC),
+    ]
+
+
+def test_create_series_across_dst_keeps_wall_time(tutor_factory, student_factory):
+    """Спека (задача 4.3): серия через перевод часов в Europe/Berlin.
+
+    Настенное время 10:00 сохраняется по обе стороны перевода (29.03.2026),
+    а UTC-значения соседних недель различаются на час: 23.03 — CET (+01),
+    30.03 и 06.04 — CEST (+02).
+    """
+    tutor_id = tutor_factory(timezone="Europe/Berlin")
+    tutor = _tutor(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id)
+    data = _lesson_data(
+        student_id=student_id,
+        # 23.03.2026 10:00 в Berlin (CET) = 09:00 UTC — понедельник.
+        starts_at=datetime(2026, 3, 23, 9, 0, tzinfo=UTC),
+        repeat=True,
+        slots=[{"weekday": _MONDAY_0, "start_time": "10:00", "end_time": "11:00"}],
+        interval_weeks=1,
+        until_date=date(2026, 4, 6),
+    )
+
+    with SessionLocal() as db:
+        lessons, errors = create_series(db, data, tutor)
+
+    assert errors == []
+    with SessionLocal() as db:
+        saved = db.query(Lesson).order_by(Lesson.starts_at).all()
+    # Настенное время в зоне педагога не съезжает: все понедельники в 10:00.
+    assert [
+        to_local(lesson.starts_at, tutor).strftime("%Y-%m-%d %H:%M") for lesson in saved
+    ] == ["2026-03-23 10:00", "2026-03-30 10:00", "2026-04-06 10:00"]
+    # В UTC недели через перевод отличаются на 6 дней 23 часа, а не на 7.
+    assert [as_utc(lesson.starts_at) for lesson in saved] == [
+        datetime(2026, 3, 23, 9, 0, tzinfo=UTC),
+        datetime(2026, 3, 30, 8, 0, tzinfo=UTC),
+        datetime(2026, 4, 6, 8, 0, tzinfo=UTC),
+    ]
+
+
 # --------------------------------------------------------------------------
 # Массовое редактирование серии (2.3)
 # --------------------------------------------------------------------------
 
 
-def _create_series_lessons(student_id: str, count: int = 3) -> tuple[str, list[str]]:
+def _create_series_lessons(
+    tutor_id: str, student_id: str, count: int = 3
+) -> tuple[str, list[str]]:
     """Создаёт серию уроков по понедельникам; возвращает (series_id, уроки)."""
     data = _lesson_data(
         student_id=student_id,
@@ -396,7 +511,7 @@ def _create_series_lessons(student_id: str, count: int = 3) -> tuple[str, list[s
         until_date=date(2026, 10, 19) + timedelta(weeks=count - 1),
     )
     with SessionLocal() as db:
-        lessons, errors = create_series(db, data)
+        lessons, errors = create_series(db, data, _tutor(tutor_id))
     assert errors == []
     return lessons[0].series_id, [lesson.id for lesson in lessons]
 
@@ -405,8 +520,9 @@ def test_mass_update_applies_common_fields_to_all_lessons(
     tutor_factory, student_factory
 ):
     """Массовое изменение типа трогает все уроки серии, включая прошедшие."""
-    student_id = student_factory(tutor_id=tutor_factory())
-    series_id, lesson_ids = _create_series_lessons(student_id)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    series_id, lesson_ids = _create_series_lessons(tutor_id, student_id)
 
     with SessionLocal() as db:
         touched = apply_to_series(
@@ -442,8 +558,9 @@ def test_mass_update_applies_common_fields_to_all_lessons(
 
 def test_mass_update_ignores_per_lesson_fields(tutor_factory, student_factory):
     """Оценка, статус, комментарий и заметка не массовые (спека)."""
-    student_id = student_factory(tutor_id=tutor_factory())
-    series_id, _ = _create_series_lessons(student_id)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    series_id, _ = _create_series_lessons(tutor_id, student_id)
 
     with SessionLocal() as db:
         lesson = db.query(Lesson).first()
@@ -485,11 +602,11 @@ def test_mass_update_does_not_touch_other_series(tutor_factory, student_factory)
     """Уроки других серий и одиночные уроки не затрагиваются."""
     tutor_id = tutor_factory()
     student_id = student_factory(tutor_id=tutor_id)
-    series_id, _ = _create_series_lessons(student_id)
-    other_series_id, other_ids = _create_series_lessons(student_id)
+    series_id, _ = _create_series_lessons(tutor_id, student_id)
+    other_series_id, other_ids = _create_series_lessons(tutor_id, student_id)
     with SessionLocal() as db:
         single = create_single_lesson(
-            db, _lesson_data(student_id=student_id, price=700)
+            db, _lesson_data(student_id=student_id, price=700), _tutor(tutor_id)
         )[0]
 
     with SessionLocal() as db:

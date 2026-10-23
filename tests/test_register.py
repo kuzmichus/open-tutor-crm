@@ -2,6 +2,7 @@
 
 import re
 
+from app.common.services.tutor_time import system_zone_name
 from app.database import SessionLocal
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.password_hasher import PasswordHasher
@@ -73,6 +74,20 @@ def test_successful_registration_creates_tutor(client):
         assert PasswordHasher().verify(FULL_DATA["password"], tutor.password_hash)
 
 
+def test_registration_fills_timezone_with_system_zone(client):
+    """Спека (задача 8.1): новый репетитор сразу получает зону.
+
+    Иначе карточка осталась бы с `NULL`, и показ времени падал бы в
+    системную зону сервера (design.md D9). Значение — IANA-имя зоны
+    (или `UTC`, если системную зону определить не удалось).
+    """
+    client.post("/tutor/register", data=FULL_DATA, follow_redirects=False)
+
+    with SessionLocal() as db:
+        tutor = db.query(Tutor).filter_by(email="maria@example.com").one()
+        assert tutor.timezone == (system_zone_name() or "UTC")
+
+
 def test_password_plaintext_not_stored(client):
     client.post("/tutor/register", data=FULL_DATA)
     with SessionLocal() as db:
@@ -104,7 +119,9 @@ def test_extra_post_fields_are_ignored(client):
         assert tutor.subject is None
         assert tutor.experience is None
         assert tutor.hourly_rate is None
-        assert tutor.timezone is None
+        # Зона не берётся из формы: подставляется системная (design.md D9).
+        assert tutor.timezone != "Europe/Moscow"
+        assert tutor.timezone == (system_zone_name() or "UTC")
 
 
 def test_uuid_ids_are_unique(client):

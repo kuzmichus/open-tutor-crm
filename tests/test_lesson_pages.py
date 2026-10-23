@@ -337,6 +337,40 @@ def test_lessons_filter_today(owner, client, student_factory):
     assert tomorrow not in partial.text
 
 
+def test_lessons_filter_today_keeps_near_midnight_lesson(
+    client, tutor_factory, student_factory
+):
+    """Спека (задача 5.2): урок около полуночи попадает в свой день.
+
+    Урок в 23:30 местного времени (UTC+04) хранится как 19:30 UTC; фильтр
+    «Сегодня» считает день по зоне педагога, поэтому урок остаётся в своём
+    дне, а не уезжает в следующий из-за перевода в UTC.
+    """
+    email = "lessons-pages-midnight@example.com"
+    owner = tutor_factory(
+        email=email, password=PASSWORD, timezone="Europe/Ulyanovsk"
+    )
+    client.post(
+        "/tutor/login",
+        data={"email": email, "password": PASSWORD},
+        follow_redirects=False,
+    )
+    student = student_factory(tutor_id=owner, first_name="Мария")
+    # Локальное «сегодня» в 23:30 → в UTC это сегодня же в 19:30 (UTC+04).
+    today_late = _insert_lesson(
+        owner,
+        student_id=student,
+        starts_at=datetime.combine(date.today(), datetime.min.time()).replace(
+            hour=19, minute=30
+        ),
+    )
+
+    ids = _ids(
+        client.get("/tutor/lessons", params={"period": "today"}).text
+    )
+    assert today_late in ids
+
+
 def test_lessons_filter_week(owner, client, student_factory):
     """Чип «На этой неделе»: понедельник — воскресенье текущей недели."""
     student = student_factory(tutor_id=owner, first_name="Мария")
@@ -463,3 +497,74 @@ def test_lessons_list_partial_requires_session(client):
     assert response.status_code == 303
     assert response.headers["location"] == "/tutor/login"
     assert "lessons-table" not in response.text
+
+
+# --------------------------------------------------------------------------
+# Часовой пояс: смена зоны и некорректное значение (спека tutor-timezone)
+# --------------------------------------------------------------------------
+
+
+def test_changing_timezone_changes_display_but_not_stored_value(
+    client, tutor_factory, student_factory
+):
+    """Спека: смена зоны меняет только показ, данные не переписываются.
+
+    Урок хранится как `06:00 UTC`. При зоне UTC+04 он показан как 10:00,
+    после смены зоны на UTC+07 — как 13:00, а в БД остаётся `06:00`.
+    """
+    email = "lessons-pages-zone-shift@example.com"
+    owner = tutor_factory(
+        email=email, password=PASSWORD, timezone="Europe/Ulyanovsk"
+    )
+    client.post(
+        "/tutor/login",
+        data={"email": email, "password": PASSWORD},
+        follow_redirects=False,
+    )
+    student = student_factory(tutor_id=owner, first_name="Мария")
+    lesson_id = _insert_lesson(
+        owner, student_id=student, starts_at=datetime(2026, 10, 22, 6, 0)
+    )
+
+    assert "22.10.2026, 10:00" in _row(client.get("/tutor/lessons").text, lesson_id)
+
+    # Меняем зону в карточке — только отображение.
+    with SessionLocal() as db:
+        from app.tutor.models.tutor import Tutor
+
+        db.get(Tutor, owner).timezone = "Asia/Krasnoyarsk"
+        db.commit()
+
+    assert "22.10.2026, 13:00" in _row(client.get("/tutor/lessons").text, lesson_id)
+
+    # Хранимое значение не изменилось.
+    with SessionLocal() as db:
+        assert db.get(Lesson, lesson_id).starts_at == datetime(2026, 10, 22, 6, 0)
+
+
+def test_unknown_timezone_does_not_break_pages(
+    client, tutor_factory, student_factory
+):
+    """Спека: некорректное имя зоны не роняет показ — берётся системная зона."""
+    email = "lessons-pages-bad-zone@example.com"
+    owner = tutor_factory(
+        email=email, password=PASSWORD, timezone="No/Such_Zone"
+    )
+    client.post(
+        "/tutor/login",
+        data={"email": email, "password": PASSWORD},
+        follow_redirects=False,
+    )
+    student = student_factory(tutor_id=owner, first_name="Мария")
+    lesson_id = _insert_lesson(
+        owner, student_id=student, starts_at=datetime(2026, 10, 22, 6, 0)
+    )
+
+    response = client.get("/tutor/lessons")
+
+    assert response.status_code == 200
+    # Строка урока отрисована: страница не упала на неизвестной зоне.
+    assert _row(response.text, lesson_id)
+    # Календарь и модалка тоже открываются.
+    assert client.get("/tutor/calendar?start=2026-10-19").status_code == 200
+    assert client.get(f"/tutor/lessons/{lesson_id}/edit").status_code == 200

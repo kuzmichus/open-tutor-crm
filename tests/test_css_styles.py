@@ -47,23 +47,6 @@ def test_404_art_is_bounded_in_width_and_height():
     assert not re.search(r"height:\s*auto\s*;", body)
 
 
-@pytest.mark.parametrize("template", ["404.html", "auth.html"])
-def test_template_classes_have_css_rules(template: str):
-    """Каждый BEM-класс из шаблона реально описан в styles.css."""
-    path = TEMPLATES_DIR / template
-    if not path.exists():
-        pytest.skip(f"{template} отсутствует")
-    html = path.read_text(encoding="utf-8")
-    prefix = "auth__" if template == "auth.html" else "not-found__"
-    used = {c for c in re.findall(rf'class="([^"]+)"', html) for c in c.split()}
-    used = {c for c in used if c.startswith(prefix)}
-    missing = sorted(c for c in used if f".{c}" not in STYLES)
-    assert not missing, f"Классы без CSS-правил: {', '.join(missing)}"
-
-
-STUDENT_TEMPLATES_DIR = ROOT / "app" / "student" / "templates" / "student"
-
-
 def _literal_classes(html: str) -> set[str]:
     """Литеральные классы из разметки.
 
@@ -78,33 +61,72 @@ def _literal_classes(html: str) -> set[str]:
     return used
 
 
-@pytest.mark.parametrize(
-    "template",
-    sorted(p.name for p in STUDENT_TEMPLATES_DIR.glob("*.html")),
-)
-def test_student_template_classes_have_css_rules(template: str):
-    """Каждый класс из шаблонов учеников описан в styles.css."""
-    html = (STUDENT_TEMPLATES_DIR / template).read_text(encoding="utf-8")
-    missing = sorted(c for c in _literal_classes(html) if f".{c}" not in STYLES)
-    assert not missing, (
-        f"{template}: классы без CSS-правил: {', '.join(missing)}"
+# Каталоги шаблонов, чьи литеральные классы обязаны быть описаны в CSS
+# (AGENTS.md: новый BEM-класс в шаблоне — с правилом в styles.css).
+# `prefix` сужает проверку у общих шаблонов: 404.html и auth.html делят
+# каталог с base.html и партиалами, чьи классы проверяются своими тестами.
+TEMPLATE_SETS = [
+    ("general-not-found", TEMPLATES_DIR, "not-found__", ("404.html",)),
+    ("general-auth", TEMPLATES_DIR, "auth__", ("auth.html",)),
+    (
+        "student",
+        ROOT / "app" / "student" / "templates" / "student",
+        None,
+        None,
+    ),
+    ("group", ROOT / "app" / "group" / "templates" / "group", None, None),
+    (
+        "unavailability",
+        ROOT / "app" / "unavailability" / "templates" / "unavailability",
+        None,
+        None,
+    ),
+]
+
+_TEMPLATE_CASES = [
+    pytest.param(
+        templates_dir,
+        prefix,
+        names or sorted(p.name for p in templates_dir.glob("*.html")),
+        id=case_id,
     )
+    for case_id, templates_dir, prefix, names in TEMPLATE_SETS
+]
 
 
-GROUP_TEMPLATES_DIR = ROOT / "app" / "group" / "templates" / "group"
+@pytest.mark.parametrize(("templates_dir", "prefix", "templates"), _TEMPLATE_CASES)
+def test_template_classes_have_css_rules(templates_dir, prefix, templates):
+    """Каждый литеральный BEM-класс из шаблона реально описан в styles.css."""
+    for template in templates:
+        html = (templates_dir / template).read_text(encoding="utf-8")
+        used = _literal_classes(html)
+        if prefix:
+            used = {c for c in used if c.startswith(prefix)}
+        missing = sorted(c for c in used if f".{c}" not in STYLES)
+        assert not missing, f"{template}: классы без CSS-правил: {', '.join(missing)}"
 
 
-@pytest.mark.parametrize(
-    "template",
-    sorted(p.name for p in GROUP_TEMPLATES_DIR.glob("*.html")),
-)
-def test_group_template_classes_have_css_rules(template: str):
-    """Каждый класс из шаблонов групп описан в styles.css."""
-    html = (GROUP_TEMPLATES_DIR / template).read_text(encoding="utf-8")
-    missing = sorted(c for c in _literal_classes(html) if f".{c}" not in STYLES)
-    assert not missing, (
-        f"{template}: классы без CSS-правил: {', '.join(missing)}"
-    )
+def test_weekend_rules_are_removed_from_css():
+    """Автоматической разметки выходных в CSS нет.
+
+    Единственный источник выходных — отметки в таблице `tutor_unavailability`
+    (спека calendar, «Выходные задаёт репетитор отметками»). Классы
+    `.cal-day--weekend` / `.cal-dayhead--weekend` и токены `--cal-weekend` /
+    `--cal-hatch` удалены вместе с плашкой «Выходной».
+    """
+    css = _without_comments(STYLES)
+    for token in (
+        "cal-day--weekend",
+        "cal-dayhead--weekend",
+        "--cal-weekend",
+        "--cal-hatch",
+    ):
+        assert token not in css, f"в styles.css остался {token}"
+
+    # Штриховка осталась только у отмеченного дня и опирается на --cal-off.
+    block = re.search(r"\.cal-day--unavailable\s*\{(.*?)\n  \}", css, flags=re.S)
+    assert block, "В styles.css нет правила .cal-day--unavailable"
+    assert "--cal-off" in block.group(1)
 
 
 def test_groups_grid_is_responsive():

@@ -30,12 +30,12 @@
 
     <span class="cal-toolbar__spacer"></span>
 
-    {# Бейдж часового пояса из профиля: скрыт, если не задан (спека) #}
-    {% if tutor and tutor.timezone %}
+    {# Бейдж часового пояса: показывается всегда — это подпись, в какой зоне
+       педагога показано время сетки. Пустое или некорректное поле карточки
+       даёт системную зону сервера (design D2), а не пустой бейдж. #}
     <span class="cal-tz">
-        <i data-lucide="globe"></i>{{ tutor.timezone }}
+        <i data-lucide="globe"></i>{{ timezone_label }}
     </span>
-    {% endif %}
 
     {# Кнопки панели: «Ссылка на окна» копирует ссылку на текущую неделю и
        показывает тост «демо»; «Цвет» — работающий контрол режима раскраски
@@ -67,10 +67,10 @@
         </ul>
     </div>
     <button class="btn btn--primary" type="button" id="cal-add" @click="openForm()">Добавить</button>
-    {# Меню быстрого добавления «⋮» (спека vacation-creation): паттерн
-       .cal-color — x-show + x-cloak + @click.outside + Escape; пункты
-       «Добавить слот» (переехал из панели, id и обработчик сохранены) и
-       «Добавить отпуск» (design.md D1). #}
+    {# Меню быстрого добавления «⋮» (спека calendar): паттерн .cal-color —
+       x-show + x-cloak + @click.outside + Escape; пункты «Добавить слот»
+       (переехал из панели, id и обработчик сохранены) и «Отпуск и выходные»
+       — открывает панель недоступности в #modal (design.md D1, D8). #}
     <div class="cal-more">
         <button class="btn btn--ghost btn--icon" type="button" id="cal-more"
                 aria-haspopup="true"
@@ -83,7 +83,11 @@
             @click.outside="closeMore()"
             @keydown.escape.window="closeMore()">
             <li><button type="button" id="cal-add-slot" @click="openSlotDialog()">Добавить слот</button></li>
-            <li><button type="button" id="cal-add-vacation" @click="openVacationDialog()">Добавить отпуск</button></li>
+            <li><button type="button" id="cal-unavailability"
+                        hx-get="/tutor/unavailability"
+                        hx-target="#modal"
+                        hx-swap="innerHTML"
+                        @click="closeMore()">Отпуск и выходные</button></li>
         </ul>
     </div>
 </div>
@@ -103,13 +107,18 @@
         {# Шапка: угол с месяцем/годом + семь дней недели (sticky сверху) #}
         <div class="cal-corner">{{ months_label }}</div>
         {% for day in days %}
-        <div class="cal-dayhead{% if day.is_weekend %} cal-dayhead--weekend{% endif %}">
+        <div class="cal-dayhead">
             <span class="cal-dayhead__name">{{ day.weekday_short }}</span>
             <span class="cal-dayhead__num{% if day.is_today %} cal-dayhead__num--today{% endif %}">
                 {{ day.day_number }}
             </span>
-            {% if day.is_weekend %}
-            <span class="cal-dayhead__off">Выходной</span>
+            {# Выходных «по календарю» нет: единственный источник — отметки
+               в таблице `tutor_unavailability`. Поэтому в шапке только
+               причина отметки либо число занятий (спека calendar,
+               «Выходные задаёт репетитор отметками»). #}
+            {% if day.unavailable %}
+            <span class="cal-dayhead__off cal-dayhead__off--unavailable"
+                  title="{{ day.unavailable_title }}">{{ day.unavailable }}</span>
             {% elif day.lessons_label %}
             <span class="cal-dayhead__count">{{ day.lessons_label }}</span>
             {% endif %}
@@ -134,8 +143,10 @@
 
         {# Семь колонок дней: четверти часа + карточки событий поверх #}
         {% for day in days %}
-        <div class="cal-day{% if day.is_weekend %} cal-day--weekend{% endif %}"
-             data-date="{{ day.iso_date }}">
+        <div class="cal-day{% if day.unavailable %} cal-day--unavailable{% endif %}"
+             data-date="{{ day.iso_date }}"
+             {% if day.unavailable %}data-unavailable="{{ day.unavailable_title }}"
+             title="{{ day.unavailable_title }}"{% endif %}>
             {% for hour in hours %}
             <div class="cal-hour">
                 {% for quarter in [0, 15, 30, 45] %}
@@ -188,10 +199,6 @@
                 {% endif %}
             </div>
             {% endfor %}
-
-            {% if day.has_vacation %}
-            <div class="cal-vacation">Отпуск</div>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -261,36 +268,6 @@
         <div class="cal-modal__actions">
             <button class="btn btn--ghost" type="button" @click="closeBooking()">Отмена</button>
             <button class="btn btn--primary" type="submit">Записаться</button>
-        </div>
-    </form>
-</div>
-
-{# Диалог «Новый отпуск» (спека vacation-creation, design.md D2/D3):
-   два обязательных датовых поля, диапазон дат защищён нативной
-   валидацией (:min у конца), создание — только в DOM, без сети. #}
-<div class="cal-modal" x-cloak x-show="vacationForm.open" role="dialog"
-     aria-modal="true" aria-labelledby="cal-vacation-title"
-     @keydown.escape.window="closeVacation()">
-    <div class="cal-modal__backdrop" @click="closeVacation()"></div>
-    <form class="cal-modal__panel" id="cal-vacation-form"
-          @submit="createVacation($event)">
-        <h3 id="cal-vacation-title" class="cal-modal__title">Новый отпуск</h3>
-
-        <div class="field">
-            <label class="label" for="vac-start">Начало</label>
-            <input class="input" id="vac-start" type="date" required
-                   x-model="vacationForm.start">
-        </div>
-
-        <div class="field">
-            <label class="label" for="vac-end">Конец</label>
-            <input class="input" id="vac-end" type="date" required
-                   :min="vacationForm.start" x-model="vacationForm.end">
-        </div>
-
-        <div class="cal-modal__actions">
-            <button class="btn btn--ghost" type="button" @click="closeVacation()">Отмена</button>
-            <button class="btn btn--primary" type="submit">Создать</button>
         </div>
     </form>
 </div>

@@ -21,6 +21,7 @@ TEMPLATE_DIRS = [
     _APP_DIR / "group" / "templates",  # модуль group
     _APP_DIR / "lesson" / "templates",  # модуль lesson
     _APP_DIR / "homework" / "templates",  # модуль homework
+    _APP_DIR / "unavailability" / "templates",  # модуль unavailability
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
@@ -48,3 +49,12 @@ from app.lesson.services.presentation import (  # noqa: E402
 )
 
 register_lesson_template_helpers()
+
+# Функции отображения модуля недоступности (подписи причин «Отпуск»/
+# «Больничный»/«Выходной» и форматы срока «26.10 – 30.10», «с 26.10 —
+# бессрочно», «сб, бессрочно»).
+from app.unavailability.services.presentation import (  # noqa: E402
+    register_template_helpers as register_unavailability_template_helpers,
+)
+
+register_unavailability_template_helpers()

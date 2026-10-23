@@ -8,7 +8,8 @@
 Сервис не знает про FastAPI: на вход — словарь с очищенными значениями
 формы, на выход — результат и список ошибок. Ожидаемые ключи `data`:
 
-- общие: `student_id`, `group_id`, `type`, `starts_at`, `duration_min`,
+- общие: `student_id`, `group_id`, `type`, `starts_at` (aware UTC —
+  форма переводит его по зоне педагога, design D6), `duration_min`,
   `note`, `meeting_url`, `price`;
 - только серия: `repeat`, `slots`, `interval_weeks`, `until_date`.
 
@@ -21,13 +22,18 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
+from app.common.services.tutor_time import to_local, to_utc
 from app.lesson.models.lesson import LESSON_DURATIONS, LESSON_TYPES, Lesson
 from app.lesson.models.lesson_series import LessonSeries
 from app.lesson.services.series_generator import generate_occurrences
 
 
-def validate_lesson_data(data: dict) -> list[str]:
-    """Проверки создания урока: начало, цель по типу, длительность, повтор."""
+def validate_lesson_data(data: dict, tutor) -> list[str]:
+    """Проверки создания урока: начало, цель по типу, длительность, повтор.
+
+    Даты сравниваются в зоне педагога: `starts_at` хранится в UTC, а
+    «дата окончания повтора» — чистая календарная дата (design D3).
+    """
     errors: list[str] = []
 
     if data.get("starts_at") is None:
@@ -58,7 +64,7 @@ def validate_lesson_data(data: dict) -> list[str]:
         until_date: date | None = data.get("until_date")
         if until_date is None:
             errors.append("Укажите дату окончания повтора.")
-        elif starts_at is not None and until_date < starts_at.date():
+        elif starts_at is not None and until_date < to_local(starts_at, tutor).date():
             errors.append("Дата окончания повтора не раньше начала урока.")
         if (data.get("interval_weeks") or 1) < 1:
             errors.append("Интервал повтора — не менее одной недели.")
@@ -83,9 +89,15 @@ def _new_lesson(data: dict, *, series_id: str | None, starts_at: datetime) -> Le
     )
 
 
-def create_single_lesson(db: Session, data: dict) -> tuple[Lesson | None, list[str]]:
-    """Создаёт один урок без серии; при ошибке ничего не сохраняет."""
-    errors = validate_lesson_data(data)
+def create_single_lesson(
+    db: Session, data: dict, tutor
+) -> tuple[Lesson | None, list[str]]:
+    """Создаёт один урок без серии; при ошибке ничего не сохраняет.
+
+    `data["starts_at"]` уже aware UTC (разбор формы) — повторный перевод
+    здесь не нужен (design D6).
+    """
+    errors = validate_lesson_data(data, tutor)
     if errors:
         db.rollback()
         return None, errors
@@ -96,15 +108,19 @@ def create_single_lesson(db: Session, data: dict) -> tuple[Lesson | None, list[s
     return lesson, []
 
 
-def create_series(db: Session, data: dict) -> tuple[list[Lesson], list[str]]:
+def create_series(db: Session, data: dict, tutor) -> tuple[list[Lesson], list[str]]:
     """Создаёт серию одним коммитом: `LessonSeries` + уроки на все даты.
 
-    Даты считаются генератором (слоты → даты от начала через интервал
-    недель до окончания включительно); длительность уроков — из поля
-    «Длительность» формы. При ошибке (пустые слоты, кривой слот, отмена
-    валидации) не сохраняется ни серия, ни уроки.
+    Даты считаются генератором в настенном времени зоны педагога (дни
+    недели и `until_date` — локальные, design D5), поэтому UTC-начало
+    формы сначала переводится обратно в локальное наивное значение. Каждая
+    сгенерированная дата конвертируется в UTC **отдельно**: прибавление
+    недели к UTC-значению сдвигало бы уроки в неделю с переводом часов
+    (design D3/D5). Длительность уроков — из поля «Длительность» формы.
+    При ошибке (пустые слоты, крой слот, отмена валидации) не сохраняется
+    ни серия, ни уроки.
     """
-    errors = validate_lesson_data(data)
+    errors = validate_lesson_data(data, tutor)
     if errors:
         db.rollback()
         return [], errors
@@ -113,7 +129,7 @@ def create_series(db: Session, data: dict) -> tuple[list[Lesson], list[str]]:
     until_date: date = data["until_date"]
     try:
         occurrences = generate_occurrences(
-            starts_at=data["starts_at"],
+            starts_at=to_local(data["starts_at"], tutor).replace(tzinfo=None),
             slots=data["slots"],
             interval_weeks=interval_weeks,
             until_date=until_date,
@@ -131,24 +147,24 @@ def create_series(db: Session, data: dict) -> tuple[list[Lesson], list[str]]:
     db.flush()
 
     lessons = [
-        _new_lesson(data, series_id=series.id, starts_at=starts_at)
-        for starts_at in occurrences
+        _new_lesson(data, series_id=series.id, starts_at=to_utc(occurrence, tutor))
+        for occurrence in occurrences
     ]
     db.add_all(lessons)
     db.commit()
     return lessons, []
 
 
-def update_lesson(db: Session, lesson: Lesson, data: dict) -> list[str]:
+def update_lesson(db: Session, lesson: Lesson, data: dict, tutor) -> list[str]:
     """Применяет данные формы редактирования к одному уроку (без коммита).
 
-    Пер-уточные поля (статус, оценка, комментарий для семьи, заметка)
-    применяются только к этому уроку; массовое применение общих полей
-    серии — `mass_update.apply_to_series`. Коммит делает вызывающая
-    сторона: при включённом «Применить ко всей серии» одной транзакцией
-    проходят и урок, и вся серия.
+    `data["starts_at"]` уже aware UTC. Пер-уточные поля (статус, оценка,
+    комментарий для семьи, заметка) применяются только к этому уроку;
+    массовое применение общих полей серии — `mass_update.apply_to_series`.
+    Коммит делает вызывающая сторона: при включённом «Применить ко всей
+    серии» одной транзакцией проходят и урок, и вся серия.
     """
-    errors = validate_lesson_data(data)
+    errors = validate_lesson_data(data, tutor)
     if errors:
         db.rollback()
         return errors

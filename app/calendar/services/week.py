@@ -5,24 +5,47 @@
 джойнит ученика и группу и берёт урок, чья цель принадлежит репетитору.
 Окно недели — `[monday, monday + 7 дней)` по `starts_at` (D1: урок,
 начавшийся в воскресенье, в следующую неделю не попадает).
+
+Границы окна считаются как настенное время в зоне педагога и переводятся в
+UTC по отдельности (`local_week_bounds`, design D3): прибавление
+`timedelta` к UTC-значению сломало бы неделю с переводом часов.
 """
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.calendar.services.week_lesson import WeekLesson
 from app.common.colors import DEFAULT_TARGET_COLOR
+from app.common.services.tutor_time import local_week_bounds
 from app.group.models.group import Group
 from app.lesson.models.lesson import Lesson
 from app.student.models.student import Student
 
 
-def week_bounds(monday: date) -> tuple[datetime, datetime]:
-    """Границы окна недели: понедельник 00:00 — следующий понедельник 00:00."""
-    start = datetime.combine(monday, time.min)
-    return start, start + timedelta(days=7)
+def week_start(value: date | str) -> date:
+    """Понедельник недели, содержащей `value` (строка — дата в формате ISO).
+
+    Некорректная строка — ValueError: вызывающая сторона (вьюха) сама
+    решает, чем заменить кривой `?start=` (обычно — текущей неделей).
+    Функция переехала сюда из удалённого демо-генератора: это живое
+    поведение календаря, а не демо-данные (design.md D7).
+    """
+    if isinstance(value, str):
+        value = date.fromisoformat(value)
+    return value - timedelta(days=value.weekday())
+
+
+def week_bounds(monday: date, tutor) -> tuple[datetime, datetime]:
+    """Границы окна недели как aware UTC: пн 00:00 — следующий пн 00:00.
+
+    Обе границы считаются настенным временем в зоне педагога и переводятся
+    по отдельности (`local_week_bounds`, design D3): единый сдвиг не
+    учитывает перевод часов, а неделя с переводом короче или длиннее семи
+    суток ровно на час.
+    """
+    return local_week_bounds(monday, tutor)
 
 
 def _target_name(first_name: str | None, last_name: str | None) -> str:
@@ -33,9 +56,15 @@ def _target_name(first_name: str | None, last_name: str | None) -> str:
     return " ".join(part for part in (first_name, initial) if part)
 
 
-def week_lessons(db: Session, tutor_id: str, monday: date) -> list[WeekLesson]:
-    """Уроки недели `monday` только этого репетитора, по времени начала."""
-    start, end = week_bounds(monday)
+def week_lessons(
+    db: Session, tutor_id: str, monday: date, tutor
+) -> list[WeekLesson]:
+    """Уроки недели `monday` только этого репетитора, по времени начала.
+
+    `tutor` — карточка репетитора: её зона задаёт границы окна недели
+    (aware UTC), а `starts_at` хранится в UTC (спека tutor-timezone).
+    """
+    start, end = week_bounds(monday, tutor)
     stmt = (
         select(
             Lesson,

@@ -106,10 +106,29 @@
             <form hx-post="{{ action }}"
                   hx-target="#modal"
                   hx-swap="innerHTML">
+                {# Подтверждение из календаря (`?ack_unavailable=1` вместе с
+                   `starts_at`): форма несёт его скрытым полем, иначе сервер
+                   показал бы баннер и пользователь подтверждал бы дважды —
+                   сначала confirm(), затем баннер (design.md D5, п. 4).
+                   Когда баннер показан, поле лежит в нём самом. #}
+                {% if ack_unavailable and not unavailable_warning %}
+                <input type="hidden" name="ack_unavailable" value="1">
+                {% endif %}
                 <div class="tab-panel"
                      id="lesson-panel-lesson"
                      role="tabpanel" aria-labelledby="lesson-tab-lesson"
                      x-show="activeTab === 'lesson'" x-cloak>
+                    {# Баннер недоступности — отдельно от блока ошибок
+                       (design.md D5, п. 3): предупреждение означает
+                       «сохранится, если подтвердите», а ошибки — «не
+                       сохранено». Скрытое поле переносит подтверждение в
+                       повторную отправку: один жест — одно подтверждение. #}
+                    {% if unavailable_warning %}
+                    <div class="form-banner form-banner--warning" role="alert">
+                        <p class="form-banner__text">{{ unavailable_warning.message }}</p>
+                        <input type="hidden" name="ack_unavailable" value="1">
+                    </div>
+                    {% endif %}
                     <fieldset class="form-section">
                         <legend class="form-section__title">Урок</legend>
 

@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.common.services.tutor_time import system_zone_name
 from app.database import get_db
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
@@ -69,6 +70,11 @@ def register_submit(
         name=name.strip(),
         email=email_clean,
         password_hash=PasswordHasher().hash(password),
+        # Зона проставляется сразу (design.md D9): иначе новый репетитор
+        # снова получил бы `NULL`, и показ времени падал бы в системную зону
+        # сервера. В колонку кладётся IANA-имя (`String`), а не объект зоны:
+        # определить системную зону не удалось — `UTC` (design.md D2).
+        timezone=system_zone_name() or "UTC",
     )
     db.add(tutor)
     db.commit()

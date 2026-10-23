@@ -5,7 +5,8 @@
 
    Подписи берутся из помощников модуля (`lesson_target`, `lesson_datetime`,
    `lesson_price`, `lesson_rating`, `lesson_status_label`) — см.
-   `app/lesson/services/presentation.py`. #}
+   `app/lesson/services/presentation.py`. Дата и время переводятся в зону
+   `tutor` на сервере (спека tutor-timezone). #}
 {% if rows %}
 <div class="lessons-table-wrap">
     <table class="lessons-table">
@@ -32,7 +33,7 @@
                         <span class="chip chip--{{ lesson.type }}">{{ lesson_type_chip(lesson.type) }}</span>
                     </span>
                 </td>
-                <td class="lessons-table__cell">{{ lesson_datetime(lesson.starts_at) }}</td>
+                <td class="lessons-table__cell">{{ lesson_datetime(lesson.starts_at, tutor) }}</td>
                 <td class="lessons-table__cell">{{ lesson_price(lesson.price, lesson_type=lesson.type, status=lesson.status) }}</td>
                 <td class="lessons-table__cell lessons-table__rating">{{ lesson_rating(lesson.rating) }}</td>
                 <td class="lessons-table__cell lessons-table__cell--status">

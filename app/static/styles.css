@@ -1166,6 +1166,28 @@
     font-weight: 500;
   }
 
+  /* Баннер формы: предупреждение, которое НЕ блокирует сохранение
+     (design.md D5, п. 3). Отличается от `.error` и видом, и ролью:
+     `.error` — «не сохранено», баннер — «сохранится, если подтвердите». */
+  .form-banner {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--status-cancelled);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--status-cancelled) 12%, transparent);
+    color: var(--foreground);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+
+  .form-banner__text {
+    margin: 0;
+    font-weight: 500;
+  }
+
   /* ==========================================================================
      Страница учеников: сетка карточек, фильтры, вид «список»
      ========================================================================== */
@@ -2362,8 +2384,10 @@
     --cal-time-w: 64px;             /* ширина колонки времени */
     --cal-line: var(--border);      /* линии сетки */
     --cal-line-soft: color-mix(in srgb, var(--border) 55%, transparent);
-    --cal-weekend: color-mix(in srgb, var(--muted) 70%, transparent);
-    --cal-hatch: color-mix(in srgb, var(--muted-foreground) 22%, transparent);
+    /* Тон недоступности: единственный способ «выключить» день в сетке.
+       Выходных «по календарю» нет — суббота и воскресенье выглядят как
+       будни, пока репетитор не занёс отметку в таблицу. */
+    --cal-off: color-mix(in srgb, var(--status-cancelled) 30%, transparent);
 
     flex: 1;
     min-height: 0;                  /* иначе flex-колонка не даёт скролл */
@@ -2475,8 +2499,6 @@
     text-align: center;
   }
 
-  .cal-dayhead--weekend { background: var(--cal-weekend); }
-
   .cal-dayhead__name {
     color: var(--muted-foreground);
     font-size: var(--text-xs);
@@ -2515,6 +2537,16 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.02em;
+  }
+
+  /* Причина отметки в шапке дня (design.md D4): заменяет плашку
+     «Выходной» и подпись числа занятий, поэтому несёт тон причины —
+     тот же `--cal-off`, что и штриховка тела дня. */
+  .cal-dayhead__off--unavailable {
+    background: var(--cal-off);
+    color: var(--foreground);
+    font-weight: 600;
+    text-transform: none;
   }
 
   .cal-dayhead__dots {
@@ -2576,14 +2608,17 @@
     border-left: 1px solid var(--cal-line-soft);
   }
 
-  /* Штриховка выходных в теле сетки */
-  .cal-day--weekend {
+  /* Штриховка недоступности: единственный способ «выключить» день в сетке.
+     Выходных «по календарю» нет — суббота и воскресенье выглядят как будни,
+     пока репетитор не занёс отметку в таблицу `tutor_unavailability`
+     (спека calendar, «Выходные задаёт репетитор отметками»). */
+  .cal-day--unavailable {
     background-image: repeating-linear-gradient(
       45deg,
-      transparent 0 6px,
-      var(--cal-hatch) 6px 7px
+      transparent 0 4px,
+      var(--cal-off) 4px 6px
     );
-    background-color: var(--cal-weekend);
+    background-color: color-mix(in srgb, var(--cal-off) 40%, transparent);
   }
 
   .cal-hour {
@@ -2807,27 +2842,6 @@
     background: color-mix(in srgb, var(--cal-slot-accent) 82%, var(--foreground));
   }
 
-  /* Блок отпуска: занимает весь день, визуально не урок */
-  .cal-vacation {
-    position: absolute;
-    inset: 2px;
-    z-index: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px dashed var(--cal-line);
-    border-radius: var(--radius-sm);
-    background: repeating-linear-gradient(
-      -45deg,
-      var(--cal-weekend) 0 8px,
-      transparent 8px 16px
-    );
-    color: var(--muted-foreground);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    pointer-events: none;             /* не перехватывает клики по сетке */
-  }
-
   /* Выпадающий список «Цвет» (заглушка без битых ссылок) */
   .cal-color {
     position: relative;
@@ -2974,6 +2988,148 @@
   @media (max-width: 639.98px) {
     .cal-toolbar { padding: calc(var(--space) * 2) calc(var(--space) * 3); }
     .cal-toolbar__title { font-size: var(--text-base); width: 100%; margin-left: 0; }
+  }
+
+  /* ==========================================================================
+     Панель «Отпуск и выходные» (.un-*)
+
+     Форма новой отметки и список «Уже отмечено» в одной панели модалки
+     (design.md D8/D11). Цвета — только токены темы: панель живёт и в
+     светлой, и в тёмной теме.
+     ======================================================================= */
+
+  /* Корень панели: своя ширина — список отметок уже формы урока */
+  .un-panel .modal-content {
+    max-width: 640px;
+  }
+
+  /* Переключатель режима: «Период» / «Постоянный выходной» */
+  .un-modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  .un-modes__option {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space));
+    padding: calc(var(--space)) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--background);
+    color: var(--foreground);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  /* Выбранный режим: акцентная рамка и фон — как у активного таба */
+  .un-modes__option:has(input:checked) {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .un-modes__option input {
+    accent-color: var(--primary);
+  }
+
+  /* Поля выбранного режима: `template x-if` вставляет их одной группой,
+     поэтому им нужна своя двухколоночная сетка внутри `form-section`. */
+  .un-fields {
+    display: contents;
+  }
+
+  /* Список «Уже отмечено» */
+  .un-marks {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .un-marks__title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .un-marks__empty {
+    padding: calc(var(--space) * 3);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .un-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Строка отметки: причина и срок слева, действия справа */
+  .un-mark {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+  }
+
+  /* Прошедшая отметка приглушена: она уже не влияет на будущие недели */
+  .un-mark--past {
+    opacity: 0.72;
+  }
+
+  .un-mark__main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 8rem;
+  }
+
+  .un-mark__reason {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .un-mark__span {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .un-mark__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space));
+  }
+
+  .un-mark__field {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Свёрнутый блок прошедших отметок (design.md D11) */
+  .un-past {
+    margin-top: calc(var(--space));
+  }
+
+  .un-past__summary {
+    padding: calc(var(--space)) 0;
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+    cursor: pointer;
   }
 
   /* ==========================================================================

@@ -39,6 +39,11 @@ def tutor_factory():
     через `PasswordHasher`; для страниц достаточно email/имени.
     БД в тестах общая на сессию, поэтому email по умолчанию уникален для
     каждого вызова (передайте `email`, чтобы задать его явно).
+
+    `timezone` по умолчанию `UTC`: тесты не должны зависеть от системной
+    зоны машины, а зона `UTC` делает настенное время из формы равным
+    хранимому. Передайте `timezone=None` или другую зону явно, если тест
+    проверяет fallback или конкретную зону (спека tutor-timezone).
     """
 
     def _create(
@@ -46,6 +51,7 @@ def tutor_factory():
         email: str | None = None,
         password: str | None = None,
         password_hash: str | None = None,
+        timezone: str | None = "UTC",
         **extra,
     ):
         from uuid import uuid4
@@ -65,7 +71,13 @@ def tutor_factory():
                 password_hash = _PLACEHOLDER_PASSWORD_HASH
 
         with SessionLocal() as session:
-            tutor = Tutor(name=name, email=email, password_hash=password_hash, **extra)
+            tutor = Tutor(
+                name=name,
+                email=email,
+                password_hash=password_hash,
+                timezone=timezone,
+                **extra,
+            )
             session.add(tutor)
             session.commit()
             return tutor.id
@@ -165,6 +177,52 @@ def group_member_factory(group_factory, student_factory):
             session.add(member)
             session.commit()
             return member.id
+
+    return _create
+
+
+@pytest.fixture()
+def unavailability_factory(tutor_factory):
+    """Создаёт отметку недоступности и возвращает её id.
+
+    `tutor_id` по умолчанию — у свежесозданного репетитора; значения по
+    умолчанию валидны для обоих режимов: `period` — отпуск 26.10–30.10.2026,
+    `weekday` — суббота без ограничения срока.
+    """
+
+    def _create(
+        tutor_id: str | None = None,
+        mode: str = "period",
+        **extra,
+    ):
+        from datetime import date
+
+        from app.database import SessionLocal
+        from app.unavailability.models.unavailability import TutorUnavailability
+
+        if tutor_id is None:
+            tutor_id = tutor_factory()
+
+        if mode == "weekday":
+            values = {
+                "mode": "weekday",
+                "reason": "dayoff",
+                "weekday": 5,
+            }
+        else:
+            values = {
+                "mode": "period",
+                "reason": "vacation",
+                "start_date": date(2026, 10, 26),
+                "end_date": date(2026, 10, 30),
+            }
+        values.update(extra)
+
+        with SessionLocal() as session:
+            mark = TutorUnavailability(tutor_id=tutor_id, **values)
+            session.add(mark)
+            session.commit()
+            return mark.id
 
     return _create
 

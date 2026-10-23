@@ -38,11 +38,15 @@
                    `lesson-saved` перерисовывает неделю с сервера, не теряя
                    открытую неделю (design.md D6); `hx-get` синхронизируется
                    с видимой неделей в calendar.js при листании. #}
+                {# `data-now` — локальный момент педагога с сервера: `calendar.js` берёт
+                   «сегодня» и предзаполнение нового урока отсюда, а не от часов
+                   устройства (design.md D7, задача 7.4). #}
                 <div id="calendar-swap" x-data="calendarGrid"
+                     data-now="{{ now_iso }}"
                      data-lesson-new="/tutor/lessons/new"
                      data-color-mode="{{ color_mode }}"
                      hx-get="/tutor/calendar?start={{ current_start }}&color={{ color_mode }}"
-                     hx-trigger="lesson-saved from:body"
+                     hx-trigger="lesson-saved from:body, unavailability-saved from:body"
                      hx-target="#calendar-swap"
                      hx-swap="innerHTML">
                     {% include "calendar/_area.html" %}

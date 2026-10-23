@@ -15,6 +15,7 @@
 
 from datetime import datetime, timedelta
 
+from app.common.services.tutor_time import to_local
 from app.lesson.models.lesson import (
     LESSON_STATUS_LABELS,
     LESSON_TYPE_LABELS,
@@ -64,19 +65,28 @@ def format_rating(rating: int | None) -> str:
     return "★" * rating + "☆" * (5 - rating)
 
 
-def format_lesson_datetime(value: datetime) -> str:
-    """«19.10.2026, 10:00» — колонка «Дата и время» списка уроков."""
+def format_lesson_datetime(value: datetime, tutor) -> str:
+    """«19.10.2026, 10:00» — колонка «Дата и время» списка уроков.
+
+    Значение переводится из UTC в зону педагога; формат подписи не
+    меняется (спека lesson-management, «Отображение времени урока»).
+    """
     if value is None:
         return ""
-    return value.strftime("%d.%m.%Y, %H:%M")
+    return to_local(value, tutor).strftime("%d.%m.%Y, %H:%M")
 
 
-def format_time_span(lesson) -> str:
-    """Подзаголовок модалки редактирования: интервал «10:00–11:00»."""
+def format_time_span(lesson, tutor) -> str:
+    """Подзаголовок модалки редактирования: интервал «10:00–11:00».
+
+    Начало и окончание считаются в зоне педагога (спека: «Интервал в
+    модалке»), формат подписи не меняется.
+    """
     if lesson is None or lesson.starts_at is None:
         return ""
-    end = lesson.starts_at + timedelta(minutes=lesson.duration_min or 0)
-    return f"{lesson.starts_at.strftime('%H:%M')}–{end.strftime('%H:%M')}"
+    start = to_local(lesson.starts_at, tutor)
+    end = start + timedelta(minutes=lesson.duration_min or 0)
+    return f"{start.strftime('%H:%M')}–{end.strftime('%H:%M')}"
 
 
 def register_template_helpers() -> None:

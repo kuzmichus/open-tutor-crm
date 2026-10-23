@@ -18,6 +18,7 @@ from app.homework.views import router as homework_router
 from app.lesson.views import router as lesson_router
 from app.student.views import router as student_router
 from app.tutor.views import router as tutor_router
+from app.unavailability.views import router as unavailability_router
 
 _STATIC_DIR = Path(__file__).resolve().parent / "app" / "static"
 
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(group_router)
     app.include_router(lesson_router)
     app.include_router(homework_router)
+    app.include_router(unavailability_router)
     # Кастомная страница 404 вместо стандартного JSON/Not Found.
     app.add_exception_handler(404, not_found)
     # Статические ассеты (htmx и т.п.) отдаются локально, без CDN.

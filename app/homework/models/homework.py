@@ -46,7 +46,11 @@ def _sql_string_in(column: str, values: tuple[str, ...]) -> str:
 
 
 class Homework(Base):
-    """Домашнее задание одного урока: задание, срок, статус и материалы."""
+    """Домашнее задание одного урока: задание, срок, статус и материалы.
+
+    `due_at` хранится в UTC; настенное время зоны педагога — только на
+    входе и на выводе (спека tutor-timezone).
+    """
 
     __tablename__ = "homework"
     __table_args__ = (
@@ -70,7 +74,11 @@ class Homework(Base):
     )
     # Обязательный текст задания: пустое «Задание» блокируется валидацией.
     assignment: Mapped[str] = mapped_column(Text, nullable=False)
-    # Срок сдачи: `datetime-local` как «Начало» урока (design: Open Questions).
+    # Срок сдачи хранится в UTC (aware, смещение 0) — как начало урока:
+    # ввод формы трактуется как настенное время в зоне педагога и
+    # переводится на сервере, показ — обратный перевод на выводе (спека
+    # tutor-timezone). SQLite теряет tzinfo, поэтому чтение нормализуется
+    # через `as_utc`.
     due_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

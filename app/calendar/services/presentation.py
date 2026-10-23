@@ -1,6 +1,6 @@
 """Отображение календаря: подписи недели и раскладка блоков по времени.
 
-Чистые функции без БД и HTTP (как demo_schedule): принимают дни недели и
+Чистые функции без БД и HTTP: принимают дни недели и
 «сейчас», возвращают словари для шаблона. Позиция и высота блока считаются
 в часах от 6:00 — шаблон умножает их на CSS-переменную `--cal-hour-h`,
 поэтому сетка масштабируется без пересчёта на сервере (design.md D1).
@@ -13,9 +13,8 @@ from app.calendar.services.color_mode import (
     STATUS,
     status_color,
 )
-from app.calendar.services.demo_schedule import lessons_word
 from app.calendar.services.schedule_day import ScheduleDay
-from app.calendar.services.schedule_event import VACATION, ScheduleEvent
+from app.calendar.services.schedule_event import ScheduleEvent
 
 # Границы таймлайна: часовые интервалы 6:00–23:00 (спека «Сетка времени»).
 GRID_START_HOUR = 6
@@ -56,6 +55,23 @@ def format_months_label(monday: date, sunday: date) -> str:
 def format_clock(value) -> str:
     """«14:00» — время без секунд."""
     return f"{value.hour:02d}:{value.minute:02d}"
+
+
+def lessons_word(count: int) -> str:
+    """Число занятий со склонением: «1 урок», «2 урока», «5 уроков».
+
+    Переехала сюда из удалённого демо-генератора: подпись используется
+    живым рендером шапки дня (design.md D7).
+    """
+    last_two = abs(count) % 100
+    last = abs(count) % 10
+    if 11 <= last_two <= 14:
+        return f"{count} уроков"
+    if last == 1:
+        return f"{count} урок"
+    if 2 <= last <= 4:
+        return f"{count} урока"
+    return f"{count} уроков"
 
 
 def format_price(price: int | None) -> str:
@@ -99,7 +115,6 @@ def build_event_view(
     # когда она задана, иначе заголовок кончался бы бесполезным «0 ₽».
     title = f"{event.student} · {price_label}" if price_label else event.student
     return {
-        "is_vacation": event.kind == VACATION,
         "top_h": _num(top_h),
         "height_h": _num(height_h),
         "left_pct": f"{_num((column - 1) * 100 / columns)}%",
@@ -111,7 +126,9 @@ def build_event_view(
         "color": event_accent(event, now=now, color_mode=color_mode),
         "is_group": event.is_group,
         # Прошедшее занятие приглушается: сниженная непрозрачность + пунктир.
-        "is_past": _as_datetime(event, event.start) < now,
+        # Сравнение aware UTC с aware UTC (design D4) — «прошло» больше не
+        # зависит от того, в каком кадре собраны «сейчас» и время урока.
+        "is_past": event.starts_at < now,
         # «Просрочен» — запланированный урок, чьё время уже прошло
         # (design.md D5): отличается от проведённого и от будущего.
         "is_overdue": overdue,
@@ -129,10 +146,14 @@ def build_event_view(
 
 
 def is_overdue(event: ScheduleEvent, *, now: datetime) -> bool:
-    """Запланированный урок, время которого уже прошло (design.md D5)."""
-    if not event.is_lesson or event.is_completed:
+    """Запланированный урок, время которого уже прошло (design.md D5).
+
+    Сравниваются aware UTC: `ends_at` события и `now` из контекста
+    (design D4), поэтому результат не зависит от зоны машины.
+    """
+    if event.is_completed:
         return False
-    return _as_datetime(event, event.end) < now
+    return event.ends_at < now
 
 
 def event_accent(event: ScheduleEvent, *, now: datetime, color_mode: str) -> str:
@@ -140,10 +161,8 @@ def event_accent(event: ScheduleEvent, *, now: datetime, color_mode: str) -> str
 
     Одно правило на карточку и на точку в шапке дня: в режиме «По статусу»
     цвет зависит от `status`/просрочки, в режиме «По цели» — от цвета
-    ученика или группы. Отпуск акцента не имеет.
+    ученика или группы.
     """
-    if not event.is_lesson:
-        return event.color
     if color_mode == STATUS:
         return status_color(
             is_completed=event.is_completed,
@@ -153,24 +172,39 @@ def event_accent(event: ScheduleEvent, *, now: datetime, color_mode: str) -> str
 
 
 def build_day_view(day: ScheduleDay, *, now: datetime, color_mode: str = DEFAULT_COLOR_MODE) -> dict:
-    """Словарь одного столбца сетки: шапка дня и его события."""
-    lessons = layout_events(day.lessons, now=now, color_mode=color_mode)
+    """Словарь одного столбца сетки: шапка дня и его события.
+
+    `unavailable` — подпись причины отметки для шапки дня (`""` — день
+    доступен), `unavailable_title` — все причины дня для всплывающей
+    подсказки (design.md D4: периода важнее выходного).
+
+    Флага «выходной» нет: выходные задаёт только таблица отметок, поэтому
+    суббота и воскресенье выглядят как обычные дни, пока репетитор не
+    отметил их сам.
+    """
+    lessons = layout_events(day.events, now=now, color_mode=color_mode)
+    mark = day.unavailable
     return {
         "date": day.date,
         "iso_date": day.date.isoformat(),
         "weekday_short": WEEKDAY_SHORT[day.date.weekday()],
         "day_number": day.date.day,
-        "is_weekend": day.is_weekend,
         "is_today": day.date == now.date(),
         # Точки шапки — тем же правилом, что и акцент карточки: цвета
         # точки и карточки урока не могут разойтись (design.md D5).
         "dots": [
             event_accent(event, now=now, color_mode=color_mode)
-            for event in day.lessons
+            for event in day.events
         ],
-        "lessons_label": lessons_word(len(day.lessons)) if day.lessons else "",
+        "lessons_label": lessons_word(len(day.events)) if day.events else "",
         "lessons": lessons,
-        "has_vacation": any(event.kind == VACATION for event in day.events),
+        # Причина отметки в шапке дня. Плашки «Выходной» больше нет, так что
+        # отметка ничего не перекрывает — она единственная подпись о
+        # нерабочем дне (спека calendar, «Выходные задаёт репетитор»).
+        "unavailable": mark.reason_label if mark else "",
+        "unavailable_title": (
+            ", ".join((mark.reason_label,) + mark.extra_reasons) if mark else ""
+        ),
     }
 
 
@@ -199,8 +233,10 @@ def build_calendar_context(
         # (design.md D5).
         "color_mode": color_mode,
         "color_target": color_mode != STATUS,
-        # Пустая неделя: ни уроков, ни отпуска (спека «Пустая неделя»).
-        "is_empty": not any(day.events for day in days),
+        # Пустая неделя: ни уроков, ни отметок недоступности (спека
+        # «Пустая неделя»: пояснение не должно называть неделю свободной,
+        # если в ней есть отметка).
+        "is_empty": not any(day.events or day.unavailable for day in days),
     }
 
 
@@ -249,8 +285,3 @@ def layout_events(
 def _num(value: float) -> str:
     """Число для инлайн-стиля без хвостовых нулей: 8 → «8», 0.667 → «0.667»."""
     return f"{round(value, 4):g}"
-
-
-def _as_datetime(event: ScheduleEvent, value) -> datetime:
-    """Дата события со временем — для сравнения с «сейчас»."""
-    return datetime.combine(event.day, value)

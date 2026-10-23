@@ -116,9 +116,53 @@ def _update_form(student_id: str, **extra) -> dict:
     return data
 
 
+def _owner_utc_plus4(client, tutor_factory):
+    """Репетитор с зоной Europe/Ulyanovsk (UTC+04), вошедший в клиент."""
+    email = "lessons-update-tz@example.com"
+    tutor_id = tutor_factory(
+        email=email, password=PASSWORD, timezone="Europe/Ulyanovsk"
+    )
+    client.post(
+        "/tutor/login",
+        data={"email": email, "password": PASSWORD},
+        follow_redirects=False,
+    )
+    return tutor_id
+
+
 # --------------------------------------------------------------------------
 # 6.1 Модалка редактирования
 # --------------------------------------------------------------------------
+
+
+def test_edit_form_prefills_local_and_saving_keeps_utc(
+    client, tutor_factory, student_factory
+):
+    """Спека (задача 3.2): урок `06:00 UTC` при зоне UTC+04.
+
+    Поле «Начало» показывает настенное время 10:00, а сохранение без
+    правки не сдвигает хранимое значение в БД.
+    """
+    owner = _owner_utc_plus4(client, tutor_factory)
+    student = student_factory(tutor_id=owner)
+    # Хранимое значение — 06:00 UTC, что в зоне UTC+04 есть 22.10 10:00.
+    lesson_id = _insert_lesson(
+        owner, student_id=student, starts_at=datetime(2026, 10, 22, 6, 0)
+    )
+
+    page = client.get(f"/tutor/lessons/{lesson_id}/edit").text
+    assert 'value="2026-10-22T10:00"' in page
+    # Подзаголовок модалки — интервал в зоне педагога: 10:00–11:00 (задача 5.1).
+    assert "10:00–11:00" in page
+
+    # Сохранение без правки не меняет хранимое UTC-значение.
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}",
+        data=_update_form(student, starts_at="2026-10-22T10:00"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 22, 6, 0)
 
 
 def test_edit_form_renders(owner, client, student_factory):
@@ -529,6 +573,36 @@ def test_move_lesson_changes_only_starts_at(owner, client, student_factory):
         "price", "status", "rating", "family_comment", "series_id",
     ):
         assert after[field] == before[field], field
+
+
+def test_move_lesson_in_tutor_zone_saves_utc(
+    client, tutor_factory, student_factory
+):
+    """Спека (задача 5.3): перенос 16:30 при зоне UTC+04 сохраняет 12:30 UTC.
+
+    Переданные дата и время трактуются как настенное время в зоне педагога.
+    """
+    owner = _owner_utc_plus4(client, tutor_factory)
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(
+        owner, student_id=student, starts_at=datetime(2026, 10, 19, 6, 0)
+    )
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}/move",
+        data={"date": "2026-10-23", "time": "16:30"},
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+
+    # 16:30 в UTC+04 — это 12:30 UTC того же дня.
+    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 23, 12, 30)
+
+    # Календарь показывает урок в настенном времени педагога: 16:30, а не 12:30
+    # (спека tutor-timezone, «Показ времени урока»).
+    calendar = client.get("/tutor/calendar?start=2026-10-19").text
+    assert 'hx-get="/tutor/lessons/' + lesson_id in calendar
+    assert "16:30 – 17:30" in calendar
 
 
 def test_move_lesson_without_htmx_redirects(owner, client, student_factory):

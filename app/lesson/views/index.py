@@ -14,6 +14,7 @@ from app.lesson.services.lessons import list_lessons, normalize_period
 from app.lesson.services.lookup import search_students
 from app.lesson.services.page_context import page_context
 from app.templating import templates
+from app.tutor.models.tutor import Tutor
 
 router = APIRouter()
 
@@ -28,7 +29,10 @@ def lessons_index(
     q = request.query_params.get("q", "")
     period = normalize_period(request.query_params.get("period", ""))
     student_id = request.query_params.get("student", "")
-    rows = list_lessons(db, tutor_id, q=q, period=period, student_id=student_id)
+    tutor = db.get(Tutor, tutor_id)
+    rows = list_lessons(
+        db, tutor_id, q=q, period=period, student_id=student_id, tutor=tutor
+    )
 
     return templates.TemplateResponse(
         request,

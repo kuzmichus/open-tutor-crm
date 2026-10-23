@@ -1,27 +1,22 @@
-"""Тесты календаря: unit-тесты демо-генератора и страницы GET /tutor/calendar.
+"""Тесты календаря: unit-тесты сервисов недели и страницы GET /tutor/calendar.
 
-Имена unit-тестов генератора содержат «demo», чтобы их можно было отобрать
-фильтром `uv run pytest tests/test_calendar.py -k demo`.
+Демо-генератор удалён (change add-tutor-unavailability): календарь наполняется
+реальными уроками из БД и отметками недоступности.
 """
 
 import re
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from app.calendar.services.demo_schedule import (
-    VACATION,
-    build_week,
-    is_between_terms,
-    lessons_word,
-    week_start,
-)
-
-# «Демо-неделя» без особых периодов (середина октября 2026).
-_PLAIN_MONDAY = date(2026, 10, 12)
+from app.calendar.services.presentation import lessons_word
+from app.calendar.services.week import week_start
+from app.common.services.tutor_time import system_zone_name
 
 PASSWORD = "Секретный-Пароль-1"
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def _login(client, email="calendar-user@example.com"):
@@ -43,27 +38,23 @@ def _login(client, email="calendar-user@example.com"):
 
 
 @pytest.fixture()
-def calendar_owner(client):
-    """Репетитор, вошедший в клиент; возвращает его id для уроков в БД."""
-    client.post(
-        "/tutor/register",
-        data={
-            "name": "Календарный",
-            "email": "calendar-owner@example.com",
-            "password": PASSWORD,
-            "password_confirm": PASSWORD,
-        },
+def calendar_owner(client, tutor_factory):
+    """Репетитор с зоной UTC, вошедший в клиент; возвращает его id.
+
+    Зона задана явно (UTC), иначе тесты зависели бы от системной зоны
+    машины: `calendar_owner` регистрируется через форму, а пустое поле
+    карточки даёт fallback на зону сервера (спека tutor-timezone).
+    Наивные `starts_at` в БД тогда показываются в сетке как есть.
+    """
+    tutor_id = tutor_factory(
+        email="calendar-owner@example.com", password=PASSWORD, timezone="UTC"
     )
     client.post(
         "/tutor/login",
         data={"email": "calendar-owner@example.com", "password": PASSWORD},
         follow_redirects=False,
     )
-    from app.database import SessionLocal
-    from app.tutor.models.tutor import Tutor
-
-    with SessionLocal() as db:
-        return db.query(Tutor).filter_by(email="calendar-owner@example.com").one().id
+    return tutor_id
 
 
 def _insert_lesson(tutor_id: str, **overrides) -> str:
@@ -90,6 +81,16 @@ def _insert_lesson(tutor_id: str, **overrides) -> str:
         return str(lesson.id)
 
 
+def _tutor(timezone: str = "UTC") -> SimpleNamespace:
+    """Карточка репетитора для сервисов календаря: нужна только её зона.
+
+    Простой объект вместо ORM-строки — значение переживает закрытие
+    сессии. По умолчанию UTC: тесты не зависят от системной зоны машины
+    (спека tutor-timezone).
+    """
+    return SimpleNamespace(timezone=timezone)
+
+
 # --------------------------------------------------------------------------
 # 3.1 Доступ: без сессии — редирект на вход
 # --------------------------------------------------------------------------
@@ -106,12 +107,18 @@ def test_calendar_requires_session(client):
 # --------------------------------------------------------------------------
 
 def test_calendar_full_page_renders(client):
-    """Входящий видит полную страницу с панелью управления."""
+    """Полная страница (без HX-Request): каркас с сайдбаром и панель управления.
+
+    Область подмены `#calendar-swap` живёт только в полной странице —
+    htmx-фрагмент её не заворачивает (см. test_calendar_htmx_fragment_only).
+    """
     _login(client)
     response = client.get("/tutor/calendar?start=2026-10-12")
     assert response.status_code == 200
     for label in ("Сегодня", "Добавить", "Ссылка на окна", "Цвет: по ученику"):
         assert label in response.text
+    assert 'id="calendar-swap"' in response.text
+    assert 'class="sidebar"' in response.text
 
 
 def test_calendar_range_title(client):
@@ -130,8 +137,47 @@ def test_calendar_timeline_labels(client):
     assert "23:00" in response.text
 
 
-def test_calendar_weekend_badge(client, calendar_owner, student_factory):
-    """Сб/вс отмечены плашкой «Выходной»; будни — числами занятий."""
+@pytest.mark.parametrize(
+    ("timezone", "expected"),
+    [
+        (None, None),  # пустое поле → системная зона сервера
+        ("Europe/Samara", "Europe/Samara"),
+    ],
+    ids=["system-zone-fallback", "explicit-zone"],
+)
+def test_calendar_timezone_badge(client, tutor_factory, timezone, expected):
+    """Бейдж `.cal-tz` подписывает зону сетки: заданную или системную.
+
+    Бейдж показывается всегда (design D2): при пустом поле карточки это
+    системная зона сервера, а не пустое место — иначе непонятно, в какой
+    зоне показано время сетки.
+    """
+    tutor_factory(email="tz-badge@example.com", password=PASSWORD, timezone=timezone)
+    client.post(
+        "/tutor/login",
+        data={"email": "tz-badge@example.com", "password": PASSWORD},
+        follow_redirects=False,
+    )
+    response = client.get("/tutor/calendar?start=2026-10-12")
+
+    assert 'class="cal-tz"' in response.text
+    assert (expected or system_zone_name() or "UTC") in response.text
+
+
+# --------------------------------------------------------------------------
+# 3.3 Карточки занятий и состояние сетки (реальные уроки из БД)
+# --------------------------------------------------------------------------
+
+def test_calendar_week_without_marks_has_no_weekend_automation(
+    client, calendar_owner, student_factory
+):
+    """Неделя без отметок: ни выходных, ни штриховки по номеру дня недели.
+
+    Единственный источник выходных — отметки в таблице `tutor_unavailability`
+    (спека calendar, «Выходные задаёт репетитор отметками»): автоматическая
+    плашка и штриховка сб/вс удалены, штриховка осталась только у отмеченных
+    дней (`.cal-day--unavailable`).
+    """
     student_id = student_factory(tutor_id=calendar_owner, first_name="Иван")
     _insert_lesson(
         calendar_owner, student_id=student_id,
@@ -142,131 +188,14 @@ def test_calendar_weekend_badge(client, calendar_owner, student_factory):
         starts_at=datetime(2026, 10, 12, 17, 0),
     )
     response = client.get("/tutor/calendar?start=2026-10-12")
-    assert "Выходной" in response.text
-    assert "2 урока" in response.text  # понедельник: два урока репетитора
+    text = response.text
 
-
-def test_calendar_timezone_badge_hidden_without_timezone(client, tutor_factory):
-    """Пустое поле timezone — элемент часового пояса отсутствует."""
-    tutor_factory(email="no-tz@example.com", password=PASSWORD)
-    client.post(
-        "/tutor/login",
-        data={"email": "no-tz@example.com", "password": PASSWORD},
-        follow_redirects=False,
-    )
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    assert 'class="cal-tz"' not in response.text
-
-
-def test_calendar_timezone_badge_shown_when_set(client, tutor_factory):
-    """Заданный timezone виден в панели управления."""
-    tutor_factory(
-        email="with-tz@example.com",
-        password=PASSWORD,
-        timezone="Europe/Samara",
-    )
-    client.post(
-        "/tutor/login",
-        data={"email": "with-tz@example.com", "password": PASSWORD},
-        follow_redirects=False,
-    )
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    assert "Europe/Samara" in response.text
-
-
-# --------------------------------------------------------------------------
-# 3.3 Карточки занятий и состояние сетки (реальные уроки из БД)
-# --------------------------------------------------------------------------
-
-def test_calendar_event_card_content(client, calendar_owner, student_factory):
-    """Карточка урока: имя с ценой и интервал времени вида «14:00 – 14:40»."""
-    student_id = student_factory(
-        tutor_id=calendar_owner, first_name="Иван", last_name="Иванов"
-    )
-    _insert_lesson(
-        calendar_owner,
-        student_id=student_id,
-        starts_at=datetime(2026, 10, 14, 14, 0),
-        duration_min=40,
-        price=1200,
-    )
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    assert "Иван И." in response.text
-    assert "14:00 – 14:40" in response.text  # среда недели
-
-
-def test_calendar_overlapping_events_shifted(client, calendar_owner, student_factory):
-    """Пересекающиеся уроки среды накладываются со сдвигом (left/width)."""
-    first = student_factory(tutor_id=calendar_owner, first_name="Иван")
-    second = student_factory(tutor_id=calendar_owner, first_name="Ольга")
-    _insert_lesson(
-        calendar_owner, student_id=first,
-        starts_at=datetime(2026, 10, 14, 14, 0), duration_min=40,
-    )
-    _insert_lesson(
-        calendar_owner, student_id=second,
-        starts_at=datetime(2026, 10, 14, 14, 20), duration_min=40,
-    )
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    # Оба урока присутствуют, у первого и второго разные смещения/ширины.
-    assert "14:00 – 14:40" in response.text
-    assert "14:20 – 15:00" in response.text
-    assert "--left: 0%" in response.text
-    assert "--left: 50%" in response.text
-    assert "--width: 50%" in response.text
-
-
-def test_calendar_vacation_block(client):
-    """Август — блок «Отпуск» вместо занятий."""
-    _login(client)
-    response = client.get("/tutor/calendar?start=2026-08-03")
-    assert response.status_code == 200
-    assert "Отпуск" in response.text
-
-
-def test_calendar_weekend_hatching(client):
-    """Колонки сб/вс помечены штриховкой выходных."""
-    _login(client)
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    assert 'class="cal-day cal-day--weekend"' in response.text
-
-
-def test_calendar_empty_week_renders(client, calendar_owner, student_factory):
-    """Неделя без уроков: страница без ошибки, пояснение о свободной неделе."""
-    # Уроки есть, но на другой неделе — запрошенная остаётся пустой.
-    student_id = student_factory(tutor_id=calendar_owner, first_name="Иван")
-    _insert_lesson(
-        calendar_owner, student_id=student_id,
-        starts_at=datetime(2026, 10, 14, 14, 0),
-    )
-    response = client.get("/tutor/calendar?start=2026-11-09")
-    assert response.status_code == 200
-    assert "свободная неделя" in response.text
-    # Карточек занятий нет: серверный блок — `class="cal-event"` или
-    # `class="cal-event cal-event--past"`; классы `cal-event__*` из
-    # inert-шаблона рендерера карточек карточками не считаются.
-    assert not re.search(r'class="cal-event[\s"]', response.text)
-
-
-def test_calendar_past_events_dimmed(client, calendar_owner, student_factory):
-    """Прошедшие уроки приглушены классом cal-event--past."""
-    student_id = student_factory(tutor_id=calendar_owner, first_name="Иван")
-    # Неделя 12–18 октября 2026 целиком в прошлом (тесты пишутся позже).
-    _insert_lesson(
-        calendar_owner, student_id=student_id,
-        starts_at=datetime(2026, 10, 14, 14, 0),
-    )
-    past = client.get("/tutor/calendar?start=2026-10-12")
-    assert "cal-event--past" in past.text
-    # Урок далеко в будущем — не «прошедший».
-    future_lesson = student_factory(tutor_id=calendar_owner, first_name="Пётр")
-    _insert_lesson(
-        calendar_owner, student_id=future_lesson,
-        starts_at=datetime(2099, 2, 3, 10, 0),
-    )
-    future = client.get("/tutor/calendar?start=2099-02-02")
-    assert 'data-lesson-id="' in future.text  # уроки есть
-    assert "cal-event--past" not in future.text
+    assert "Выходной" not in text
+    assert "cal-day--weekend" not in text
+    assert "cal-dayhead--weekend" not in text
+    assert "cal-day--unavailable" not in text
+    assert "cal-dayhead__off--unavailable" not in text
+    assert "2 урока" in text  # понедельник: два урока репетитора
 
 
 # --------------------------------------------------------------------------
@@ -356,17 +285,6 @@ def test_calendar_invalid_start_falls_to_current_week(client):
     assert title.group(1) in bad.text
 
 
-def test_calendar_specific_week_start(client):
-    """`?start=2026-10-12` → заголовок недели с 12 октября."""
-    _login(client)
-    response = client.get("/tutor/calendar?start=2026-10-12", headers=_HTMX)
-    assert "12 октября – 18 октября 2026" in response.text
-
-
-# --------------------------------------------------------------------------
-# 4.2 Навигация: подмена только области, содержимое недели меняется
-# --------------------------------------------------------------------------
-
 def test_calendar_navigation_changes_week_content(client):
     """Фрагмент следующей недели содержит её заголовок, а не текущий."""
     _login(client)
@@ -379,35 +297,9 @@ def test_calendar_navigation_changes_week_content(client):
     assert 'id="calendar-swap"' not in next_week.text
 
 
-def test_calendar_full_page_still_renders_after_fragment(client):
-    """Полная страница (без HX-Request) по-прежнему отдаёт каркас со сайдбаром."""
-    _login(client)
-    page = client.get("/tutor/calendar?start=2026-10-12")
-    assert page.status_code == 200
-    assert 'id="calendar-swap"' in page.text
-    assert 'class="sidebar"' in page.text
-
-
 # --------------------------------------------------------------------------
 # 5.1 Клиентский слой: calendar.js и данные четвертей часа
 # --------------------------------------------------------------------------
-
-def test_calendar_loads_calendar_js_before_alpine(client):
-    """calendar.js — локальный defer-скрипт до alpine.min.js (alpine:init).
-
-    Компонент подписывается на `alpine:init`, а defer-скрипты выполняются
-    в порядке документа — позже Alpine регистрация не успевает сработать.
-    """
-    _login(client)
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    assert '<script src="/static/calendar.js" defer></script>' in response.text
-    assert (
-        response.text.index("/static/calendar.js")
-        < response.text.index("/static/alpine.min.js")
-    )
-    # Точка монтирования: Alpine-компонент на корне области подмены.
-    assert 'x-data="calendarGrid"' in response.text
-
 
 def test_calendar_slots_expose_quarter_data(client):
     """Ячейки четвертей несут data-start/data-end — hover и клик по ним."""
@@ -424,20 +316,25 @@ def test_calendar_slots_expose_quarter_data(client):
 # --------------------------------------------------------------------------
 
 def test_calendar_wires_lessons_js_and_modal_container(client):
-    """3.2: lessons.js до alpine.min.js, `#modal` вне области свопа.
+    """3.2: calendar.js/lessons.js до alpine.min.js, `#modal` вне области свопа.
 
+    Компонент подписывается на `alpine:init`, а defer-скрипты выполняются
+    в порядке документа — позже Alpine регистрация не успевает сработать.
     Форма урока живёт в контейнере `#modal`, который htmx не подменяет
     при листании недель (design.md D6): иначе открытая модалка исчезала
     бы вместе с областью `#calendar-swap`.
     """
     _login(client)
     response = client.get("/tutor/calendar?start=2026-10-12")
+    assert '<script src="/static/calendar.js" defer></script>' in response.text
     assert '<script src="/static/lessons.js" defer></script>' in response.text
     assert (
         response.text.index("/static/calendar.js")
         < response.text.index("/static/lessons.js")
         < response.text.index("/static/alpine.min.js")
     )
+    # Точка монтирования: Alpine-компонент на корне области подмены.
+    assert 'x-data="calendarGrid"' in response.text
     # Контейнер модалки есть и находится вне области подмены.
     swap = re.search(
         r'<div id="calendar-swap".*?</section>', response.text, re.S
@@ -447,7 +344,7 @@ def test_calendar_wires_lessons_js_and_modal_container(client):
     assert '<div id="modal"></div>' in response.text
 
 def test_calendar_lesson_card_opens_edit_form(client, calendar_owner, student_factory):
-    """3.3: карточка урока несёт edit-ссылку в #modal, карточка отпуска — нет."""
+    """3.3: карточка урока несёт edit-ссылку в #modal."""
     student_id = student_factory(tutor_id=calendar_owner, first_name="Иван")
     lesson_id = _insert_lesson(
         calendar_owner, student_id=student_id,
@@ -460,39 +357,59 @@ def test_calendar_lesson_card_opens_edit_form(client, calendar_owner, student_fa
     assert 'hx-target="#modal"' in card
     assert 'hx-swap="innerHTML"' in card
 
-    # Август: демо-отпуск — блок без id урока и без edit-ссылки.
+    # Август: демо-отпуска больше нет — заглушки .cal-vacation в сетке нет
+    # вовсе, а без уроков страница остаётся пустой неделей.
     august = client.get("/tutor/calendar?start=2026-08-03")
-    vacation = re.search(r'<div class="cal-vacation">', august.text)
-    assert vacation, "Блока отпуска нет в сетке"
+    assert 'class="cal-vacation"' not in august.text
     assert "/edit" not in august.text
 
 
 def test_calendar_entry_points_open_lesson_form(client):
-    """3.4: клик по четверти и «Добавить» открывают форму создания урока.
+    """3.4: клик по четверти, «Добавить» и FAB открывают форму создания урока.
 
-    Обе точки входа ведут на `GET /tutor/lessons/new` с префиллом
+    Все точки входа ведут на `GET /tutor/lessons/new` с префиллом
     `starts_at` (design.md D9): четверть — своя дата/время, кнопка —
-    ближайшая будущая четверть (`prefillMoment`).
+    ближайшая будущая четверть (`prefillMoment`). Рендерер
+    `#cal-event-template` обслуживает демо-слоты.
     """
     _login(client)
     page = client.get("/tutor/calendar?start=2026-10-12")
     # Адрес формы — в разметке корня (JS читает data-lesson-new).
     assert 'data-lesson-new="/tutor/lessons/new"' in page.text
-    # «Добавить» и FAB по-прежнему открывают форму (обработчик openForm).
+    # Все три обработчика и шаблон карточки слота на месте.
+    assert '@click="openSlot($event.currentTarget)"' in page.text
     assert 'id="cal-add" @click="openForm()"' in page.text
     assert 'class="cal-fab" type="button" @click="openForm()"' in page.text
+    assert 'id="cal-event-template"' in page.text
 
     js = _calendar_js()
-    # Клик по четверти: своя дата/время четверти в форме создания.
+    # Клик по четверти: своя дата/время четверти в форме создания; третий
+    # аргумент — признак подтверждения для отмеченного дня (design.md D5).
     slot_open = js[js.index("openSlot: function"):js.index("openLessonForm: function")]
-    assert "openLessonForm(data.date, data.time)" in slot_open
+    assert "this.openLessonForm(data.date, data.time" in slot_open
     # Кнопка «Добавить»: ближайшая будущая четверть из prefillMoment.
     form_open = js[js.index("openForm: function"):js.index("toggleMore: function")]
     assert "prefillMoment()" in form_open
     assert "openLessonForm(moment.date, moment.time)" in form_open
     # Сама форма запрашивается htmx-ом в #modal с параметром префилла.
     helper = js[js.index("openLessonForm: function"):js.index("prefillMoment: function")]
-    assert 'htmx.ajax("GET", url + "?starts_at="' in helper
+    assert 'window.htmx.ajax("GET", url + query' in helper
+    assert '"?starts_at="' in helper
+    assert 'target: "#modal"' in helper
+
+    js = _calendar_js()
+    # Клик по четверти: своя дата/время четверти в форме создания; третий
+    # аргумент — признак подтверждения для отмеченного дня (design.md D5).
+    slot_open = js[js.index("openSlot: function"):js.index("openLessonForm: function")]
+    assert "this.openLessonForm(data.date, data.time" in slot_open
+    # Кнопка «Добавить»: ближайшая будущая четверть из prefillMoment.
+    form_open = js[js.index("openForm: function"):js.index("toggleMore: function")]
+    assert "prefillMoment()" in form_open
+    assert "openLessonForm(moment.date, moment.time)" in form_open
+    # Сама форма запрашивается htmx-ом в #modal с параметром префилла.
+    helper = js[js.index("openLessonForm: function"):js.index("prefillMoment: function")]
+    assert 'window.htmx.ajax("GET", url + query' in helper
+    assert '"?starts_at="' in helper
     assert 'target: "#modal"' in helper
 
 
@@ -512,7 +429,7 @@ def test_calendar_refreshes_week_after_lesson_saved(client):
     assert swap, "Область #calendar-swap не найдена"
     tag = swap.group(0)
     assert 'hx-get="/tutor/calendar?start=2026-10-19&color=target"' in tag
-    assert 'hx-trigger="lesson-saved from:body"' in tag
+    assert 'hx-trigger="lesson-saved from:body, unavailability-saved from:body"' in tag
     assert 'hx-target="#calendar-swap"' in tag
 
     js = _calendar_js()
@@ -523,46 +440,36 @@ def test_calendar_refreshes_week_after_lesson_saved(client):
     assert 'root.addEventListener("htmx:afterSwap"' in js
 
 
-def test_calendar_demo_lesson_modal_removed(client):
-    """3.6: демо-модалка урока удалена — урок создаётся формой страницы Уроков.
+def test_calendar_demo_modal_removed_slots_are_dom_only(client):
+    """3.6: демо-модалка урока удалена, слоты остались DOM-only.
 
-    Остаются демо-слот и отпуск: их спеки в change не входят
-    (design.md D9), `openSlot`/`createSlot`/`createVacation` работают.
+    Демо-слот остаётся (его спека в change не входит, design.md D9), а
+    демо-отпуск удалён вместе с заглушкой: недоступность живёт в БД.
+    Слот создаётся только в DOM — ни fetch, ни XMLHttpRequest в calendar.js
+    нет вообще (спека «DOM-only жизненный цикл»).
     """
     _login(client)
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    text = response.text
+    text = client.get("/tutor/calendar?start=2026-10-12").text
     # Демо-выбора ученика и «Сохранить» в календаре больше нет.
     assert 'id="cal-student"' not in text
     assert "cal-student-field" not in text
     assert "saveLesson" not in text
     assert "demo_students" not in text
-    # Слот и отпуск на месте.
+    # Слот на месте, диалог отпуска удалён.
     assert 'id="cal-slot-date"' in text
     assert '@click="createSlot()">Создать</button>' in text
-    assert 'id="cal-vacation-form"' in text
+    assert 'id="cal-vacation-form"' not in text
 
     js = _calendar_js()
     assert "saveLesson" not in js
+    assert "createVacation" not in js
+    # Создание слота живёт в DOM: обработчик диалога, создание и привязка
+    # к четверти часа — и ни одного сетевого вызова.
+    assert "openSlotDialog" in js
     assert "createSlot" in js
-    assert "createVacation" in js
-    # Слоты/отпуск остались DOM-only: сетевых запросов в calendar.js нет.
+    assert "snapToQuarter" in js
     assert "fetch(" not in js
     assert "XMLHttpRequest" not in js
-
-
-def test_calendar_modal_entry_points_wired(client):
-    """Точки входа: клик четверти, «Добавить», мобильная FAB.
-
-    Все три ведут на форму создания урока (`openLessonForm`), а рендерер
-    `#cal-event-template` обслуживает демо-слоты.
-    """
-    _login(client)
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    assert '@click="openSlot($event.currentTarget)"' in response.text
-    assert 'id="cal-add" @click="openForm()"' in response.text
-    assert 'class="cal-fab" type="button" @click="openForm()"' in response.text
-    assert 'id="cal-event-template"' in response.text
 
 
 # --------------------------------------------------------------------------
@@ -650,7 +557,7 @@ def test_calendar_stub_buttons_without_broken_links(client):
 
 
 
-def test_demo_week_start_normalizes_to_monday():
+def test_week_start_normalizes_to_monday():
     """`?start=` любой день недели → понедельник; строка ISO тоже работает."""
     assert week_start(date(2026, 10, 12)) == date(2026, 10, 12)  # уже понедельник
     assert week_start(date(2026, 10, 15)) == date(2026, 10, 12)  # четверг
@@ -658,40 +565,13 @@ def test_demo_week_start_normalizes_to_monday():
     assert week_start("2026-10-14") == date(2026, 10, 12)  # строка ?start=
 
 
-def test_demo_build_week_normalizes_any_day_of_week():
-    """`build_week` принимает любой день недели и строит 7 дней от понедельника."""
-    days = build_week(date(2026, 10, 15))  # четверг запрошенной недели
-    assert len(days) == 7
-    assert [d.date.weekday() for d in days] == list(range(7))
-    assert days[0].date == date(2026, 10, 12)
+def test_week_start_rejects_broken_string():
+    """Кривая строка — ValueError: вьюха сама подставляет текущую неделю."""
+    with pytest.raises(ValueError):
+        week_start("2026-13-45")
 
 
-def test_demo_determinism_same_week_identical():
-    """Два вызова одной недели идентичны (листание стабильно)."""
-    assert build_week(_PLAIN_MONDAY) == build_week(_PLAIN_MONDAY)
-    # и в середине недели, и на строке — тот же результат
-    assert build_week(date(2026, 10, 14)) == build_week("2026-10-12")
-
-
-def test_demo_vacation_on_demo_week():
-    """Август — демо-отпуск: заглушка «Отпуск» вместо занятий."""
-    days = build_week(date(2026, 8, 3))  # понедельник демо-недели отпуска
-    events = [event for day in days for event in day.events]
-    assert events  # отпуск присутствует
-    assert all(event.kind == VACATION for event in events)
-    assert not any(day.lessons for day in days)
-
-
-def test_demo_between_terms_week_is_empty():
-    """Новогодний перерыв — неделя вообще без событий (пустое состояние)."""
-    days = build_week(date(2026, 12, 28))
-    assert all(not day.events for day in days)
-    # соседние недели «пустыми» не считаются
-    assert not is_between_terms(date(2026, 12, 21))
-    assert not is_between_terms(date(2026, 1, 12))
-
-
-def test_demo_lessons_word_declension():
+def test_lessons_word_declension():
     """Склонения числа занятий: 1 урок / 2 урока / 5 уроков / 21 урок…"""
     assert lessons_word(1) == "1 урок"
     assert lessons_word(2) == "2 урока"
@@ -746,21 +626,6 @@ def test_calendar_slot_dialog_markup(client):
     # Поля выбора ученика в диалоге нет — урок создаётся формой Уроков.
     assert "cal-student-field" not in response.text
     assert 'id="cal-student"' not in response.text
-
-
-def test_calendar_slot_creation_static():
-    """Задача 1.2: openSlotDialog/createSlot/snapToQuarter, без сети.
-
-    Слот создаётся только в DOM — ни fetch, ни XMLHttpRequest в calendar.js
-    нет вообще (спека «DOM-only жизненный цикл»).
-    """
-    js = _calendar_js()
-    assert "openSlotDialog" in js
-    assert "createSlot" in js
-    assert "snapToQuarter" in js
-    # Создание слота не обращается к серверу.
-    assert "fetch(" not in js
-    assert "XMLHttpRequest" not in js
 
 
 def test_calendar_slot_card_renderer_static():
@@ -892,17 +757,18 @@ def test_calendar_slot_excluded_from_drag_static():
 
 
 # --------------------------------------------------------------------------
-# 7. Отпуск (спека vacation-creation, change add-vacation-dialog): меню ⋮ в
-#    панели, диалог «Новый отпуск», клик по отпуску — SSR-разметка и
-#    статические проверки (design.md D6: без запуска JS)
+# 7. Недоступность в календаре (спека calendar, change add-tutor-unavailability):
+#    пункт меню «Отпуск и выходные», отмеченный день в сетке, guard клика —
+#    SSR-разметка и статические проверки (design.md D6: без запуска JS)
 # --------------------------------------------------------------------------
 
 def test_calendar_more_menu_markup(client):
-    """Задача 1.1: #cal-more сразу после #cal-add, пункты внутри меню.
+    """Задача 4.5: #cal-more сразу после #cal-add, пункты внутри меню.
 
     Прямая кнопка слота из панели переехала в меню: id и обработчик
     сохранены, поэтому существующий test_calendar_slot_dialog_markup
-    проходит без правок.
+    проходит без правок. Пункт «Отпуск и выходные» открывает панель
+    недоступности в #modal (design.md D8).
     """
     _login(client)
     response = client.get("/tutor/calendar?start=2026-10-12")
@@ -924,7 +790,6 @@ def test_calendar_more_menu_markup(client):
     assert menu, "Выпадающего меню #cal-more-menu нет в разметке"
     items = menu.group(0)
     assert 'id="cal-add-slot" @click="openSlotDialog()"' in items
-    assert 'id="cal-add-vacation" @click="openVacationDialog()"' in items
     assert '@click.outside="closeMore()"' in items
     assert '@keydown.escape.window="closeMore()"' in items
 
@@ -934,79 +799,215 @@ def test_calendar_more_menu_markup(client):
     assert text.count("openSlotDialog()") == 1
 
 
+def test_calendar_more_menu_opens_unavailability_panel(client):
+    """Пункт «Отпуск и выходные» открывает панель, а не форму урока.
+
+    Кнопка несёт `hx-get` панели с целью `#modal` — форму урока она не
+    открывает (спека calendar, «Пункт „Отпуск и выходные“ открывает
+    панель недоступности»).
+    """
+    _login(client)
+    text = client.get("/tutor/calendar?start=2026-10-12").text
+
+    menu = re.search(r'<ul[^>]*id="cal-more-menu"[^>]*>.*?</ul>', text, re.S)
+    assert menu, "Выпадающего меню #cal-more-menu нет в разметке"
+    item = re.search(
+        r'<button[^>]*id="cal-unavailability"[^>]*>.*?</button>', menu.group(0), re.S
+    )
+    assert item, "Пункта «Отпуск и выходные» нет в меню"
+    button = item.group(0)
+    assert "Отпуск и выходные" in button
+    assert 'hx-get="/tutor/unavailability"' in button
+    assert 'hx-target="#modal"' in button
+    assert 'hx-swap="innerHTML"' in button
+    # Меню закрывается выбором пункта.
+    assert "closeMore()" in button
+    # Старого пункта нет.
+    assert "Добавить отпуск" not in text
+    assert 'id="cal-add-vacation"' not in text
+
+
 def test_calendar_more_menu_js_static():
-    """Задача 1.2: moreOpen/toggleMore/closeMore, выбор пункта закрывает меню."""
+    """Задача 4.5: moreOpen/toggleMore/closeMore, выбор пункта закрывает меню."""
     js = _calendar_js()
     assert "moreOpen" in js
     assert "toggleMore" in js
     assert "closeMore" in js
-    # Оба пункта закрывают меню перед открытием диалога.
+    # Пункт слота закрывает меню перед открытием диалога.
     slot_open = js[js.index("openSlotDialog: function"):js.index("closeModal: function")]
     assert "closeMore()" in slot_open
-    vac_open = js[js.index("openVacationDialog: function"):js.index("closeVacation: function")]
-    assert "closeMore()" in vac_open
 
 
-def test_calendar_vacation_dialog_markup(client):
-    """Задача 2.1: диалог «Новый отпуск» — два обязательных датовых поля.
+def test_calendar_unavailable_day_markup(
+    client, calendar_owner, unavailability_factory
+):
+    """Задача 4.3: день с отметкой заштрихован, причина — в шапке.
 
-    Диапазон защищён нативной валидацией: `:min` у конца привязан к
-    началу (design.md D3), отправка формы вызывает createVacation.
+    `.cal-vacation` из сетки удалён: отмеченный день — класс на колонке,
+    `data-unavailable` с причиной и подпись в шапке вместо «Выходного».
     """
-    _login(client)
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    text = response.text
-    assert "Новый отпуск" in text
-    assert 'id="cal-vacation-form"' in text
-    assert "createVacation($event)" in text
+    unavailability_factory(
+        tutor_id=calendar_owner,
+        start_date=date(2026, 10, 14),
+        end_date=date(2026, 10, 15),
+    )
+    text = client.get("/tutor/calendar?start=2026-10-12").text
 
-    start = re.search(r'id="vac-start"[^>]*', text)
-    assert start, "Поля начала отпуска нет в разметке"
-    assert 'type="date"' in start.group(0)
-    assert "required" in start.group(0)
+    day = re.search(r'<div class="cal-day[^"]*"[^>]*data-date="2026-10-14"[^>]*>', text)
+    assert day, "Колонки отмеченного дня нет в сетке"
+    tag = day.group(0)
+    assert "cal-day--unavailable" in tag
+    assert 'data-unavailable="Отпуск"' in tag
+    # Причина в шапке дня.
+    assert "cal-dayhead__off--unavailable" in text
+    assert "Отпуск" in text
+    # Заглушка отпуска удалена.
+    assert 'class="cal-vacation"' not in text
 
-    end = re.search(r'id="vac-end"[^>]*', text)
-    assert end, "Поля конца отпуска нет в разметке"
-    assert 'type="date"' in end.group(0)
-    assert "required" in end.group(0)
-    assert ':min="vacationForm.start"' in end.group(0)
-
-    assert '@click="closeVacation()">Отмена</button>' in text
-    assert re.search(r'<button[^>]*type="submit">Создать</button>', text)
+    # День без отметки — без класса и атрибута.
+    free = re.search(r'<div class="cal-day[^"]*"[^>]*data-date="2026-10-12"[^>]*>', text)
+    assert free and "cal-day--unavailable" not in free.group(0)
+    assert "data-unavailable" not in free.group(0)
 
 
-def test_calendar_vacation_create_static():
-    """Задача 2.2: createVacation и префиллы в calendar.js, без сети.
+def test_calendar_unavailable_weekday_mark_labels_saturday(
+    client, calendar_owner, unavailability_factory
+):
+    """Постоянный выходной в субботу: причина в шапке, воскресенье пустое.
 
-    Отпуск создаётся только в DOM: ни fetch, ни XMLHttpRequest в
-    calendar.js нет вообще (спека «DOM-only жизненный цикл»).
+    Плашки «Выходной» по календарю больше нет — подпись даёт только отметка
+    (спека calendar, «Выходные задаёт репетитор отметками»).
+    """
+    unavailability_factory(
+        tutor_id=calendar_owner, mode="weekday", weekday=5, until_date=date(2026, 12, 31)
+    )
+    text = client.get("/tutor/calendar?start=2026-10-12").text
+
+    saturday = _dayhead(text, "сб")
+    assert saturday, "Шапки субботы нет"
+    assert "cal-dayhead__off--unavailable" in saturday
+    assert 'title="Выходной">Выходной</span>' in saturday
+
+    # Воскресенье без отметки: ни причины, ни плашки выходного.
+    sunday = _dayhead(text, "вс")
+    assert sunday, "Шапки воскресенья нет"
+    assert "cal-dayhead__off" not in sunday
+    assert "Выходной" not in sunday
+
+
+def test_calendar_unavailable_day_keeps_lessons(
+    client, calendar_owner, student_factory, unavailability_factory
+):
+    """Отметка не скрывает уроки дня: карточки остаются кликабельными."""
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Иван")
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 14, 14, 0),
+    )
+    unavailability_factory(
+        tutor_id=calendar_owner,
+        start_date=date(2026, 10, 14),
+        end_date=date(2026, 10, 14),
+    )
+    text = client.get("/tutor/calendar?start=2026-10-12").text
+
+    assert "cal-day--unavailable" in text
+    card = _card(text, lesson_id)
+    assert card, "Карточка урока пропала из отмеченного дня"
+    assert f'hx-get="/tutor/lessons/{lesson_id}/edit"' in card
+
+
+def test_calendar_empty_week_with_mark_is_not_free(
+    client, calendar_owner, unavailability_factory
+):
+    """Неделя без уроков, но с отметкой: пояснения о «свободной неделе» нет."""
+    unavailability_factory(
+        tutor_id=calendar_owner,
+        start_date=date(2026, 11, 9),
+        end_date=date(2026, 11, 13),
+    )
+    text = client.get("/tutor/calendar?start=2026-11-09").text
+
+    assert "свободная неделя" not in text
+    assert "cal-day--unavailable" in text
+    assert not re.search(r'class="cal-event[\s"]', text)
+
+
+def test_calendar_period_reason_wins_over_weekday_on_render(
+    client, calendar_owner, unavailability_factory
+):
+    """Приоритет D4 на уровне разметки: причина периода важнее «Выходного».
+
+    Суббота 17.10 попадает и в период «Больничный», и в постоянный
+    выходной — в шапке должна быть причина периода, а выходной доступен
+    только во всплывающей подсказке.
+    """
+    unavailability_factory(
+        tutor_id=calendar_owner,
+        reason="sick",
+        start_date=date(2026, 10, 16),
+        end_date=date(2026, 10, 18),
+    )
+    unavailability_factory(tutor_id=calendar_owner, mode="weekday", weekday=5)
+
+    text = client.get("/tutor/calendar?start=2026-10-12").text
+    saturday = _dayhead(text, "сб")
+    assert saturday, "Шапки субботы нет"
+    # В шапке — «Больничный», а не «Выходной».
+    assert ">Больничный</span>" in saturday
+    # Обе причины — в подсказке.
+    assert 'title="Больничный, Выходной"' in saturday
+
+
+def test_calendar_confirm_guard_for_unavailable_day_static():
+    """Задача 5.6: клик и drag спрашивают подтверждение для отмеченного дня.
+
+    Раньше клик по дню с отпуском блокировался (`.cal-vacation`); теперь
+    форма открывается после подтверждения, а признак подтверждения уходит
+    в адрес формы и в тело переноса (design.md D5). При отказе карточка
+    остаётся на месте: `confirm()` стоит до правки `data-date` и до
+    `appendChild`.
     """
     js = _calendar_js()
-    for token in (
-        "createVacation",
-        "vacationForm",
-        "openVacationDialog",
-        "prefillMoment",
-        '"cal-vacation"',
-    ):
-        assert token in js, token
-    # Блок вставляется первым ребёнком дня (под карточки), диапазон
-    # защищён defensive-проверкой end < start.
-    assert "insertBefore" in js
-    assert "end < start" in js
-    assert "fetch(" not in js
-    assert "XMLHttpRequest" not in js
+
+    # Клик по четверти: причина читается с колонки, спрашивается confirm().
+    slot = js[js.index("openSlot: function"):js.index("prefillMoment: function")]
+    assert "unavailableReason(day)" in slot
+    assert "window.confirm(" in slot
+    assert '"1"' in slot  # подтверждение передаётся признаком
+    assert '".cal-vacation"' not in slot
+    # Признак подтверждения уходит в адрес формы (design.md D5, п. 4).
+    helper = js[js.index("openLessonForm: function"):js.index("prefillMoment: function")]
+    assert '"&ack_unavailable="' in helper
+
+    # Перенос: подтверждение до любых правок карточки.
+    end = js[js.index("onDragEnd: function"):js.index("moveLesson: function")]
+    confirm_at = end.index("window.confirm(")
+    append_at = end.index("day.appendChild(card)")
+    date_at = end.index('card.setAttribute("data-date"')
+    assert confirm_at < append_at, "confirm() должен идти до appendChild"
+    assert confirm_at < date_at, "confirm() должен идти до смены data-date"
+    assert "this.unavailableQuestion(reason)" in end
+
+    # Перенос передаёт признак подтверждения.
+    mover = js[js.index("moveLesson: function"):js.index("elementUnder: function")]
+    assert "ack_unavailable" in mover
 
 
-def test_calendar_vacation_click_guard_static():
-    """Задача 3.1: в теле openSlot есть проверка .cal-vacation.
+def test_calendar_has_no_vacation_leftovers():
+    """Задача 6.3: в calendar.js и _area.html не осталось «отпускных» следов.
 
-    Guard покрывает и клиентские блоки отпуска, и серверную демо-заглушку —
-    клик по дню с отпуском не открывает форму урока (спека vacation-creation).
+    Проверяется именно слово `vacation` (и его camelCase-формы): прежняя
+    версия дополнительно перебирала токены вроде `vacationForm`, но они
+    не могут встретиться без самого слова — цикл был недостижим.
     """
     js = _calendar_js()
-    body = js[js.index("openSlot: function"):js.index("prefillMoment: function")]
-    assert '".cal-vacation"' in body
+    area = (
+        ROOT / "app" / "calendar" / "templates" / "calendar" / "_area.html"
+    ).read_text(encoding="utf-8")
+
+    assert "vacation" not in js.lower()
+    assert "vacation" not in area.lower()
 
 
 # --------------------------------------------------------------------------
@@ -1024,6 +1025,24 @@ def _card(response_text: str, lesson_id: str) -> str:
         re.S,
     )
     return match.group(0) if match else ""
+
+
+def _dayhead(response_text: str, weekday_short: str) -> str:
+    """Разметка шапки дня по короткому названию дня недели («сб», «вс»).
+
+    Шапки идут подряд, поэтому блок ограничен началом следующей шапки или
+    колонкой времени — иначе `.*?</div>` зацепил бы чужой день.
+    """
+    for match in re.finditer(
+        r'<div class="cal-dayhead[^"]*">.*?(?=<div class="cal-dayhead|<div class="cal-times")',
+        response_text,
+        re.S,
+    ):
+        block = match.group(0)
+        name = re.search(r'class="cal-dayhead__name">([^<]*)<', block)
+        if name and name.group(1).strip() == weekday_short:
+            return block
+    return ""
 
 
 def test_week_lessons_returns_only_own_lessons_of_week(calendar_owner, student_factory):
@@ -1058,7 +1077,7 @@ def test_week_lessons_returns_only_own_lessons_of_week(calendar_owner, student_f
     )
 
     with SessionLocal() as db:
-        rows = week_lessons(db, calendar_owner, date(2026, 10, 12))
+        rows = week_lessons(db, calendar_owner, date(2026, 10, 12), _tutor())
 
     assert [row.lesson.id for row in rows] == [in_week]
     assert rows[0].target_name == "Свой"
@@ -1082,11 +1101,166 @@ def test_week_lessons_window_is_start_based(calendar_owner, student_factory):
     )
 
     with SessionLocal() as db:
-        first = week_lessons(db, calendar_owner, date(2026, 10, 12))
-        second = week_lessons(db, calendar_owner, date(2026, 10, 19))
+        first = week_lessons(db, calendar_owner, date(2026, 10, 12), _tutor())
+        second = week_lessons(db, calendar_owner, date(2026, 10, 19), _tutor())
 
     assert [row.lesson.id for row in first] == [sunday]
     assert [row.lesson.id for row in second] == [monday]
+
+
+def test_week_bounds_are_local_midnights_in_utc():
+    """Спека (задача 7.1): границы недели считаются по настенному времени.
+
+    При зоне UTC+04 неделя с понедельника 12.10 открывается окном
+    `11.10 20:00 UTC … 18.10 20:00 UTC`, а не `12.10 00:00 … 19.10 00:00`:
+    границы переводятся по отдельности (design D3).
+    """
+    from app.calendar.services.week import week_bounds
+
+    start, end = week_bounds(date(2026, 10, 12), _tutor("Europe/Ulyanovsk"))
+
+    assert start == datetime(2026, 10, 11, 20, 0, tzinfo=UTC)
+    assert end == datetime(2026, 10, 18, 20, 0, tzinfo=UTC)
+
+
+def test_week_lessons_keeps_late_evening_lesson_on_its_own_day(
+    calendar_owner, student_factory
+):
+    """Спека (задача 7.1): урок 23:30 местного остаётся в понедельнике.
+
+    Хранится он как 20:30 UTC предыдущих суток — по UTC-дате это была бы
+    воскресенье, но окно недели считается по локальным полуночам, поэтому
+    урок попадает в свою неделю и на свой день.
+    """
+    from app.calendar.services.week import week_lessons
+    from app.database import SessionLocal
+
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Поздний")
+    # 23:30 в UTC+04 = 19:30 UTC того же календарного дня.
+    late = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 12, 19, 30),
+    )
+
+    with SessionLocal() as db:
+        rows = week_lessons(
+            db, calendar_owner, date(2026, 10, 12), _tutor("Europe/Ulyanovsk")
+        )
+
+    assert [row.lesson.id for row in rows] == [late]
+
+
+def test_calendar_renders_late_lesson_on_monday(
+    client, tutor_factory, student_factory
+):
+    """Урок 23:30 местного рендерится в понедельнике недели, не в воскресенье."""
+    tutor_id = tutor_factory(
+        email="cal-tz-plus4@example.com",
+        password=PASSWORD,
+        timezone="Europe/Ulyanovsk",
+    )
+    client.post(
+        "/tutor/login",
+        data={"email": "cal-tz-plus4@example.com", "password": PASSWORD},
+        follow_redirects=False,
+    )
+    student_id = student_factory(tutor_id=tutor_id, first_name="Поздний")
+    lesson_id = _insert_lesson(
+        tutor_id, student_id=student_id,
+        starts_at=datetime(2026, 10, 12, 19, 30), duration_min=30,
+    )
+
+    page = client.get("/tutor/calendar?start=2026-10-12").text
+
+    card = _card(page, lesson_id)
+    assert 'data-date="2026-10-12"' in card
+    # Конец урока за полночь прижимается к 23:59 — карточка не должна
+    # показывать отрицательный интервал по минутам суток.
+    assert "23:30 – 23:59" in card
+
+
+def test_calendar_today_differs_by_tutor_zone_at_same_moment(
+    client, tutor_factory, monkeypatch
+):
+    """Спека (задача 7.3): «сегодня» считается в зоне педагога.
+
+    При одном и том же серверном моменте (22:30 UTC) для репетитора в
+    UTC+04 это уже следующие сутки, а для репетитора в UTC−05 — нет.
+    """
+    fixed = datetime(2026, 10, 25, 22, 30, tzinfo=UTC)
+    monkeypatch.setattr(
+        "app.common.services.tutor_time.utcnow", lambda: fixed
+    )
+
+    page_by_zone = {}
+    for email, zone in (
+        ("cal-today-east@example.com", "Europe/Ulyanovsk"),
+        ("cal-today-west@example.com", "America/New_York"),
+    ):
+        tutor_id = tutor_factory(
+            email=email, password=PASSWORD, timezone=zone
+        )
+        client.post(
+            "/tutor/login",
+            data={"email": email, "password": PASSWORD},
+            follow_redirects=False,
+        )
+        page = client.get("/tutor/calendar").text
+        page_by_zone[zone] = (
+            tutor_id,
+            re.search(r'data-now="([^"]*)"', page).group(1),
+            re.search(r'id="calendar-swap"[^>]*?hx-get="([^"]*)"', page, re.S)
+            .group(1),
+        )
+
+    east = page_by_zone["Europe/Ulyanovsk"]
+    west = page_by_zone["America/New_York"]
+
+    # Момент 25.10 22:30 UTC: на востоке UTC+04 это уже 26.10 02:30,
+    # на западе EDT (UTC−4) — ещё 25.10 18:30 того же дня.
+    assert east[1].startswith("2026-10-26T02:30")
+    assert west[1].startswith("2026-10-25T18:30")
+    # Открытая неделя — та, к которой относится локальное сегодня:
+    # 26.10 (понедельник) открывает неделю 26.10, 25.10 (воскресенье) —
+    # неделю 19.10.
+    assert "start=2026-10-26" in east[2]
+    assert "start=2026-10-19" in west[2]
+
+
+def test_calendar_swap_carries_server_now(client):
+    """Спека (задача 7.4): `#calendar-swap` отдаёт локальный момент сервера."""
+    _login(client)
+    response = client.get("/tutor/calendar?start=2026-10-12")
+
+    swap = re.search(r'<div id="calendar-swap"[^>]*>', response.text, re.S)
+    assert swap, "контейнер #calendar-swap не найден"
+    now_attr = re.search(r'data-now="([^"]*)"', swap.group(0))
+    assert now_attr, "у #calendar-swap нет data-now"
+    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", now_attr.group(1))
+
+
+def test_calendar_js_today_uses_server_now_not_device_clock():
+    """Спека (задача 7.4): `todayIso()`/`prefillMoment()` читают `data-now`.
+
+    Часы устройства не используются: педагог мог открыть календарь с
+    устройства в другой зоне, и «сегодня» разошлось бы с неделей,
+    которую отрисовал сервер (design.md D7).
+    """
+    js = _calendar_js()
+
+    today = re.search(
+        r"function todayIso\(\) \{(.*?)\n  \}", js, re.S
+    )
+    assert today, "в calendar.js нет todayIso"
+    assert "new Date(" not in today.group(1)
+    assert "serverNowParts()" in today.group(1)
+
+    prefill = re.search(
+        r"prefillMoment: function \(\) \{(.*?)\n        \},", js, re.S
+    )
+    assert prefill, "в calendar.js нет prefillMoment"
+    assert "new Date(" not in prefill.group(1)
+    assert "serverNowParts()" in prefill.group(1)
 
 
 def test_week_lessons_group_target(calendar_owner, group_factory):
@@ -1104,7 +1278,7 @@ def test_week_lessons_group_target(calendar_owner, group_factory):
     )
 
     with SessionLocal() as db:
-        rows = week_lessons(db, calendar_owner, date(2026, 10, 12))
+        rows = week_lessons(db, calendar_owner, date(2026, 10, 12), _tutor())
 
     row = next(row for row in rows if row.lesson.id == lesson_id)
     assert row.target_name == "Группа 8Б"
@@ -1134,6 +1308,7 @@ def test_schedule_event_from_lesson_carries_id_status_color(calendar_owner, stud
             target_name="Мария С.",
             target_id=student_id,
             target_color=PALETTE[6],
+            tutor=_tutor(),
         )
 
     assert event.lesson_id == lesson_id
@@ -1146,6 +1321,10 @@ def test_schedule_event_from_lesson_carries_id_status_color(calendar_owner, stud
     assert (event.day, event.start, event.end) == (
         date(2026, 10, 14), time(14, 0), time(14, 50)
     )
+    # Событие несёт aware UTC — источник истины для «прошло/просрочен»
+    # (design D4); при зоне UTC локальные поля совпадают с хранимыми.
+    assert event.starts_at == datetime(2026, 10, 14, 14, 0, tzinfo=UTC)
+    assert event.ends_at == datetime(2026, 10, 14, 14, 50, tzinfo=UTC)
 
 
 def test_calendar_grid_contains_real_lessons_with_lesson_id(
@@ -1189,20 +1368,6 @@ def test_calendar_isolates_tutor_lessons(client, calendar_owner, student_factory
     assert "Чужой" not in response.text
 
 
-def test_calendar_keeps_demo_vacation_with_real_lessons(
-    client, calendar_owner, student_factory
-):
-    """2.3: демо-отпуск остаётся источником и сосуществует с уроками БД."""
-    student_id = student_factory(tutor_id=calendar_owner, first_name="Иван")
-    lesson_id = _insert_lesson(
-        calendar_owner, student_id=student_id,
-        starts_at=datetime(2026, 8, 5, 10, 0),
-    )
-    response = client.get("/tutor/calendar?start=2026-08-03")
-    assert "Отпуск" in response.text
-    assert _card(response.text, lesson_id)
-
-
 def test_calendar_layout_overlaps_real_lessons(client, calendar_owner, student_factory):
     """2.4: layout_events накладывает пересекающиеся реальные уроки."""
     first = student_factory(tutor_id=calendar_owner, first_name="Иван")
@@ -1239,29 +1404,68 @@ def test_calendar_real_past_lesson_dimmed(client, calendar_owner, student_factor
 
 
 def test_is_overdue_only_for_planned_past_lessons():
-    """2.5: «просрочен» — запланированный урок, чьё время уже прошло."""
+    """2.5: «просрочен» — запланированный урок, чьё время уже прошло.
+
+    Сравнение строится на aware UTC (`starts_at`/`ends_at` против `now`):
+    результат не зависит от часов устройства (design D4, задача 7.2).
+    """
     from app.calendar.services.presentation import is_overdue
     from app.calendar.services.schedule_event import ScheduleEvent
 
-    now = datetime(2026, 10, 21, 12, 0)
+    now = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
     planned_past = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 10, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 10, 40, tzinfo=UTC),
         day=date(2026, 10, 21), start=time(10, 0), end=time(10, 40),
         lesson_id="a", status="planned",
     )
     planned_future = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 13, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 13, 40, tzinfo=UTC),
         day=date(2026, 10, 21), start=time(13, 0), end=time(13, 40),
         lesson_id="b", status="planned",
     )
     completed_past = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 10, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 10, 40, tzinfo=UTC),
         day=date(2026, 10, 21), start=time(10, 0), end=time(10, 40),
         lesson_id="c", status="completed", is_completed=True,
     )
-    vacation = ScheduleEvent(day=date(2026, 10, 21), start=time(0, 0), end=time(23, 59), kind=VACATION)
 
     assert is_overdue(planned_past, now=now) is True
     assert is_overdue(planned_future, now=now) is False
     assert is_overdue(completed_past, now=now) is False
-    assert is_overdue(vacation, now=now) is False
+
+
+def test_is_past_compares_aware_utc_not_local_wall_time():
+    """Спека (задача 7.2): признак «прошло» не зависит от часов устройства.
+
+    Урок начался в 06:00 UTC — это 10:00 настенного у педагога в UTC+04.
+    В 08:00 UTC урок уже идёт, хотя по локальным часам карточки (10:00)
+    он выглядел бы будущим. Флаг обязан следовать aware-моменту, иначе
+    приглушение зависело бы от того, в каком кадре собраны значения.
+    """
+    from app.calendar.services.presentation import build_event_view
+    from app.calendar.services.schedule_event import ScheduleEvent
+
+    event = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 6, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 6, 40, tzinfo=UTC),
+        day=date(2026, 10, 21), start=time(10, 0), end=time(10, 40),
+        lesson_id="aware", status="planned",
+    )
+
+    # 08:00 UTC — после начала урока, хотя локальное 10:00 ещё «впереди».
+    started = build_event_view(
+        event, now=datetime(2026, 10, 21, 8, 0, tzinfo=UTC)
+    )
+    assert started["is_past"] is True
+
+    # 05:00 UTC — до начала: урок ещё не начался ни по UTC, ни по локали.
+    upcoming = build_event_view(
+        event, now=datetime(2026, 10, 21, 5, 0, tzinfo=UTC)
+    )
+    assert upcoming["is_past"] is False
 
 
 def test_calendar_overdue_lesson_differs_from_planned_and_completed(
@@ -1306,13 +1510,28 @@ def test_calendar_day_header_counts_real_lessons(client, calendar_owner, student
     assert f"--dot: {PALETTE[9]}" in response.text
 
 
-def test_calendar_empty_week_shows_explanation(client, calendar_owner):
-    """2.6: пустая неделя — пояснение, сетка и шапка на месте."""
+def test_calendar_empty_week_shows_explanation(client, calendar_owner, student_factory):
+    """2.6: пустая неделя — пояснение, сетка и шапка на месте, карточек нет.
+
+    Уроки у репетитора есть, но на другой неделе — запрошенная остаётся
+    пустой, и страница отдаёт пояснение вместо карточек занятий.
+    """
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Иван")
+    _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 14, 14, 0),
+    )
+
     response = client.get("/tutor/calendar?start=2026-11-09")
+
     assert response.status_code == 200
     assert "свободная неделя" in response.text
     assert "cal-dayhead" in response.text
     assert "cal-times" in response.text
+    # Карточек занятий нет: серверный блок — `class="cal-event"` или
+    # `class="cal-event cal-event--past"`; классы `cal-event__*` из
+    # inert-шаблона рендерера карточек карточками не считаются.
+    assert not re.search(r'class="cal-event[\s"]', response.text)
 
 
 # --------------------------------------------------------------------------
@@ -1554,9 +1773,10 @@ def test_calendar_drag_persists_move_to_server():
     """
     js = _calendar_js()
 
-    # Конец жеста вызывает сохранение, передавая карточку и новое начало.
+    # Конец жеста вызывает сохранение, передавая карточку, новое начало и
+    # признак подтверждения (пустой, если день доступен).
     end = js[js.index("onDragEnd: function"):js.index("moveLesson: function")]
-    assert "this.moveLesson(card, newMin)" in end
+    assert "this.moveLesson(card, newMin" in end
 
     # Запрос уходит только для реального урока и несёт дату/время.
     mover = js[js.index("moveLesson: function"):js.index("elementUnder: function")]
@@ -1650,10 +1870,11 @@ def test_calendar_card_tooltip_follows_drag():
 def test_calendar_real_lessons_fill_weekdays_only(
     client, calendar_owner, student_factory
 ):
-    """Уроки БД раскладываются по будням; выходные остаются пустыми.
+    """Уроки БД раскладываются по своим дням, включая субботу.
 
     Заменяет демо-тест «будни расписаны, выходные свободны»: расписание
-    теперь приходит из БД, а не из генератора.
+    теперь приходит из БД, а выходные задаёт репетитор отметками — поэтому
+    суббота без отметки ничем не отличается от будня.
     """
     student_id = student_factory(tutor_id=calendar_owner, first_name="Будни")
     weekday_id = _insert_lesson(
@@ -1669,9 +1890,9 @@ def test_calendar_real_lessons_fill_weekdays_only(
 
     assert _card(page, weekday_id), "Урока буднего дня нет в сетке"
     assert _card(page, saturday_id), "Урока субботы нет в сетке"
-    # Выходные по-прежнему помечены штриховкой и плашкой «Выходной».
-    assert page.count("cal-day--weekend") == 2
-    assert page.count(">Выходной<") == 2
+    # Никакой автоматической разметки выходных нет.
+    assert "cal-day--weekend" not in page
+    assert ">Выходной<" not in page
 
 
 def test_calendar_real_lesson_card_fields(
