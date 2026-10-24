@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import to_local
 from app.database import get_db
+from app.finance.services.charges import sync_lesson_charges
 from app.lesson.services.access import get_owned_lesson, require_tutor_id
 from app.lesson.services.lesson_form import (
     lesson_form_context,
@@ -136,6 +137,12 @@ async def update_lesson_view(
     # и в массовое обновление не попадают (whitelist MASS_UPDATE_FIELDS).
     if form.get("series_all") == "1" and lesson.series_id:
         apply_to_series(db, lesson.series_id, data)
+    # Списания пересчитываются после всех правок урока и серии, до коммита
+    # (design D6): одной транзакцией сохраняются и уроки, и счёт. Массовая
+    # правка цены меняет все уроки серии, поэтому списания синхронизируются
+    # по каждому — иначе «Применить ко всей серии» обновило бы уроки, а
+    # история денег осталась бы старой.
+    sync_lesson_charges(db, lesson, series_applied=form.get("series_all") == "1")
     db.commit()
 
     return _saved_response(request)

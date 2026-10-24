@@ -161,7 +161,6 @@ def test_general_tab_shows_empty_roster(owner, client, group_factory):
     [
         ("schedule", "Расписание группы появится позже."),
         ("lessons", "Занятия группы появятся позже."),
-        ("payments", "Оплаты группы появятся позже."),
     ],
 )
 def test_stub_tabs_explain_and_have_no_dead_actions(
@@ -178,6 +177,23 @@ def test_stub_tabs_explain_and_have_no_dead_actions(
     # В заглушке нет кнопок и ссылок — только пояснение.
     assert "<button" not in section
     assert "<a " not in section
+
+
+def test_payments_tab_is_not_a_stub(owner, client, student_factory):
+    """Вкладка «Оплаты» грузит панель своим маршрутом вместо заглушки.
+
+    Панель приходит лениво (слот с `hx-trigger="load"`), поэтому в HTML
+    модалки есть только слот — сами суммы проверяют тесты
+    `test_group_payments.py` по маршруту панели.
+    """
+    group_id, _ = _group_with_member(owner, student_factory)
+    html = client.get(f"/tutor/groups/{group_id}/edit").text
+
+    assert "Оплаты группы появятся позже." not in html
+    assert f'hx-get="/tutor/groups/{group_id}/payments"' in html
+    assert 'hx-trigger="load"' in html
+    assert 'hx-target="this"' in html
+    assert 'hx-swap="outerHTML"' in html
 
 
 # --------------------------------------------------------------------------

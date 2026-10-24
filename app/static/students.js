@@ -17,6 +17,10 @@
 
   var VIEW_KEY = "opentutorcrm:students-view";
 
+  /* Имена вкладок карточки ученика: `?tab=` из адреса принимается только
+     из этого списка, иначе открылся бы пустой таб (design D9/D12). */
+  var TAB_NAMES = ["general", "payments", "settings"];
+
   /* Формат телефона `+7 555 555-55-55` — то же правило, что на сервере
      (`app/student/services/phone.py`), иначе значение «переписывалось» бы
      при сохранении. Возвращает "" для пустого ввода; значения, не похожие на
@@ -197,14 +201,19 @@
     });
 
     /* Модалка формы: подтип ученика, строки контактов, закрытие. */
-    Alpine.data("studentForm", function (initialKind) {
+    Alpine.data("studentForm", function (initialKind, initialTab) {
       return {
         open: true,
         kind: initialKind === "adult" ? "adult" : "child",
-        /* Вкладки модалки: «Общее» — поля, «Платежи» — заглушка,
+        /* Вкладки модалки: «Общее» — поля, «Платежи» — счёт ученика,
            «Настройки» — напоминания. Панели скрываются через x-show,
-           поэтому поля всех вкладок остаются в DOM и попадают в POST. */
-        tab: "general",
+           поэтому несохранённые правки «Общего» доживают до сохранения,
+           а не пропадают при клике на «Платежи» (design D9).
+
+           `initialTab` приходит из адреса (`?tab=payments`): по нему
+           карточка открывается сразу на счёте. Неизвестное значение
+           игнорируется — вкладка по умолчанию «Общее». */
+        tab: TAB_NAMES.indexOf(initialTab) === -1 ? "general" : initialTab,
         /* Валидация браузера не может показать подсказку у поля в скрытой
            вкладке, поэтому перед отправкой ищем первое невалидное поле
            и переключаемся на вкладку, где оно живёт. */
@@ -213,6 +222,46 @@
           if (!invalid) return;
           var panel = invalid.closest("[data-tab-panel]");
           if (panel) this.tab = panel.dataset.tabPanel;
+        },
+        /* Та же проблема, но для соседней формы: каждая форма вкладки
+           добирает поля другой через `hx-include`, и htmx валидирует их
+           сам. Своя форма при этом валидна (пустое имя лежит в «Общем»),
+           поэтому браузер не показывает ничего, а htmx молча останавливает
+           запрос событием `htmx:validation:halted` — со стороны это
+           выглядит как «кнопка не работает». Переключаем вкладку на первое
+           невалидное поле и повторяем подсказку, когда панель уже видна. */
+        init: function () {
+          var self = this;
+          this._onValidationHalted = function (event) {
+            var errors = (event.detail && event.detail.errors) || [];
+            var invalid = errors.length ? errors[0].elt : null;
+            if (!invalid) return;
+            var panel = invalid.closest("[data-tab-panel]");
+            if (panel && panel.dataset.tabPanel) {
+              self.tab = panel.dataset.tabPanel;
+            }
+            /* Панель показывается через x-show — эффект Alpine применится
+               в микрозадаче, поэтому подсказку просим следующим тиком. */
+            setTimeout(function () {
+              try {
+                if (typeof invalid.reportValidity === "function") {
+                  invalid.reportValidity();
+                }
+              } catch (error) {
+                /* Скрытое поле могло исчезнуть из DOM — подсказка не нужна. */
+              }
+            }, 0);
+          };
+          document.addEventListener(
+            "htmx:validation:halted",
+            this._onValidationHalted
+          );
+        },
+        destroy: function () {
+          document.removeEventListener(
+            "htmx:validation:halted",
+            this._onValidationHalted
+          );
         },
         close: function () {
           this.open = false;

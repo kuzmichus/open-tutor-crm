@@ -369,33 +369,16 @@ def test_calendar_entry_points_open_lesson_form(client):
 
     Все точки входа ведут на `GET /tutor/lessons/new` с префиллом
     `starts_at` (design.md D9): четверть — своя дата/время, кнопка —
-    ближайшая будущая четверть (`prefillMoment`). Рендерер
-    `#cal-event-template` обслуживает демо-слоты.
+    ближайшая будущая четверть (`prefillMoment`).
     """
     _login(client)
     page = client.get("/tutor/calendar?start=2026-10-12")
     # Адрес формы — в разметке корня (JS читает data-lesson-new).
     assert 'data-lesson-new="/tutor/lessons/new"' in page.text
-    # Все три обработчика и шаблон карточки слота на месте.
+    # Все три обработчика на месте.
     assert '@click="openSlot($event.currentTarget)"' in page.text
     assert 'id="cal-add" @click="openForm()"' in page.text
     assert 'class="cal-fab" type="button" @click="openForm()"' in page.text
-    assert 'id="cal-event-template"' in page.text
-
-    js = _calendar_js()
-    # Клик по четверти: своя дата/время четверти в форме создания; третий
-    # аргумент — признак подтверждения для отмеченного дня (design.md D5).
-    slot_open = js[js.index("openSlot: function"):js.index("openLessonForm: function")]
-    assert "this.openLessonForm(data.date, data.time" in slot_open
-    # Кнопка «Добавить»: ближайшая будущая четверть из prefillMoment.
-    form_open = js[js.index("openForm: function"):js.index("toggleMore: function")]
-    assert "prefillMoment()" in form_open
-    assert "openLessonForm(moment.date, moment.time)" in form_open
-    # Сама форма запрашивается htmx-ом в #modal с параметром префилла.
-    helper = js[js.index("openLessonForm: function"):js.index("prefillMoment: function")]
-    assert 'window.htmx.ajax("GET", url + query' in helper
-    assert '"?starts_at="' in helper
-    assert 'target: "#modal"' in helper
 
     js = _calendar_js()
     # Клик по четверти: своя дата/время четверти в форме создания; третий
@@ -429,7 +412,12 @@ def test_calendar_refreshes_week_after_lesson_saved(client):
     assert swap, "Область #calendar-swap не найдена"
     tag = swap.group(0)
     assert 'hx-get="/tutor/calendar?start=2026-10-19&color=target"' in tag
-    assert 'hx-trigger="lesson-saved from:body, unavailability-saved from:body"' in tag
+    # Подписки: урок, недоступность и окно для записи перерисовывают неделю
+    # с сервера (спека calendar, «Сохранение окна обновляет неделю»).
+    assert (
+        'hx-trigger="lesson-saved from:body, unavailability-saved from:body, '
+        'slot-saved from:body"' in tag
+    )
     assert 'hx-target="#calendar-swap"' in tag
 
     js = _calendar_js()
@@ -440,13 +428,13 @@ def test_calendar_refreshes_week_after_lesson_saved(client):
     assert 'root.addEventListener("htmx:afterSwap"' in js
 
 
-def test_calendar_demo_modal_removed_slots_are_dom_only(client):
-    """3.6: демо-модалка урока удалена, слоты остались DOM-only.
+def test_calendar_demo_layer_is_removed(client):
+    """8.1/8.2: демо-слой календаря удалён целиком.
 
-    Демо-слот остаётся (его спека в change не входит, design.md D9), а
-    демо-отпуск удалён вместе с заглушкой: недоступность живёт в БД.
-    Слот создаётся только в DOM — ни fetch, ни XMLHttpRequest в calendar.js
-    нет вообще (спека «DOM-only жизненный цикл»).
+    Урок, отпуск, окно и запись живут в БД: календарь больше не держит
+    клиентских модалок «Новый слот» и «Запись на слот», не рендерит
+    карточки из `<template>` и не создаёт ничего только в DOM. Окно
+    открывается серверным диалогом, запись приходит с публичной страницы.
     """
     _login(client)
     text = client.get("/tutor/calendar?start=2026-10-12").text
@@ -455,19 +443,27 @@ def test_calendar_demo_modal_removed_slots_are_dom_only(client):
     assert "cal-student-field" not in text
     assert "saveLesson" not in text
     assert "demo_students" not in text
-    # Слот на месте, диалог отпуска удалён.
-    assert 'id="cal-slot-date"' in text
-    assert '@click="createSlot()">Создать</button>' in text
+    # Клиентских модалок окна и записи нет — только серверный диалог.
+    assert 'id="cal-slot-date"' not in text
+    assert 'id="cal-booking-form"' not in text
+    assert 'id="cal-event-template"' not in text
     assert 'id="cal-vacation-form"' not in text
 
     js = _calendar_js()
-    assert "saveLesson" not in js
-    assert "createVacation" not in js
-    # Создание слота живёт в DOM: обработчик диалога, создание и привязка
-    # к четверти часа — и ни одного сетевого вызова.
-    assert "openSlotDialog" in js
-    assert "createSlot" in js
-    assert "snapToQuarter" in js
+    for gone in (
+        "saveLesson",
+        "createVacation",
+        "openSlotDialog",
+        "createSlot",
+        "openBooking",
+        "closeBooking",
+        "confirmBooking",
+        "renderCard",
+        "layoutDay",
+        "cal-event--booked",
+    ):
+        assert gone not in js, gone
+    # Ни одного сетевого вызова в компоненте нет вообще.
     assert "fetch(" not in js
     assert "XMLHttpRequest" not in js
 
@@ -527,33 +523,37 @@ def test_calendar_events_expose_drag_data(client, calendar_owner, student_factor
 # --------------------------------------------------------------------------
 
 def test_calendar_stub_buttons_without_broken_links(client):
-    """«Ссылка на окна» и «Цвет: ученик»: селекторы на месте, битых нет."""
+    """«Ссылка на окна» и «Цвет»: селекторы на месте, битых ссылок нет."""
     _login(client)
     response = client.get("/tutor/calendar?start=2026-10-12")
     main = re.search(r"<main class=\"main\">(.*?)</main>", response.text, re.S)
     assert main, "На странице нет <main>"
     area = main.group(1)
 
-    # Селекторы кнопок и их обработчики-заглушки.
+    # Селекторы кнопок и их обработчики.
     assert 'id="cal-link"' in area
     assert '@click="copyWeekLink()"' in area
     assert 'id="cal-color"' in area
     assert "colorOpen" in area              # выпадающий список кнопки цвета
-    assert 'class="cal-toast"' in area      # тост подтверждения «демо»
+    # Поле показа ссылки, когда буфер обмена недоступен (задача 7.5).
+    assert 'class="cal-link-fallback"' in area
+    assert 'id="cal-link-url"' in area
+    assert 'class="cal-toast"' in area      # подтверждение копирования
 
-    # У самих кнопок нет href/action — вести они могут только на JS-заглушку.
+    # У самих кнопок нет href/action — они не ведут на маршруты.
     for button in re.findall(r'<button[^>]*id="cal-(?:link|color)"[^>]*>', area):
         assert "href=" not in button, button
         assert "action=" not in button, button
 
-    # JS-заглушки: копирование ссылки через clipboard и тост «демо».
+    # Копирование идёт через clipboard, а ссылка строится из текущей сетки,
+    # а не из устаревших data-*.
     js = (Path(__file__).resolve().parent.parent / "app" / "static" / "calendar.js").read_text(
         encoding="utf-8"
     )
     assert "clipboard.writeText" in js
-    assert "Демо" in js
-    # Ссылка недели строится из текущей сетки, а не из устаревших data-*.
     assert ".cal-day[data-date]" in js
+    # Тост «демо» удалён: копирование реальное (задача 7.5).
+    assert "Демо: ссылка на неделю скопирована" not in js
 
 
 
@@ -603,63 +603,59 @@ def _styles_css() -> str:
 
 
 def test_calendar_slot_dialog_markup(client):
-    """Задача 1.1: кнопка «Добавить слот», поля даты/времени, «Создать».
+    """Задача 7.3: «Добавить слот» открывает серверный диалог окна.
 
-    Диалог содержит только поля слота: выбор ученика удалён вместе с
-    демо-модалкой урока (design.md D9).
+    Диалог живёт в `slot/_dialog.html` и приходит в `#modal` по hx-get —
+    календарь больше не держит своей копии формы окна. Поля диалога
+    проверяются на его собственном ответе.
     """
     _login(client)
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    assert 'id="cal-add-slot" @click="openSlotDialog()"' in response.text
-    assert "Добавить слот" in response.text
-    assert "Новый слот" in response.text
-    # Редактируемые дата и время: шаг 900 с = граница четверти часа.
-    date_input = re.search(r'id="cal-slot-date"[^>]*', response.text)
-    assert date_input, "Поля даты слота нет в разметке"
+    page = client.get("/tutor/calendar?start=2026-10-12").text
+
+    assert "Добавить слот" in page
+    entry = re.search(r'<button[^>]*id="cal-add-slot"[^>]*>', page)
+    assert entry, "Пункта меню «Добавить слот» нет в разметке"
+    assert 'hx-get="/tutor/slots/new"' in entry.group(0)
+    assert 'hx-target="#modal"' in entry.group(0)
+    assert 'hx-swap="innerHTML"' in entry.group(0)
+
+    # Сам диалог: одно окно по умолчанию, поля даты и времени на месте.
+    dialog = client.get("/tutor/slots/new").text
+    assert "Новые окна для записи" in dialog
+    date_input = re.search(r'id="slot-new-date"[^>]*', dialog)
+    assert date_input, "Поля даты окна нет в диалоге"
     assert 'type="date"' in date_input.group(0)
-    time_input = re.search(r'id="cal-slot-time"[^>]*', response.text)
-    assert time_input, "Поля времени слота нет в разметке"
+    time_input = re.search(r'id="slot-new-time"[^>]*', dialog)
+    assert time_input, "Поля времени окна нет в диалоге"
     assert 'type="time"' in time_input.group(0)
-    assert 'step="900"' in time_input.group(0)
-    # Кнопка «Создать» вызывает createSlot.
-    assert '@click="createSlot()">Создать</button>' in response.text
     # Поля выбора ученика в диалоге нет — урок создаётся формой Уроков.
-    assert "cal-student-field" not in response.text
-    assert 'id="cal-student"' not in response.text
-
-
-def test_calendar_slot_card_renderer_static():
-    """Задача 2.1: единый рендерер с kind — подпись и классы слота.
-
-    Карточка слота: класс cal-event--slot, подпись «Свободен · запись по
-    ссылке»; после записи — cal-event--booked и подпись «Занят: <имя>»
-    (спека slot-booking).
-    """
-    js = _calendar_js()
-    assert "Свободен · запись по ссылке" in js
-    assert "cal-event--slot" in js
-    assert "cal-event--booked" in js
-    # Карточка слота создаётся через renderCard с kind: "slot".
-    assert 'kind: "slot"' in js
-    # Кнопка «Записаться» создаётся только для свободного слота.
-    assert 'book.textContent = "Записаться"' in js
-    # Подпись занятого слота.
-    assert '"Занят: "' in js
+    assert "cal-student-field" not in dialog
+    assert 'id="cal-student"' not in dialog
 
 
 def test_calendar_slot_styles_static():
-    """Задача 2.2: стили слота — пунктирная рамка, классы свободен/занят.
+    """7.6: стили окна — состояние задаёт класс, темы — только токен.
 
-    Светлая и тёмная темы заданы переменной --cal-slot-accent (токены
-    в :root и .dark), поэтому компонентные правила тему не дублируют.
+    Каждое состояние окна (`free`, `pending`, `booking`, `lesson`, `past`)
+    описано своим правилом, приглушение занятых и прошедших — отдельным
+    классом. Светлая и тёмная темы заданы переменной `--cal-slot-accent`
+    (токены в `:root` и `.dark`), поэтому компонентные правила тему не
+    дублируют.
     """
     css = _styles_css()
+
     assert ".cal-event--slot" in css
-    assert ".cal-event--booked" in css
+    # Все пять состояний из спеки описаны правилами.
+    for state in ("free", "pending", "booking", "lesson", "past"):
+        assert f".cal-event--slot-{state}" in css, state
+    assert ".cal-event--muted" in css
+
     slot_block = re.search(r"\.cal-event--slot\s*\{(.*?)\}", css, re.S)
     assert slot_block, "Блока .cal-event--slot нет в styles.css"
     assert "border-style: dashed" in slot_block.group(1)
-    # Собственный цвет слота — на переменных обеих тем.
+    assert "--cal-slot-accent" in slot_block.group(1)
+
+    # Собственный цвет окна — на переменных обеих тем.
     assert "--cal-slot-accent" in css
     root_block = re.search(r":root\s*\{(.*?)\n  \}", css, re.S)
     dark_block = re.search(r"\.dark\s*\{(.*?)\n  \}", css, re.S)
@@ -668,18 +664,20 @@ def test_calendar_slot_styles_static():
 
 
 def test_calendar_slot_state_is_not_clipped():
-    """Подпись состояния слота не сжимается в коротком слоте.
+    """7.6: подпись состояния окна не сжимается в короткой карточке.
 
-    Регрессия после правки карточки урока: `.cal-event` — flex-колонка,
-    и подпись «Свободен · запись по ссылке» схлопывалась до нулевой
-    высоты — на слоте оставалось одно время и кнопка. Строка состояния
-    объявлена `flex: 0 0 auto`, а интервал времени скрывается контейнерным
-    запросом, когда трёх строк не помещается.
+    Регрессия: `.cal-event` — flex-колонка, и подпись состояния
+    схлопывалась до нулевой высоты — на окне оставалось одно время.
+    Подпись (`.cal-event__title` в ветке окна) объявлена `flex: 0 0 auto`,
+    а интервал времени скрывается контейнерным запросом, когда строк не
+    помещается.
     """
     css = _styles_css()
 
-    state = re.search(r"\.cal-event__state\s*\{([^}]*)\}", css)
-    assert state, "В styles.css нет правила .cal-event__state"
+    state = re.search(
+        r"\.cal-event--slot \.cal-event__title\s*\{([^}]*)\}", css
+    )
+    assert state, "В styles.css нет правила .cal-event--slot .cal-event__title"
     assert "flex: 0 0 auto" in state.group(1), "Подпись состояния не должна сжиматься"
 
     slot_container = re.search(
@@ -688,72 +686,20 @@ def test_calendar_slot_state_is_not_clipped():
         css,
     )
     assert slot_container, (
-        "Нет @container-правила, скрывающего время слота в короткой карточке"
+        "Нет @container-правила, скрывающего время окна в короткой карточке"
     )
-
-
-def test_calendar_booking_dialog_markup(client):
-    """Задача 3.1: диалог «Запись на слот» — два обязательных поля и кнопки."""
-    _login(client)
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    assert "Запись на слот" in response.text
-    # Обязательные поля «Имя» и «Телефон/Telegram» (нативная валидация).
-    name_input = re.search(r'id="cal-book-name"[^>]*', response.text)
-    assert name_input, "Поля «Имя» нет в разметке"
-    assert "required" in name_input.group(0)
-    assert "Имя" in response.text
-    contact_input = re.search(r'id="cal-book-contact"[^>]*', response.text)
-    assert contact_input, "Поля «Телефон/Telegram» нет в разметке"
-    assert "required" in contact_input.group(0)
-    assert "Телефон/Telegram" in response.text
-    # Кнопки «Отмена» и «Записаться» (submit у формы записи).
-    assert '@click="closeBooking()">Отмена</button>' in response.text
-    assert ">Записаться</button>" in response.text
-    assert "confirmBooking($event)" in response.text
-
-
-def test_calendar_booking_js_static():
-    """Задача 3.2: openBooking/confirmBooking/data-booked-by в calendar.js.
-
-    Открытие — только от свободной карточки слота, подтверждение пишет
-    данные в DOM-атрибуты карточки (design.md D4), без сетевых запросов.
-    """
-    js = _calendar_js()
-    assert "openBooking" in js
-    assert "confirmBooking" in js
-    assert "data-booked-by" in js
-    # Открытый диалог ведёт на DOM-узел карточки, а не на индекс.
-    assert "_bookingSlot" in js
-
-
-def test_calendar_booking_contact_in_title_static():
-    """Задача 3.3: контакт из формы попадает в title занятой карточки.
-
-    Данные записи живут только в DOM-атрибутах (data-contact/title) — без
-    БД, localStorage и сетевых запросов. Проверка сужена до блока записи:
-    localStorage в файле есть, но он хранит режим раскраски (design.md D5).
-    """
-    js = _calendar_js()
-    assert 'card.setAttribute("title"' in js
-    assert 'card.setAttribute("data-contact"' in js
-    booking = js[js.index("openBooking: function"):js.index("closeBooking: function")]
-    assert "localStorage" not in booking
 
 
 def test_calendar_slot_excluded_from_drag_static():
     """Задача 2.3: в ветке начала драга есть исключение .cal-event--slot.
 
-    Позиционирование слота переиспользует логику наложения карточек —
-    layoutDay применяет ту же кластеризацию, что services/presentation.py
-    (слот поверх занятия: видны обе).
+    Окно — не урок: жест по его карточке не начинается, поэтому клик по
+    карточке всегда открывает диалог окна (спека calendar).
     """
     js = _calendar_js()
     start = js.index("onEventPointerDown")
     end = js.index("onDragMove")
     assert ".cal-event--slot" in js[start:end]
-    # Раскладка наложения карточек вызывается при создании слота.
-    assert "layoutDay" in js
-    assert "this.layoutDay(day)" in js
 
 
 # --------------------------------------------------------------------------
@@ -789,14 +735,19 @@ def test_calendar_more_menu_markup(client):
     menu = re.search(r'<ul[^>]*id="cal-more-menu"[^>]*>.*?</ul>', text, re.S)
     assert menu, "Выпадающего меню #cal-more-menu нет в разметке"
     items = menu.group(0)
-    assert 'id="cal-add-slot" @click="openSlotDialog()"' in items
+    # Пункт окна ведёт на серверный диалог окна, а не в клиентскую модалку.
+    entry = re.search(r'<button[^>]*id="cal-add-slot"[^>]*>', items)
+    assert entry, "Пункта «Добавить слот» нет в меню"
+    assert 'hx-get="/tutor/slots/new"' in entry.group(0)
+    assert '@click="closeMore()"' in entry.group(0)
     assert '@click.outside="closeMore()"' in items
     assert '@keydown.escape.window="closeMore()"' in items
 
     # Прямая кнопка слота из панели удалена: id встречается ровно один
-    # раз — в меню; точка входа слота в разметке тоже ровно одна.
+    # раз — в меню. Клиентской модалки окна в календаре больше нет:
+    # диалог окна — серверный (`slot/_dialog.html`).
     assert text.count('id="cal-add-slot"') == 1
-    assert text.count("openSlotDialog()") == 1
+    assert "openSlotDialog()" not in text
 
 
 def test_calendar_more_menu_opens_unavailability_panel(client):
@@ -833,9 +784,10 @@ def test_calendar_more_menu_js_static():
     assert "moreOpen" in js
     assert "toggleMore" in js
     assert "closeMore" in js
-    # Пункт слота закрывает меню перед открытием диалога.
-    slot_open = js[js.index("openSlotDialog: function"):js.index("closeModal: function")]
-    assert "closeMore()" in slot_open
+    # Пункт окна закрывает меню и открывает серверный диалог (hx-get в
+    # разметке), поэтому клиентского состояния диалога больше нет.
+    assert "openSlotDialog" not in js
+    assert "closeModal" not in js
 
 
 def test_calendar_unavailable_day_markup(
@@ -974,7 +926,8 @@ def test_calendar_confirm_guard_for_unavailable_day_static():
     slot = js[js.index("openSlot: function"):js.index("prefillMoment: function")]
     assert "unavailableReason(day)" in slot
     assert "window.confirm(" in slot
-    assert '"1"' in slot  # подтверждение передаётся признаком
+    # Подтверждение передаётся признаком, и только когда причина есть.
+    assert 'reason ? "1" : ""' in slot
     assert '".cal-vacation"' not in slot
     # Признак подтверждения уходит в адрес формы (design.md D5, п. 4).
     helper = js[js.index("openLessonForm: function"):js.index("prefillMoment: function")]
@@ -1325,21 +1278,6 @@ def test_schedule_event_from_lesson_carries_id_status_color(calendar_owner, stud
     # (design D4); при зоне UTC локальные поля совпадают с хранимыми.
     assert event.starts_at == datetime(2026, 10, 14, 14, 0, tzinfo=UTC)
     assert event.ends_at == datetime(2026, 10, 14, 14, 50, tzinfo=UTC)
-
-
-def test_calendar_grid_contains_real_lessons_with_lesson_id(
-    client, calendar_owner, student_factory
-):
-    """2.3: сетка недели содержит реальные уроки с data-lesson-id."""
-    student_id = student_factory(tutor_id=calendar_owner, first_name="Иван")
-    lesson_id = _insert_lesson(
-        calendar_owner, student_id=student_id,
-        starts_at=datetime(2026, 10, 14, 14, 0),
-    )
-    response = client.get("/tutor/calendar?start=2026-10-12")
-    card = _card(response.text, lesson_id)
-    assert card, "Реального урока нет в сетке"
-    assert f'data-lesson-id="{lesson_id}"' in card
 
 
 def test_calendar_isolates_tutor_lessons(client, calendar_owner, student_factory):
@@ -1850,21 +1788,18 @@ def test_calendar_card_tooltip_follows_drag():
 
     `title` содержит интервал времени, поэтому после drag старое значение
     показывало бы прежнее время. Пересборка идёт общим методом
-    `setCardTitle`, чтобы рендер и перенос не расходились.
+    `setCardTitle` — рендер карточки на клиенте удалён вместе с демо-слоем,
+    поэтому подсказку обновляет только перенос.
     """
     js = _calendar_js()
 
     assert "setCardTitle: function" in js
-    render = js[js.index("renderCard: function"):js.index("setCardTitle: function")]
-    assert "this.setCardTitle(card, data.startMin, data.duration)" in render
-
     end = js[js.index("onDragEnd: function"):js.index("moveLesson: function")]
     assert "this.setCardTitle(card, newMin, drag.duration)" in end
 
 
 # --------------------------------------------------------------------------
 # Замена демо-тестов уроков тестами реальных данных (задача 6.1)
-# Демо-слоты и демо-отпуск остаются: их спеки в change не входят.
 # --------------------------------------------------------------------------
 
 def test_calendar_real_lessons_fill_weekdays_only(
@@ -1874,7 +1809,9 @@ def test_calendar_real_lessons_fill_weekdays_only(
 
     Заменяет демо-тест «будни расписаны, выходные свободны»: расписание
     теперь приходит из БД, а выходные задаёт репетитор отметками — поэтому
-    суббота без отметки ничем не отличается от будня.
+    суббота без отметки ничем не отличается от будня. Отсутствие
+    автоматических выходных проверяет
+    `test_calendar_week_without_marks_has_no_weekend_automation`.
     """
     student_id = student_factory(tutor_id=calendar_owner, first_name="Будни")
     weekday_id = _insert_lesson(
@@ -1890,9 +1827,6 @@ def test_calendar_real_lessons_fill_weekdays_only(
 
     assert _card(page, weekday_id), "Урока буднего дня нет в сетке"
     assert _card(page, saturday_id), "Урока субботы нет в сетке"
-    # Никакой автоматической разметки выходных нет.
-    assert "cal-day--weekend" not in page
-    assert ">Выходной<" not in page
 
 
 def test_calendar_real_lesson_card_fields(
@@ -2031,3 +1965,428 @@ def test_calendar_card_name_is_not_clipped_by_flex():
     assert card and "container-type: size" in card.group(1), (
         "Карточка должна быть контейнером запросов по размеру"
     )
+
+
+# --------------------------------------------------------------------------
+# 9. Окна для записи в сетке (change slots-and-bookings, раздел 7):
+#    недельная выборка окон, общий список events, раскладка наложения,
+#    состояние окна в событии
+# --------------------------------------------------------------------------
+
+FUTURE_MONDAY = date(2099, 2, 2)  # понедельник; 2026-10-23 уже «прошло»
+
+
+
+def _week_days(tutor_id: str, monday: date = FUTURE_MONDAY):
+    """Дни недели через сервис, без HTTP (зона UTC)."""
+    from app.calendar.services.week_days import build_week_days
+    from app.database import SessionLocal
+
+    with SessionLocal() as db:
+        return build_week_days(db, tutor_id, monday, _tutor())
+
+
+def _slot_event(days, slot_id: str):
+    """Событие окна по его id (None — окна в неделе нет)."""
+    for day in days:
+        for event in day.events:
+            if event.slot_id == slot_id:
+                return event
+    return None
+
+
+def test_build_week_days_includes_slot_events(calendar_owner, slot_factory):
+    """7.1: окно недели попадает в `day.events` событием с `kind="slot"`.
+
+    Вид задан явно (design D5): пустой `lesson_id` больше ничего не
+    означает, поэтому признак окна — отдельное поле `kind`.
+    """
+    slot_id = slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+
+    days = _week_days(calendar_owner)
+    event = _slot_event(days, slot_id)
+
+    assert event is not None, "Окна нет в событиях недели"
+    assert event.kind == "slot"
+    assert event.is_slot is True
+    assert event.slot_state == "free"
+    assert event.lesson_id == ""
+    # Локальные поля нужны раскладке: 10:00–10:40 в зоне UTC.
+    assert (event.day, event.start, event.end) == (
+        date(2099, 2, 3), time(10, 0), time(10, 40)
+    )
+    # Цель и цена у окна пустые: оно не раскрывает, кто занял время.
+    assert (event.student, event.price) == ("", 0)
+
+
+def test_build_week_days_keeps_lessons_and_slots_in_one_list(calendar_owner, student_factory, slot_factory):
+    """7.1: уроки и окна лежат в общем списке событий одного дня (design D5)."""
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Оба")
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2099, 2, 3, 12, 0),
+    )
+    slot_id = slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+
+    tuesday = next(day for day in _week_days(calendar_owner) if day.date == date(2099, 2, 3))
+    kinds = {event.kind for event in tuesday.events}
+    ids = {event.lesson_id for event in tuesday.events} | {
+        event.slot_id for event in tuesday.events
+    }
+
+    assert kinds == {"lesson", "slot"}
+    assert {lesson_id, slot_id} <= ids
+
+
+def test_build_week_days_excludes_foreign_slots(calendar_owner, tutor_factory, slot_factory):
+    """7.1: окно другого репетитора в неделю не попадает."""
+    stranger_id = tutor_factory(email="slot-stranger-week@example.com")
+    foreign_slot = slot_factory(stranger_id, starts_at=datetime(2099, 2, 3, 11, 0))
+
+    days = _week_days(calendar_owner)
+
+    assert _slot_event(days, foreign_slot) is None
+
+
+def test_build_week_days_slot_state_is_computed(calendar_owner, student_factory, slot_factory):
+    """7.1: состояние окна в событии считается пересечением (design D4).
+
+    Урок 10:20–11:00 пересекает окно 10:00–10:40 → `lesson`; окно
+    12:00–12:40 ни с чем не пересекается → `free`.
+    """
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Занял")
+    _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2099, 2, 3, 10, 20), duration_min=40,
+    )
+    busy_slot = slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+    free_slot = slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 12, 0))
+
+    days = _week_days(calendar_owner)
+
+    assert _slot_event(days, busy_slot).slot_state == "lesson"
+    assert _slot_event(days, free_slot).slot_state == "free"
+
+
+def test_layout_events_overlaps_slot_with_lesson(calendar_owner, student_factory, slot_factory):
+    """7.1: окно и урок раскладываются как два пересекающихся урока.
+
+    Одна реализация раскладки на общий список `events` — иначе окно
+    14:00 нарисовалось бы поверх урока 14:20 (design D5).
+    """
+    from app.calendar.services.presentation import layout_events
+
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Наложение")
+    _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2099, 2, 3, 10, 20), duration_min=40,
+    )
+    slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+
+    days = _week_days(calendar_owner)
+    tuesday = next(day for day in days if day.date == date(2099, 2, 3))
+    views = layout_events(
+        tuesday.events, now=datetime(2099, 1, 1, 12, 0, tzinfo=UTC)
+    )
+
+    assert len(views) == 2
+    # Окно идёт первым (10:00), урок — вторым: каждый получает половину.
+    assert [view["left_pct"] for view in views] == ["0%", "50%"]
+    assert [view["width_pct"] for view in views] == ["50%", "50%"]
+
+
+def test_calendar_empty_week_with_only_slots_is_not_free(client, calendar_owner, slot_factory):
+    """7.1: неделя только из окон — не «свободная неделя» (спека calendar)."""
+    slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+
+    page = client.get("/tutor/calendar?start=2099-02-02").text
+
+    assert "свободная неделя" not in page
+
+
+def test_calendar_slot_card_opens_slot_dialog(client, calendar_owner, slot_factory):
+    """7.3: карточка окна несёт `data-slot-id` и открывает диалог окна.
+
+    Клик по карточке ведёт в `#modal` на `GET /tutor/slots/{id}` — форму
+    урока окно не открывает (спека calendar, «Окно не открывает форму
+    урока»). Раскладка при этом общая с уроками: окно получает те же
+    `--top/--dur/--left/--width`.
+    """
+    slot_id = slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+
+    page = client.get("/tutor/calendar?start=2099-02-02").text
+    card = re.search(
+        r'<div class="cal-event[^"]*"[^>]*data-slot-id="' + re.escape(slot_id) + r'".*?</div>',
+        page,
+        re.S,
+    )
+    assert card, "Карточки окна нет в сетке"
+    markup = card.group(0)
+
+    assert 'class="cal-event cal-event--slot cal-event--slot-free"' in markup
+    assert f'hx-get="/tutor/slots/{slot_id}"' in markup
+    assert 'hx-target="#modal"' in markup
+    # Форма урока к окну не привязана.
+    assert "/edit" not in markup
+    assert "data-lesson-id" not in markup
+    # Позиция и размер считаются той же раскладкой, что у урока.
+    for marker in ("--top:", "--dur:", "--left:", "--width:"):
+        assert marker in markup, marker
+    # Состояние окна доступно и разметке, и стилям.
+    assert 'data-slot-state="free"' in markup
+    assert "Свободно" in markup
+    assert "10:00 – 10:40" in markup
+    # Свободное окно не приглушается: место ещё можно занять.
+    assert "cal-event--muted" not in markup
+
+    # Диалог окна по этому адресу отдаётся сервером.
+    dialog = client.get(f"/tutor/slots/{slot_id}")
+    assert dialog.status_code == 200
+    assert "Окно для записи" in dialog.text
+    assert 'id="slot-dialog"' in dialog.text
+
+
+def test_calendar_slot_saved_refreshes_week(client):
+    """7.3: `slot-saved` перерисовывает неделю с сервера.
+
+    Создание, правка, удаление окна и действия с бронью отвечают
+    `HX-Trigger: slot-saved`; подписка живёт на `#calendar-swap`, поэтому
+    новая карточка появляется без перезагрузки страницы.
+    """
+    _login(client)
+    page = client.get("/tutor/calendar?start=2026-10-12").text
+
+    swap = re.search(r'<div id="calendar-swap".*?>', page, re.S)
+    assert swap, "Область #calendar-swap не найдена"
+    assert "slot-saved from:body" in swap.group(0)
+
+    # Скрипт диалога окна подключён до Alpine — иначе `alpine:init`
+    # пройдёт раньше подписки на `slotDialog` (правило AGENTS.md).
+    assert page.index("/static/slots.js") < page.index("/static/alpine.min.js")
+
+
+def test_slot_dialog_links_to_lesson_form_with_duration(client, calendar_owner, slot_factory):
+    """7.4: «Записать ученика» несёт `?starts_at=` и `&duration_min=`.
+
+    Ссылка ведёт в настоящую форму урока (не в клиентскую модалку):
+    дата и время — настенные значения окна, длительность — его
+    `duration_min`. Иначе созданный урок разошёлся бы с окном по времени
+    и окно осталось бы «Свободно» (спека calendar, «Префилл из окна»).
+    """
+    slot_id = slot_factory(
+        calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0), duration_min=40
+    )
+
+    dialog = client.get(f"/tutor/slots/{slot_id}").text
+    link = re.search(r'<button[^>]*data-slot-book[^>]*>', dialog, re.S)
+    assert link, "Кнопки «Записать ученика» нет в диалоге окна"
+    url = re.search(r'hx-get="([^"]+)"', link.group(0)).group(1)
+
+    assert url.startswith("/tutor/lessons/new?")
+    assert "starts_at=2099-02-03T10:00" in url
+    assert "duration_min=40" in url
+    assert 'hx-target="#modal"' in link.group(0)
+
+
+def test_lesson_form_prefills_duration_from_slot(
+    client, calendar_owner, student_factory
+, slot_factory):
+    """7.4: форма урока показывает длительность окна и сохраняется без ошибки.
+
+    Значение из `?duration_min=` выделено в селекте; сохранение той же
+    формы создаёт урок ровно на длительность окна — окно становится
+    «Занято уроком», а не остаётся свободным рядом с уроком.
+    """
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Из окна")
+
+    form = client.get(
+        "/tutor/lessons/new?starts_at=2099-02-03T10:00&duration_min=40"
+    ).text
+    # «Начало» и «Длительность» предзаполнены из окна.
+    assert 'value="2099-02-03T10:00"' in form
+    duration_option = re.search(
+        r'<option value="40"[^>]*selected[^>]*>', form
+    )
+    assert duration_option, "Длительность окна не выделена в селекте"
+
+    response = client.post(
+        "/tutor/lessons",
+        data={
+            "type": "individual",
+            "student_id": student_id,
+            "starts_at": "2099-02-03T10:00",
+            "duration_min": "40",
+        },
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger") == "lesson-saved"
+    # Ошибок валидации в ответе нет: тело пустое — модалка закрывается.
+    assert response.text == ""
+
+    from app.database import SessionLocal
+    from app.lesson.models.lesson import Lesson
+
+    with SessionLocal() as db:
+        lesson = db.query(Lesson).filter_by(student_id=student_id).one()
+        assert lesson.duration_min == 40
+
+    # Окно на это время больше не «Свободно» (спека calendar, «Окно занято
+    # после урока»): состояние считается пересечением, а не хранится.
+    slot_id = slot_factory(
+        calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0), duration_min=40
+    )
+    event = _slot_event(_week_days(calendar_owner), slot_id)
+    assert event is not None
+    assert event.slot_state == "lesson"
+
+
+def test_lesson_form_ignores_unknown_duration(client, calendar_owner):
+    """7.4: длительность вне `LESSON_DURATIONS` игнорируется, форма открыта.
+
+    Префилл — удобство, а не источник истины: 80 минут нет в закрытом
+    списке, поэтому селект остаётся на значении по умолчанию.
+    """
+    form = client.get(
+        "/tutor/lessons/new?starts_at=2099-02-03T10:00&duration_min=80"
+    ).text
+
+    assert "Новый урок" in form
+    assert not re.search(r'<option value="80"', form)
+
+
+def test_calendar_public_link_points_to_public_page(client, calendar_owner):
+    """7.5: «Ссылка на окна» копирует публичный адрес недели, а не календарь.
+
+    База ссылки (`/s/<tutor_id>`) приходит с сервера в `data-public-url`
+    корня, понедельник дописывает `calendar.js` из видимой сетки. Адрес
+    календаря (`/tutor/calendar`) в ссылку не попадает: ученик не вошёл
+    в систему, и такая ссылка вела бы его на форму входа (design D7).
+    """
+    from app.slot.services.public_link import PUBLIC_PREFIX
+
+    page = client.get("/tutor/calendar?start=2026-10-12").text
+
+    root = re.search(r'<div id="calendar-swap"[^>]*>', page, re.S)
+    assert root, "Корня #calendar-swap нет в разметке"
+    public = re.search(r'data-public-url="([^"]+)"', root.group(0))
+    assert public, "У корня нет data-public-url"
+    assert public.group(1) == f"{PUBLIC_PREFIX}/{calendar_owner}"
+
+    js = _calendar_js()
+    builder = js[js.index("publicWeekUrl: function"):js.index("copyWeekLink: function")]
+    # Адрес собирается из базы и понедельника видимой недели.
+    assert "this.publicBase()" in builder
+    assert "this.currentStart()" in builder
+    assert '"?start=" + start' in builder
+    # Режим раскраски в публичную ссылку не попадает.
+    assert "withColor" not in builder
+
+    # Копирование не обещает успех заранее: тост — только в обработчике
+    # успешной записи, при отказе показывается поле со ссылкой.
+    copier = js[js.index("copyWeekLink: function"):js.index("showToast: function")]
+    assert "navigator.clipboard.writeText(url).then(" in copier
+    assert "self.linkFallback.open = true" in copier
+    assert "showFallback" in copier
+
+
+def _slot_card(page: str, slot_id: str) -> str:
+    """Разметка карточки окна по её data-slot-id (пустая строка — нет)."""
+    match = re.search(
+        r'<div class="cal-event[^"]*"[^>]*data-slot-id="' + re.escape(slot_id) + r'".*?</div>',
+        page,
+        re.S,
+    )
+    return match.group(0) if match else ""
+
+
+
+def test_calendar_lesson_slot_card_is_muted(client, calendar_owner, student_factory, slot_factory):
+    """7.2: окно, занятое уроком, показывает «Занято уроком» и приглушено.
+
+    Состояние считается пересечением с уроком, а не хранится (design D4),
+    поэтому удаление урока возвращает окно в «Свободно».
+    """
+    from app.database import SessionLocal
+    from app.lesson.models.lesson import Lesson
+
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Занял")
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2099, 2, 3, 10, 20), duration_min=40,
+    )
+    slot_id = slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+
+    card = _slot_card(client.get("/tutor/calendar?start=2099-02-02").text, slot_id)
+
+    assert "Занято уроком" in card
+    assert "cal-event--muted" in card
+    assert "cal-event--slot-lesson" in card
+    assert "Свободно" not in card
+
+    # Урок удалён — окно снова свободно (состояние не хранится).
+    with SessionLocal() as db:
+        db.delete(db.get(Lesson, lesson_id))
+        db.commit()
+
+    freed = _slot_card(client.get("/tutor/calendar?start=2099-02-02").text, slot_id)
+    assert "Свободно" in freed
+    assert "cal-event--muted" not in freed
+
+
+def test_calendar_pending_and_booked_slot_cards(client, calendar_owner, slot_factory, booking_factory):
+    """7.2: «Ожидает подтверждения» и «Занято записью» — разные подписи.
+
+    Приоритет `booking > lesson > past > free` (design D4): подтверждённая
+    бронь важнее прошедшего времени, ожидающая — тоже занятое окно.
+    """
+    pending_slot = slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+    booked_slot = slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 12, 0))
+    booking_factory(pending_slot, status="pending")
+    booking_factory(booked_slot, status="confirmed")
+
+    page = client.get("/tutor/calendar?start=2099-02-02").text
+
+    pending = _slot_card(page, pending_slot)
+    assert "Ожидает подтверждения" in pending
+    assert "cal-event--slot-pending" in pending
+    # Ожидающая бронь ещё не закреплена за учеником — не приглушается.
+    assert "cal-event--muted" not in pending
+
+    booked = _slot_card(page, booked_slot)
+    assert "Занято записью" in booked
+    assert "cal-event--slot-booking" in booked
+    assert "cal-event--muted" in booked
+
+
+def test_calendar_past_slot_card_shows_past_state(client, calendar_owner, slot_factory):
+    """7.2: прошедшее окно — «Время прошло» и приглушение.
+
+    Прошедшее окно не предлагается ученику на публичной странице, но в
+    календаре педагога остаётся: он видит, что время ушло (спека calendar).
+    """
+    slot_id = slot_factory(calendar_owner, starts_at=datetime(2020, 1, 8, 10, 0))
+
+    card = _slot_card(client.get("/tutor/calendar?start=2020-01-06").text, slot_id)
+
+    assert card, "Карточки прошедшего окна нет в сетке"
+    assert "Время прошло" in card
+    assert "cal-event--muted" in card
+    assert "cal-event--slot-past" in card
+
+
+def test_calendar_slot_dots_and_count_include_slots(client, calendar_owner, slot_factory):
+    """7.2: шапка дня считает окна наравне с уроками.
+
+    Точка окна окрашена токеном `--cal-slot-accent`, а не цветом цели:
+    окно не принадлежит ученику (спека calendar).
+    """
+    from app.calendar.services.presentation import SLOT_ACCENT
+
+    slot_factory(calendar_owner, starts_at=datetime(2099, 2, 3, 10, 0))
+
+    page = client.get("/tutor/calendar?start=2099-02-02").text
+
+    assert SLOT_ACCENT in page
+    assert "1 урок" in page

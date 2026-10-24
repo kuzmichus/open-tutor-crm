@@ -23,6 +23,7 @@ from app.common.access import require_tutor_id
 from app.database import get_db
 from app.lesson.services.lesson_form import (
     lesson_form_context,
+    parse_duration_min,
     parse_lesson_form,
     parse_starts_at,
     validate_targets,
@@ -51,6 +52,7 @@ def _saved_response(request: Request):
 def new_lesson_form(
     request: Request,
     starts_at: str | None = None,
+    duration_min: str | None = None,
     ack_unavailable: str | None = None,
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
@@ -60,13 +62,22 @@ def new_lesson_form(
     `?starts_at=` (из календаря) предзаполняет «Начало»: значение
     трактуется как настенное время в зоне педагога; некорректное
     значение просто игнорируется — форма открывается пустой.
+    `?duration_min=` (из окна для записи) предзаполняет «Длительность»:
+    урок из окна должен совпасть с окном по времени, иначе окно останется
+    «Свободно» рядом с созданным уроком (спека calendar, «Префилл из
+    окна»). Значение вне `LESSON_DURATIONS` игнорируется.
     `?ack_unavailable=1` приходит из календаря после клиентского
     подтверждения и переносится скрытым полем: повторно сервер не
     спрашивает (design.md D5, п. 4), но проверку всё равно выполняет.
     """
     tutor = db.get(Tutor, tutor_id)
     prefill = parse_starts_at(starts_at, tutor)
-    data = {"starts_at": prefill} if prefill is not None else None
+    duration = parse_duration_min(duration_min)
+    data = {
+        key: value
+        for key, value in (("starts_at", prefill), ("duration_min", duration))
+        if value is not None
+    } or None
     return templates.TemplateResponse(
         request,
         "lesson/_form.html",
@@ -94,6 +105,11 @@ async def create_lesson_view(
     form = await request.form()
     data, errors = parse_lesson_form(form, tutor)
     errors += validate_targets(db, tutor_id, data)
+    # Создание всегда даёт «Запланирован» (спека lesson-management): поля
+    # «Проведение» в форме создания нет, и присланный статус — мусор от
+    # устаревшей страницы. Сервис записи статус принимает (им пользуются
+    # тесты и будущие импорты), поэтому гасим его здесь, а не в writer'е.
+    data["status"] = None
 
     # Предупреждение считается до записи: уроки не должны создаваться,
     # пока пользователь не подтвердил постановку в отмеченный день (D5).

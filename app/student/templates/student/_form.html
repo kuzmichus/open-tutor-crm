@@ -1,20 +1,28 @@
 {# Модальная форма ученика: создание и редактирование.
 
-   Модалка состоит из шапки, скроллящегося тела (`.modal-body`) и футера
-   с кнопками (`.modal-actions`) — кнопки «Отмена»/«Сохранить» не уезжают
-   за пределы экрана вместе с контентом. Внутри тела — вкладки: «Общее»
-   (все поля, контакты и плательщик), «Платежи» (заглушка) и «Настройки»
-   (напоминания). Панели переключаются через `x-show`, поэтому поля всех
-   вкладок остаются в DOM и уходят в POST.
+   Модалка состоит из шапки, таббара и **трёх соседних** панелей
+   `.tab-form` (design D9). Панели — соседи, а не вложенные друг в друга:
+   вложенные `<form>` браузер выбрасывает, и кнопка отправляла бы чужую
+   форму. «Общее» и «Настройки» — самостоятельные формы со своими полями
+   и своим футером, «Платежи» — панель без формы: каждое её действие —
+   отдельный запрос во второй слой модалок.
+
+   Поля обеих форм уходят в один POST: каждая форма добирает поля соседней
+   через `hx-include`. Без этого сохранение из «Общего» сбрасывало бы
+   напоминания, а из «Настроек» — стирало имя и контакты (`parse_student_form`
+   получает пустые значения и сохраняет их как очищенные).
+
+   Панели переключаются через `x-show`, поэтому несохранённые правки
+   «Общего» доживают до сохранения при клике на «Платежи» (design D9).
 
    Контекст: form, contact_rows, contact_rows_count, contact_rows_open,
    contact_options_json, errors, student, student_id, action, title,
    from_card, statuses, status_label, timezone_options_json. #}
 <div class="modal-root"
-     x-data="studentForm('{{ form.kind }}')"
+     x-data="studentForm('{{ form.kind }}', '{{ tab }}')"
      x-show="open"
      x-cloak
-     @keydown.escape.window="close()"
+     @keydown.escape.window="if (!paymentsStackedOpen()) close()"
      @student-saved.window="close()">
     <div class="modal-overlay" @click="close()"></div>
 
@@ -26,57 +34,59 @@
             </button>
         </div>
 
-        <form class="modal-form"
-              hx-post="{{ action }}"
-              hx-target="#modal"
-              hx-swap="innerHTML"
-              @submit="revealInvalidField">
-            <input type="hidden" name="from_card" value="{{ '1' if from_card else '' }}">
+        <div class="tabs modal-tabs" role="tablist" aria-label="Разделы формы ученика">
+            <button class="tab" type="button" role="tab"
+                    id="student-tab-general"
+                    aria-controls="student-panel-general"
+                    :aria-selected="tab === 'general' ? 'true' : 'false'"
+                    :class="tab === 'general' ? 'tab--active' : ''"
+                    @click="tab = 'general'">
+                Общее
+            </button>
+            <button class="tab" type="button" role="tab"
+                    id="student-tab-payments"
+                    aria-controls="student-panel-payments"
+                    :aria-selected="tab === 'payments' ? 'true' : 'false'"
+                    :class="tab === 'payments' ? 'tab--active' : ''"
+                    @click="tab = 'payments'">
+                Платежи
+            </button>
+            <button class="tab" type="button" role="tab"
+                    id="student-tab-settings"
+                    aria-controls="student-panel-settings"
+                    :aria-selected="tab === 'settings' ? 'true' : 'false'"
+                    :class="tab === 'settings' ? 'tab--active' : ''"
+                    @click="tab = 'settings'">
+                Настройки
+            </button>
+        </div>
 
-            <div class="modal-body">
-                {% if errors %}
-                <div class="error" role="alert">
-                    <ul>
-                        {% for message in errors %}
-                        <li>{{ message }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                {% endif %}
+        <div class="tab-shell">
+            {# Вкладка «Общее»: поля ученика, контакты и плательщик. #}
+            <form class="tab-form"
+                  id="student-form-general"
+                  data-tab-panel="general"
+                  role="tabpanel" aria-labelledby="student-tab-general"
+                  hx-post="{{ action }}"
+                  hx-target="#modal"
+                  hx-swap="innerHTML"
+                  hx-include="#student-form-settings"
+                  x-show="tab === 'general'"
+                  x-cloak
+                  @submit="revealInvalidField">
+                <input type="hidden" name="from_card" value="{{ '1' if from_card else '' }}">
 
-                <div class="tabs modal-tabs" role="tablist" aria-label="Разделы формы ученика">
-                    <button class="tab" type="button" role="tab"
-                            id="student-tab-general"
-                            aria-controls="student-panel-general"
-                            :aria-selected="tab === 'general' ? 'true' : 'false'"
-                            :class="tab === 'general' ? 'tab--active' : ''"
-                            @click="tab = 'general'">
-                        Общее
-                    </button>
-                    <button class="tab" type="button" role="tab"
-                            id="student-tab-payments"
-                            aria-controls="student-panel-payments"
-                            :aria-selected="tab === 'payments' ? 'true' : 'false'"
-                            :class="tab === 'payments' ? 'tab--active' : ''"
-                            @click="tab = 'payments'">
-                        Платежи
-                    </button>
-                    <button class="tab" type="button" role="tab"
-                            id="student-tab-settings"
-                            aria-controls="student-panel-settings"
-                            :aria-selected="tab === 'settings' ? 'true' : 'false'"
-                            :class="tab === 'settings' ? 'tab--active' : ''"
-                            @click="tab = 'settings'">
-                        Настройки
-                    </button>
-                </div>
+                <div class="modal-body">
+                    {% if errors %}
+                    <div class="error" role="alert">
+                        <ul>
+                            {% for message in errors %}
+                            <li>{{ message }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
 
-                {# Вкладка «Общее»: все поля, контакты и плательщик. #}
-                <div class="tab-panel"
-                     id="student-panel-general"
-                     data-tab-panel="general"
-                     role="tabpanel" aria-labelledby="student-tab-general"
-                     x-show="tab === 'general'" x-cloak>
                     <fieldset class="form-section">
                         <legend class="form-section__title">Общее</legend>
 
@@ -225,25 +235,64 @@
                     </fieldset>
                 </div>
 
-                {# Вкладка «Платежи»: заглушка до появления счетов и оплат. #}
-                <div class="tab-panel"
-                     id="student-panel-payments"
-                     data-tab-panel="payments"
-                     role="tabpanel" aria-labelledby="student-tab-payments"
-                     x-show="tab === 'payments'" x-cloak>
+                {# Футер вне скроллящейся области: кнопки всегда на виду. #}
+                <div class="modal-actions">
+                    <button class="btn btn--ghost" type="button" @click="close()">Отмена</button>
+                    <button class="btn btn--primary" type="submit">Сохранить</button>
+                </div>
+            </form>
+
+            {# Вкладка «Платежи»: панель без формы (design D11). Каждая кнопка —
+               самостоятельный запрос, поэтому вкладка не содержит ни `<form>`,
+               ни скрытых полей и не может отправить карточку ученика. #}
+            <div class="tab-form"
+                 id="student-panel-payments"
+                 data-tab-panel="payments"
+                 role="tabpanel" aria-labelledby="student-tab-payments"
+                 x-show="tab === 'payments'"
+                 x-cloak>
+                <div class="modal-body">
+                    {% if student_id %}
+                    {# Панель приходит своим маршрутом и дальше перезапрашивает
+                       себя по `payment-saved` — баланс и история обновляются с
+                       сервера, а не пересчитываются в JS. #}
+                    <div id="student-finance-slot"
+                         hx-get="/tutor/students/{{ student_id }}/payments/panel"
+                         hx-trigger="load"
+                         hx-swap="innerHTML">
+                        <p class="finance-empty">Загрузка платежей…</p>
+                    </div>
+                    {% else %}
+                    {# Нового ученика ещё нет в БД: счёт появится после
+                       сохранения карточки. #}
                     <div class="tab-panel__empty">
                         <i data-lucide="wallet"></i>
-                        <p>Счета, оплаты и баланс ученика появятся здесь позже.</p>
+                        <p>Счёт появится после сохранения карточки.</p>
                     </div>
+                    {% endif %}
                 </div>
 
-                {# Вкладка «Настройки»: уведомления, которые раньше жили
-                   внизу общей формы. #}
-                <div class="tab-panel"
-                     id="student-panel-settings"
-                     data-tab-panel="settings"
-                     role="tabpanel" aria-labelledby="student-tab-settings"
-                     x-show="tab === 'settings'" x-cloak>
+                <div class="modal-actions">
+                    <button class="btn btn--ghost" type="button" @click="close()">Закрыть</button>
+                </div>
+            </div>
+
+            {# Вкладка «Настройки»: напоминания. Отдельная форма — своя отправка
+               и свой футер; поля «Общего» добираются через `hx-include`. #}
+            <form class="tab-form"
+                  id="student-form-settings"
+                  data-tab-panel="settings"
+                  role="tabpanel" aria-labelledby="student-tab-settings"
+                  hx-post="{{ action }}"
+                  hx-target="#modal"
+                  hx-swap="innerHTML"
+                  hx-include="#student-form-general"
+                  x-show="tab === 'settings'"
+                  x-cloak
+                  @submit="revealInvalidField">
+                <input type="hidden" name="from_card" value="{{ '1' if from_card else '' }}">
+
+                <div class="modal-body">
                     <fieldset class="form-section">
                         <legend class="form-section__title">Напоминания ученику</legend>
                         <div class="flex flex-wrap gap-2">
@@ -265,13 +314,12 @@
                         </div>
                     </fieldset>
                 </div>
-            </div>
 
-            {# Футер вне скроллящейся области: кнопки всегда на виду. #}
-            <div class="modal-actions">
-                <button class="btn btn--ghost" type="button" @click="close()">Отмена</button>
-                <button class="btn btn--primary" type="submit">Сохранить</button>
-            </div>
-        </form>
+                <div class="modal-actions">
+                    <button class="btn btn--ghost" type="button" @click="close()">Отмена</button>
+                    <button class="btn btn--primary" type="submit">Сохранить</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>

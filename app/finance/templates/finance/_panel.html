@@ -1,0 +1,149 @@
+{# Панель платежей — вкладка «Платежи» карточки ученика (design D11).
+
+   Панель не является формой: каждая кнопка — самостоятельный запрос,
+   поэтому уход на вкладку и любое действие в ней не отправляют поля
+   карточки ученика.
+
+   Перезапрос: `payment-saved` приходит после сохранения платежа, правки
+   и возврата; панель запрашивает себя заново, чтобы баланс и история
+   обновились с сервера, а не пересчитывались в JS (правило AGENTS.md).
+
+   Суммы приходят готовыми из `panel_context`: шаблон вызывает только
+   форматтеры (`money`, `balance_label`, `signed_money`) и не складывает
+   деньги сам.
+
+   Контекст: finance_student, finance_student_name, finance_tutor,
+   finance_balance, finance_payments (payment, refundable, can_refund),
+   finance_history, finance_needs_recalculate. #}
+<div class="finance-panel"
+     id="student-finance-panel"
+     hx-get="/tutor/students/{{ finance_student.id }}/payments/panel"
+     hx-trigger="payment-saved from:body"
+     hx-swap="outerHTML">
+
+    <div class="finance-toolbar">
+        <button class="btn btn--primary btn--sm" type="button"
+                hx-get="/tutor/students/{{ finance_student.id }}/payments/new"
+                hx-target="#modal-payment"
+                hx-swap="innerHTML">
+            <i data-lucide="plus"></i>
+            Внести оплату
+        </button>
+        <button class="btn btn--ghost btn--sm" type="button"
+                hx-get="/tutor/students/{{ finance_student.id }}/invoice"
+                hx-target="#modal-payment"
+                hx-swap="innerHTML">
+            <i data-lucide="file-text"></i>
+            Счёт за период
+        </button>
+        <button class="btn btn--ghost btn--sm" type="button"
+                hx-post="/tutor/students/{{ finance_student.id }}/balance/recalculate"
+                hx-target="#student-finance-panel"
+                hx-swap="outerHTML">
+            <i data-lucide="refresh-cw"></i>
+            Пересчитать баланс
+        </button>
+    </div>
+
+    {# Баннер непересчитанного баланса (design D8): таблица счетов появилась
+       позже уроков, и без ремонта баланс показал бы минус по всем прошлым
+       занятиям. Исчезает сам после «Пересчитать» — панель приходит новая. #}
+    {% if finance_needs_recalculate %}
+    <div class="finance-banner" role="status">
+        <div class="finance-banner__text">
+            <strong>Баланс не пересчитан.</strong>
+            У проведённых уроков ещё нет списаний — нажмите «Пересчитать баланс»,
+            чтобы учесть их в счёте ученика.
+        </div>
+        <button class="btn btn--ghost btn--sm" type="button"
+                hx-post="/tutor/students/{{ finance_student.id }}/balance/recalculate"
+                hx-target="#student-finance-panel"
+                hx-swap="outerHTML">
+            Пересчитать
+        </button>
+    </div>
+    {% endif %}
+
+    <section class="finance-balance">
+        <span class="finance-balance__label">Баланс ученика</span>
+        <span class="finance-balance__value">{{ balance_label(finance_balance) }}</span>
+        <span class="finance-balance__hint">
+            {% if finance_balance < 0 %}
+            Ученик должен — внесите оплату или проверьте списания.
+            {% elif finance_balance > 0 %}
+            На счёте есть остаток в пользу ученика.
+            {% else %}
+            Оплаты и списания сходятся.
+            {% endif %}
+        </span>
+    </section>
+
+    <section class="finance-section">
+        <h3 class="finance-section__title">Платежи</h3>
+        {% if finance_payments %}
+        <ul class="finance-list">
+            {% for row in finance_payments %}
+            {% set payment = row.payment %}
+            <li class="finance-row" data-payment-id="{{ payment.id }}">
+                <div class="finance-row__main">
+                    <span class="finance-row__title">
+                        {{ payment_method_label(payment.method) }}
+                        <span class="finance-row__status">{{ payment_status_label(payment.status) }}</span>
+                    </span>
+                    <span class="finance-row__meta">
+                        {{ operation_datetime(payment.occurred_at, finance_tutor) }}
+                        {% if payment.comment %}· {{ payment.comment }}{% endif %}
+                        {% if row.refundable < payment.amount %}
+                        · возвращено {{ money(payment.amount - row.refundable) }}
+                        {% endif %}
+                    </span>
+                </div>
+                <span class="finance-row__amount">{{ money(payment.amount) }}</span>
+                <div class="finance-row__actions">
+                    <button class="btn btn--ghost btn--sm" type="button"
+                            hx-get="/tutor/payments/{{ payment.id }}/edit"
+                            hx-target="#modal-payment"
+                            hx-swap="innerHTML">
+                        Изменить
+                    </button>
+                    {% if row.can_refund %}
+                    <button class="btn btn--ghost btn--sm" type="button"
+                            hx-get="/tutor/payments/{{ payment.id }}/refund/new"
+                            hx-target="#modal-payment"
+                            hx-swap="innerHTML">
+                        Возврат
+                    </button>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="finance-empty">Платежей пока нет.</p>
+        {% endif %}
+    </section>
+
+    <section class="finance-section">
+        <h3 class="finance-section__title">История операций</h3>
+        {% if finance_history %}
+        <ul class="finance-list">
+            {% for operation in finance_history %}
+            <li class="finance-row">
+                <div class="finance-row__main">
+                    <span class="finance-row__title">{{ operation_kind_label(operation) }}</span>
+                    <span class="finance-row__meta">
+                        {{ operation_datetime(operation.occurred_at, finance_tutor) }}
+                    </span>
+                </div>
+                <span class="finance-row__amount
+                             {% if operation.kind == 'payment' %}finance-row__amount--in{% else %}finance-row__amount--out{% endif %}">
+                    {{ signed_money(operation) }}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="finance-empty">Операций пока нет.</p>
+        {% endif %}
+    </section>
+</div>

@@ -150,27 +150,21 @@
         hoverX: 0,
         hoverY: 0,
 
-        /* Модалка «Новый слот»: редактируемые дата/время из slotForm
-           (design.md D1). Формы создания урока здесь больше нет — её
-           открывает настоящая форма урока в #modal (design.md D9). */
-        modal: { open: false, duration: 40 },
         /* Адрес формы создания урока — из `data-lesson-new` корня
            (design.md D9): её открывают клик по четверти и «Добавить». */
         lessonNewUrl: "/tutor/lessons/new",
-        /* Поля диалога создания слота: дата и время (спека slot-booking). */
-        slotForm: { date: "", time: "" },
-        /* Диалог записи: открыт/имя/контакт; _bookingSlot — DOM-узел
-           карточки конкретного слота, а не индекс в массиве (design.md D6). */
-        booking: { open: false, name: "", contact: "" },
-        _bookingSlot: null,
         /* Подавитель клика после drag (design.md D7): браузер эмитит click
            после pointerup, и без флага перенос открывал бы форму урока. */
         _suppressClick: false,
         /* Выпадающий список «Цвет», меню быстрого добавления «⋮» и тост
-           подтверждений демо-режима. */
+           подтверждений. */
         colorOpen: false,
         moreOpen: false,
         toast: { open: false, text: "" },
+        /* Показ публичной ссылки, когда буфер обмена недоступен: адрес
+           остаётся в поле, пока пользователь не скопирует его вручную
+           (спека calendar, «Буфер обмена недоступен»). */
+        linkFallback: { open: false, url: "" },
         /* Активный режим раскраски (design.md D5): сервер рендерит его из
            `?color=`, выбор пользователя переживает перезагрузку в
            localStorage. */
@@ -187,11 +181,6 @@
           });
           root.addEventListener("pointerdown", function (event) {
             self.onEventPointerDown(event);
-          });
-          /* Клики по карточкам слотов — делегированием на корне: карточки
-             создаются на клиенте и подменяются при листании недель. */
-          root.addEventListener("click", function (event) {
-            self.onAreaClick(event);
           });
           /* Подавление клика после drag (design.md D7): браузер эмитит
              click после pointerup, и htmx открыл бы форму редактирования.
@@ -422,115 +411,24 @@
           this.moreOpen = false;
         },
 
-        /* Кнопка «Добавить слот» (пункт меню): модалка «Новый слот» с общим
-           префиллом даты/времени и кнопкой «Создать» (design.md D1/D2).
-           Выбор пункта сначала закрывает меню. */
-        openSlotDialog: function () {
-          this.closeMore();
-          var moment = this.prefillMoment();
-          this.slotForm.date = moment.date;
-          this.slotForm.time = moment.time;
-          this.modal.duration = 40;
-          this.modal.open = true;
-        },
-
-        closeModal: function () {
-          this.modal.open = false;
-        },
-
-        /* Демо-создание слота: карточка добавляется только в DOM, ноль
-           сетевых запросов; время нормализуется к границе четверти часа
-           (snapToQuarter), конец зажимается по границе 23:00 (design.md D2).
-           Слот переживает закрытие диалога и исчезает при листании недели —
-           подмена #calendar-swap забирает карточку (design.md D6). */
-        createSlot: function () {
-          var day = this.$root.querySelector(
-            '.cal-day[data-date="' + this.slotForm.date + '"]'
-          );
-          if (!day) return;
-
-          var startMin = parseClock(this.slotForm.time);
-          if (startMin === null) return;
-          startMin = snapToQuarter(startMin);
-          startMin = Math.max(GRID_START_MIN, Math.min(startMin, GRID_END_MIN - STEP_MIN));
-          var duration = Math.max(STEP_MIN, parseInt(this.modal.duration, 10) || 40);
-          duration = Math.min(duration, GRID_END_MIN - startMin);  /* конец — 23:00 */
-
-          var card = this.renderCard({
-            kind: "slot",
-            startMin: startMin,
-            duration: duration,
-          });
-          card.setAttribute("data-date", this.slotForm.date);
-          day.appendChild(card);
-          this.layoutDay(day);
-          this.closeModal();
-        },
-
         /* ------------------------------------------------------------------
-           Диалог «Новый отпуск» удалён: недоступность хранится в БД и
-           управляется панелью «Отпуск и выходные» (пункт меню «⋯» открывает
-           её в #modal). Клиент отпусков больше не создаёт.
+           Демо-слой удалён: окна и записи живут в БД. Окно открывается
+           серверным диалогом `slot/_dialog.html` (hx-get из пункта меню и
+           с карточки окна), запись приходит с публичной страницы. Клиент
+           больше не создаёт карточки и не рисует диалогов сам.
            ------------------------------------------------------------------ */
 
-        /* Рендер карточки из общего шаблона: позиция/высота — в часах от
-           6:00, как у серверных уроков (services/presentation.py).
-           kind: "lesson" (по умолчанию) — карточка занятия; "slot" —
-           карточка слота: класс cal-event--slot, подпись состояния
-           «Свободен · запись по ссылке» и кнопка «Записаться» только у
-           свободного (спека slot-booking, design.md D3).
-
-           Разметка та же, что у серверной карточки: имя цели отдельной
-           строкой, цена и время — во второй (`cal-event__meta`). */
-        renderCard: function (data) {
-          var source = document.getElementById("cal-event-template");
-          var card = source.content.firstElementChild.cloneNode(true);
-          var price = card.querySelector(".cal-event__price");
-          if (data.kind === "slot") {
-            card.className = "cal-event cal-event--slot";
-            /* Подпись состояния вместо имени ученика. */
-            var state = document.createElement("span");
-            state.className = "cal-event__state";
-            state.textContent = "Свободен · запись по ссылке";
-            card.replaceChild(state, card.querySelector(".cal-event__title"));
-            /* Кнопка записи — только у свободного слота; у занятого
-               (cal-event--booked) её в DOM нет вовсе (design.md D4). */
-            if (!data.booked) {
-              var book = document.createElement("button");
-              book.type = "button";
-              book.className = "cal-event__book";
-              book.textContent = "Записаться";
-              card.appendChild(book);
-            } else {
-              card.classList.add("cal-event--booked");
-              card.querySelector(".cal-event__state").textContent =
-                "Занят: " + data.bookedBy;
-            }
-            /* У слота цены нет — второй строкой остаётся только время. */
-            if (price) price.remove();
-          } else {
-            card.className = "cal-event";
-            card.querySelector(".cal-event__title").textContent = data.title;
-            if (price) price.textContent = data.priceLabel || "";
-          }
-          card.querySelector(".cal-event__time").textContent =
-            formatClock(data.startMin) + " – " + formatClock(data.startMin + data.duration);
-          card.style.setProperty("--top", ((data.startMin - GRID_START_MIN) / 60).toString());
-          card.style.setProperty("--dur", (data.duration / 60).toString());
-          card.style.setProperty("--accent", data.color || "#3b82f6");
-          card.setAttribute("data-student", data.kind === "slot" ? "" : data.title);
-          card.setAttribute("data-start-min", String(data.startMin));
-          card.setAttribute("data-duration-min", String(data.duration));
-          if (data.kind !== "slot") {
-            this.setCardTitle(card, data.startMin, data.duration);
-          }
-          if (data.isGroup) {
-            var tag = document.createElement("span");
-            tag.className = "cal-event__tag";
-            tag.textContent = "Группа";
-            card.appendChild(tag);
-          }
-          return card;
+        /* Клик после переноса гасится в capture-фазе (design.md D7):
+           htmx слушает click на самой карточке и открыл бы форму
+           редактирования. Флаг ставит `moveLesson`, снимает — следующий
+           обычный жест или этот же обработчик. */
+        onSuppressedClick: function (event) {
+          if (!this._suppressClick) return;
+          this._suppressClick = false;
+          var card = event.target.closest && event.target.closest(".cal-event");
+          if (!card || !this.$root.contains(card)) return;
+          event.stopImmediatePropagation();
+          event.preventDefault();
         },
 
         /* Всплывающая подсказка карточки: имя цели, цена (если задана) и
@@ -551,135 +449,9 @@
           card.setAttribute("title", parts.join(" · "));
         },
 
-        /* Раскладка наложения в столбце дня — та же логика, что на сервере
-           (services/presentation.py layout_events): цепочка пересекающихся
-           карточек делит ширину поровну, поэтому слот поверх демо-занятия
-           не перекрывает его — видны обе карточки (спека «Слот поверх
-           существующего занятия»). Вызывается после добавления слота. */
-        layoutDay: function (day) {
-          var cards = day.querySelectorAll(".cal-event");
-          var items = [];
-          for (var i = 0; i < cards.length; i++) {
-            var start = parseInt(cards[i].getAttribute("data-start-min"), 10);
-            var dur = parseInt(cards[i].getAttribute("data-duration-min"), 10);
-            if (isNaN(start) || isNaN(dur)) continue;
-            items.push({ card: cards[i], start: start, end: start + dur });
-          }
-          items.sort(function (a, b) {
-            return a.start - b.start || a.end - b.end;
-          });
-
-          var cluster = [];
-          var clusterEnd = null;
-          var flush = function () {
-            var total = cluster.length;
-            for (var j = 0; j < total; j++) {
-              cluster[j].card.style.setProperty("--left", (j * 100) / total + "%");
-              cluster[j].card.style.setProperty("--width", 100 / total + "%");
-            }
-            cluster = [];
-          };
-          for (var k = 0; k < items.length; k++) {
-            var item = items[k];
-            if (cluster.length && clusterEnd !== null && item.start >= clusterEnd) {
-              flush();
-              clusterEnd = null;
-            }
-            cluster.push(item);
-            clusterEnd = clusterEnd === null ? item.end : Math.max(clusterEnd, item.end);
-          }
-          if (cluster.length) flush();
-        },
-
         /* ------------------------------------------------------------------
-           Диалог записи на слот (спека slot-booking): открытие — только от
-           карточки cal-event--slot без cal-event--booked, подтверждение
-           помечает слот занятым. Всё в DOM, без сетевых запросов
-           (design.md D4).
+           «Ссылка на окна»: копирование публичного адреса недели (design D7).
            ------------------------------------------------------------------ */
-
-        /* Клик по карточке слота или её кнопке «Записаться» — диалог
-           записи, а НЕ форма создания урока (спека «Клик по карточке
-           слота»). Клики по карточкам уроков игнорируются. */
-        onAreaClick: function (event) {
-          if (!event.target.closest) return;
-          var card = event.target.closest(".cal-event--slot");
-          if (!card || !this.$root.contains(card)) return;
-          event.stopPropagation();
-          this.openBooking(card);
-        },
-
-        /* Клик после переноса гасится в capture-фазе (design.md D7):
-           htmx слушает click на самой карточке и открыл бы форму
-           редактирования. Флаг ставит `moveLesson`, снимает — следующий
-           обычный жест или этот же обработчик. */
-        onSuppressedClick: function (event) {
-          if (!this._suppressClick) return;
-          this._suppressClick = false;
-          var card = event.target.closest && event.target.closest(".cal-event");
-          if (!card || !this.$root.contains(card)) return;
-          event.stopImmediatePropagation();
-          event.preventDefault();
-        },
-
-        /* Открыть диалог записи: только свободный слот (без --booked);
-           занятая карточка и чужой элемент игнорируются. */
-        openBooking: function (el) {
-          var card = el && el.closest ? el.closest(".cal-event--slot") : null;
-          if (!card || !this.$root.contains(card)) return;
-          if (card.classList.contains("cal-event--booked")) return;
-          this._bookingSlot = card;
-          this.booking.open = true;
-        },
-
-        /* Отмена/закрытие: слот остаётся свободным, поля сбрасываются. */
-        closeBooking: function () {
-          this.booking.open = false;
-          this.booking.name = "";
-          this.booking.contact = "";
-          this._bookingSlot = null;
-        },
-
-        /* Подтверждение записи: preventDefault останавливает нативную
-           отправку формы, required-поля не пропускают пустые значения.
-           На карточку пишутся data-booked-by/data-contact, подпись
-           «Занят: <имя>», класс cal-event--booked, контакт — в title;
-           кнопка «Записаться» удаляется из DOM — повторная запись
-           невозможна (design.md D4). */
-        confirmBooking: function (event) {
-          event.preventDefault();
-          var card = this._bookingSlot;
-          if (
-            card &&
-            card.classList.contains("cal-event--slot") &&
-            !card.classList.contains("cal-event--booked")
-          ) {
-            var name = this.booking.name;
-            card.classList.add("cal-event--booked");
-            card.setAttribute("data-booked-by", name);
-            card.setAttribute("data-contact", this.booking.contact);
-            /* Контакт в title занятой карточки: репетитору есть как связаться. */
-            card.setAttribute("title", name + " · " + this.booking.contact);
-            var state = card.querySelector(".cal-event__state");
-            if (state) state.textContent = "Занят: " + name;
-            var book = card.querySelector(".cal-event__book");
-            if (book && book.parentNode) book.parentNode.removeChild(book);
-          }
-          this.closeBooking();
-        },
-
-        /* ------------------------------------------------------------------
-           Кнопки-заглушки панели (спека «Кнопки-заглушки ведут без битых
-           ссылок»): без маршрутов на несуществующее, всё локально.
-           ------------------------------------------------------------------ */
-
-        /* Ссылка на текущую неделю: понедельник берётся из сетки, а не из
-           корня — htmx при листании обновляет только область, корень со
-           своими data-* остаётся от прошлой недели. Ссылка несёт активный
-           режим раскраски, чтобы он открывался у получателя (design.md D5). */
-        weekLink: function () {
-          return location.origin + this.withColor(this.weekPath());
-        },
 
         /* Понедельник видимой недели — из первой колонки сетки. */
         currentStart: function () {
@@ -699,17 +471,61 @@
           }
         },
 
-        /* «Ссылка на окна»: копирует ссылку и подтверждает тостом «демо».
-           Без буфера обмена тост всё равно показывается — страница не
-           ломается. */
+        /* База публичной ссылки из корня: `/s/<tutor_id>`.
+           Корень (`#calendar-swap`) htmx не подменяет, поэтому `data-public-url`
+           переживает листание недель; понедельник берётся из видимой сетки. */
+        publicBase: function () {
+          var root = this.$root;
+          return (root.dataset && root.dataset.publicUrl) || "";
+        },
+
+        /* Публичный адрес просматриваемой недели: `/s/<tutor_id>?start=<пн>`.
+
+           Неделя — из первой колонки сетки, а не из корня: htmx при листании
+           обновляет только область, `data-*` корня остаются от прошлой недели.
+           Режим раскраски в публичную ссылку не входит — ученику он не нужен
+           и в его интерфейсе ничего не меняет. */
+        publicWeekUrl: function () {
+          var base = this.publicBase();
+          if (!base) return "";
+          var start = this.currentStart();
+          return location.origin + base + (start ? "?start=" + start : "");
+        },
+
+        /* Кнопка «Ссылка на окна»: копирует публичную ссылку недели.
+           Буфер обмена доступен не всегда (http, права, старый браузер) —
+           тогда ссылка показывается в поле рядом, чтобы её можно было
+           скопировать вручную (спека calendar, «Буфер обмена недоступен»).
+           Тост подтверждает только успешное копирование: обещать
+           «скопировано», когда в буфере пусто, — хуже, чем не обещать. */
         copyWeekLink: function () {
-          var url = this.weekLink();
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).catch(function () {
-              /* буфер недоступен (http/права) — тост уже показан */
+          var self = this;
+          var url = this.publicWeekUrl();
+          if (!url) return;
+
+          var showFallback = function () {
+            self.linkFallback.url = url;
+            self.linkFallback.open = true;
+            self.$nextTick(function () {
+              var field = self.$refs.linkField;
+              if (field) {
+                field.focus();
+                field.select();
+              }
             });
+          };
+
+          if (!navigator.clipboard || !navigator.clipboard.writeText) {
+            showFallback();
+            return;
           }
-          this.showToast("Демо: ссылка на неделю скопирована");
+          navigator.clipboard.writeText(url).then(
+            function () {
+              self.linkFallback.open = false;
+              self.showToast("Ссылка на окна скопирована");
+            },
+            showFallback
+          );
         },
 
         /* Тост подтверждений: сам гаснет, повторный вызов перезапускает. */

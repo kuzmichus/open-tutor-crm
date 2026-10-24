@@ -10,8 +10,9 @@
 import html
 import json
 import re
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -19,6 +20,7 @@ from app.database import SessionLocal
 from app.lesson.models.lesson import Lesson
 from app.student.models.student import Student
 from app.templating import templates
+from app.tutor.services.clock import utcnow
 
 PASSWORD = "Секретный-Пароль-1"
 ROOT = Path(__file__).resolve().parent.parent
@@ -295,8 +297,14 @@ def test_lessons_page_shows_only_own_lessons(
 
 
 def _dt(day_offset: int, hour: int = 10, minute: int = 0) -> datetime:
-    """Дата относительно сегодня: фильтры «Сегодня»/«На этой неделе» живые."""
-    day = date.today() + timedelta(days=day_offset)
+    """Дата относительно сегодня: фильтры «Сегодня»/«На этой неделе» живые.
+
+    «Сегодня» берётся из того же источника, что у приложения (`utcnow`), а
+    не из `date.today()`: машина живёт в своей зоне, а фикстура задаёт
+    педагогу UTC. В час, когда даты расходятся (после местной полуночи),
+    тест падал бы на ровном месте — урок «сегодня» оказывался «вчера».
+    """
+    day = utcnow().date() + timedelta(days=day_offset)
     return datetime(day.year, day.month, day.day, hour, minute)
 
 
@@ -357,10 +365,13 @@ def test_lessons_filter_today_keeps_near_midnight_lesson(
     )
     student = student_factory(tutor_id=owner, first_name="Мария")
     # Локальное «сегодня» в 23:30 → в UTC это сегодня же в 19:30 (UTC+04).
+    # Дата — из зоны педагога, а не с машины: в час расхождения дат
+    # `date.today()` дал бы «завтра» и урок выпал бы из фильтра.
+    local_today = datetime.now(ZoneInfo("Europe/Ulyanovsk")).date()
     today_late = _insert_lesson(
         owner,
         student_id=student,
-        starts_at=datetime.combine(date.today(), datetime.min.time()).replace(
+        starts_at=datetime.combine(local_today, datetime.min.time()).replace(
             hour=19, minute=30
         ),
     )
@@ -374,7 +385,9 @@ def test_lessons_filter_today_keeps_near_midnight_lesson(
 def test_lessons_filter_week(owner, client, student_factory):
     """Чип «На этой неделе»: понедельник — воскресенье текущей недели."""
     student = student_factory(tutor_id=owner, first_name="Мария")
-    today = date.today()
+    # Неделя — по зоне педагога (фикстура задаёт UTC), а не по зоне машины:
+    # иначе в час расхождения дат «сегодня» теста попадало в чужую неделю.
+    today = utcnow().date()
     monday = today - timedelta(days=today.weekday())
     # День текущей недели, отличный от сегодняшнего.
     in_week_day = monday + timedelta(days=(today.weekday() + 2) % 7)

@@ -1,5 +1,7 @@
 """Сервисы модуля group: выборки групп, состав, форма и запись (2.1–2.5)."""
 
+import pytest
+
 from app.database import SessionLocal
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
@@ -227,49 +229,40 @@ def test_parse_group_form_empty_price_is_none():
     assert data["description"] is None
 
 
-def test_parse_group_form_requires_name():
-    from app.group.services.group_form import parse_group_form
+@pytest.mark.parametrize(
+    ("form", "message"),
+    [
+        ({"name": "   "}, "Укажите название группы."),
+        ({"name": "x" * 101}, "Название группы не длиннее 100 символов."),
+        ({"name": "A", "price": "сто"}, "Цена за урок должна быть целым числом."),
+        ({"name": "A", "price": "-5"}, "Цена за урок не может быть отрицательной."),
+        (
+            {"name": "A", "members_form": "1", "members": ["s1", "s2", "s1"]},
+            "Один и тот же ученик не может состоять в группе дважды.",
+        ),
+        (
+            {
+                "name": "A",
+                "members_form": "1",
+                "members": [f"s{index}" for index in range(MAX_MEMBERS + 1)],
+            },
+            "В группе может быть не более 10 участников.",
+        ),
+    ],
+    ids=[
+        "no-name",
+        "long-name",
+        "price-not-number",
+        "price-negative",
+        "member-duplicates",
+        "member-limit",
+    ],
+)
+def test_parse_group_form_rejections(form, message):
+    """Невалидная форма группы отклоняется своим сообщением."""
+    _, errors = parse_group_form(form)
 
-    _, errors = parse_group_form({"name": "   "})
-    assert "Укажите название группы." in errors
-
-
-def test_parse_group_form_rejects_long_name():
-    from app.group.services.group_form import parse_group_form
-
-    _, errors = parse_group_form({"name": "x" * 101})
-    assert "Название группы не длиннее 100 символов." in errors
-
-
-def test_parse_group_form_rejects_bad_price():
-    from app.group.services.group_form import parse_group_form
-
-    _, errors = parse_group_form({"name": "A", "price": "сто"})
-    assert "Цена за урок должна быть целым числом." in errors
-
-    _, errors = parse_group_form({"name": "A", "price": "-5"})
-    assert "Цена за урок не может быть отрицательной." in errors
-
-
-def test_parse_group_form_rejects_member_duplicates():
-    from app.group.services.group_form import parse_group_form
-
-    _, errors = parse_group_form(
-        {
-            "name": "A",
-            "members_form": "1",
-            "members": ["s1", "s2", "s1"],
-        }
-    )
-    assert "Один и тот же ученик не может состоять в группе дважды." in errors
-
-
-def test_parse_group_form_rejects_member_limit():
-    from app.group.services.group_form import parse_group_form
-
-    ids = [f"s{index}" for index in range(11)]
-    _, errors = parse_group_form({"name": "A", "members_form": "1", "members": ids})
-    assert "В группе может быть не более 10 участников." in errors
+    assert message in errors
 
 
 def test_parse_group_form_counts_limit_after_removals():

@@ -2,6 +2,8 @@
 
 import re
 
+import pytest
+
 from app.common.services.tutor_time import system_zone_name
 from app.database import SessionLocal
 from app.tutor.models.tutor import Tutor
@@ -38,26 +40,25 @@ def test_form_asks_only_name_email_password_and_confirm(client):
         assert optional not in field_names
 
 
-def test_password_confirmation_mismatch_rejected(client):
-    before = _count_tutors("maria@example.com")
-    response = client.post(
-        "/tutor/register",
-        data={**FULL_DATA, "password_confirm": "Другой-Пароль"},
-    )
-    assert response.status_code == 200
-    assert "Пароли не совпадают" in response.text
-    assert _count_tutors("maria@example.com") == before
+@pytest.mark.parametrize(
+    ("override", "message"),
+    [
+        ({"password_confirm": "Другой-Пароль"}, "Пароли не совпадают"),
+        ({"password_confirm": ""}, "Пароли не совпадают"),
+        ({"email": "не-email"}, "корректный email"),
+        ({"password": ""}, "Укажите пароль"),
+    ],
+    ids=["password-mismatch", "missing-confirmation", "invalid-email", "empty-password"],
+)
+def test_invalid_registration_is_rejected(client, override, message):
+    """Форма с невалидным полем возвращается с подписью ошибки и не создаёт запись."""
+    data = {**FULL_DATA, **override}
 
+    response = client.post("/tutor/register", data=data)
 
-def test_missing_confirmation_rejected(client):
-    before = _count_tutors("maria@example.com")
-    response = client.post(
-        "/tutor/register",
-        data={**FULL_DATA, "password_confirm": ""},
-    )
     assert response.status_code == 200
-    assert "Пароли не совпадают" in response.text
-    assert _count_tutors("maria@example.com") == before
+    assert message in response.text
+    assert _count_tutors(data["email"]) == 0
 
 
 def test_successful_registration_creates_tutor(client):
@@ -135,28 +136,6 @@ def test_uuid_ids_are_unique(client):
     assert len(ids) >= 2
     assert len(set(ids)) == len(ids)
     assert all(len(i) == 36 for i in ids)
-
-
-def test_invalid_email_rejected(client):
-    before = _count_tutors("bad@example.com")
-    response = client.post(
-        "/tutor/register",
-        data={**FULL_DATA, "email": "не-email"},
-    )
-    assert response.status_code == 200
-    assert "корректный email" in response.text
-    assert _count_tutors("bad@example.com") == before
-
-
-def test_empty_password_rejected(client):
-    before = _count_tutors("maria@example.com")
-    response = client.post(
-        "/tutor/register",
-        data={**FULL_DATA, "password": ""},
-    )
-    assert response.status_code == 200
-    assert "Укажите пароль" in response.text
-    assert _count_tutors("maria@example.com") == before
 
 
 def test_duplicate_email_rejected(client):

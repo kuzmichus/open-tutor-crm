@@ -22,6 +22,9 @@ TEMPLATE_DIRS = [
     _APP_DIR / "lesson" / "templates",  # модуль lesson
     _APP_DIR / "homework" / "templates",  # модуль homework
     _APP_DIR / "unavailability" / "templates",  # модуль unavailability
+    _APP_DIR / "slot" / "templates",  # модуль slot
+    _APP_DIR / "booking" / "templates",  # модуль booking
+    _APP_DIR / "finance" / "templates",  # модуль finance
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
@@ -58,3 +61,19 @@ from app.unavailability.services.presentation import (  # noqa: E402
 )
 
 register_unavailability_template_helpers()
+
+# Функции отображения модуля окон (подписи состояний «Свободно»/«Занято
+# уроком», причин пропуска пачки, интервал «10:00 – 10:40»).
+from app.slot.services.presentation import (  # noqa: E402
+    register_template_helpers as register_slot_template_helpers,
+)
+
+register_slot_template_helpers()
+
+# Функции отображения модуля финансов (деньги «1 200 ₽» и знак суммы,
+# подписи вида операции и статуса платежа, дата «22 окт. 2026, 01:31»).
+from app.finance.services.presentation import (  # noqa: E402
+    register_template_helpers as register_finance_template_helpers,
+)
+
+register_finance_template_helpers()

@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ student_full_name(card.student) }} — Open Tutor CRM{% endblock %}
 
+{% block head %}
+    {# Диалоги счёта ученика — второй слой модалок карточки; скрипт идёт до
+       alpine.min.js, как на странице списка учеников. #}
+    <script src="/static/payments.js" defer></script>
+{% endblock %}
+
 {% block body %}
     {% include "sidebar.html" %}
 
@@ -141,18 +147,15 @@
                 </div>
             </section>
 
-            {# Заглушка будущих модулей: без чисел и без ссылок на несуществующие
-               маршруты уроков и отчётов. #}
-            <section class="card mt-4">
-                <h2 class="card__title">Уроки и оплаты</h2>
-                <div class="student-metrics mt-4">
-                    <p class="student-metrics__text">
-                        Уроки, оплаты и задолженность появятся в следующих обновлениях.
-                    </p>
-                </div>
-            </section>
+            {# Сводка счёта вместо заглушки «Уроки и оплаты» (design D12):
+               настоящий баланс и последние операции, действие «Платежи»
+               открывает карточку на вкладке «Платежи». #}
+            {% include "finance/_card_summary.html" %}
 
             <div id="modal"></div>
+            {# Второй слой модалок (design D10): платёж, возврат и счёт
+               открываются поверх карточки, не затрагивая её полей. #}
+            <div id="modal-payment"></div>
         </div>
     </main>
 {% endblock %}

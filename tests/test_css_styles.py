@@ -75,6 +75,9 @@ TEMPLATE_SETS = [
         None,
     ),
     ("group", ROOT / "app" / "group" / "templates" / "group", None, None),
+    ("finance", ROOT / "app" / "finance" / "templates" / "finance", None, None),
+    ("slot", ROOT / "app" / "slot" / "templates" / "slot", None, None),
+    ("booking", ROOT / "app" / "booking" / "templates" / "booking", None, None),
     (
         "unavailability",
         ROOT / "app" / "unavailability" / "templates" / "unavailability",

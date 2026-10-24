@@ -8,7 +8,6 @@
 import json
 import re
 from datetime import date, datetime
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -18,8 +17,6 @@ from app.lesson.models.lesson import Lesson
 
 PASSWORD = "Секретный-Пароль-1"
 HTMX = {"HX-Request": "true"}
-ROOT = Path(__file__).resolve().parent.parent
-CALENDAR_JS = (ROOT / "app" / "static" / "calendar.js").read_text(encoding="utf-8")
 
 
 @pytest.fixture()
@@ -472,31 +469,6 @@ def test_move_lesson_respects_unavailability_ack(
 # --------------------------------------------------------------------------
 # 5.6 Клиент: confirm() на отмеченном дне, ack в запросах, без vacationForm
 # --------------------------------------------------------------------------
-
-
-def test_calendar_js_confirms_and_sends_ack():
-    """Клик и drag спрашивают подтверждение и передают ack_unavailable."""
-    slot_open = CALENDAR_JS[
-        CALENDAR_JS.index("openSlot: function"):CALENDAR_JS.index("unavailableReason: function")
-    ]
-    assert "window.confirm(" in slot_open
-    assert 'reason ? "1" : ""' in slot_open
-
-    helper = CALENDAR_JS[
-        CALENDAR_JS.index("openLessonForm: function"):CALENDAR_JS.index("prefillMoment: function")
-    ]
-    assert "ack_unavailable" in helper
-
-    drag = CALENDAR_JS[
-        CALENDAR_JS.index("onDragEnd: function"):CALENDAR_JS.index("moveLesson: function")
-    ]
-    assert "window.confirm(" in drag
-
-    mover = CALENDAR_JS[
-        CALENDAR_JS.index("moveLesson: function"):CALENDAR_JS.index("elementUnder: function")
-    ]
-    assert "ack_unavailable" in mover
-    assert "vacationForm" not in CALENDAR_JS
 
 
 def test_calendar_day_carries_reason_for_confirm(

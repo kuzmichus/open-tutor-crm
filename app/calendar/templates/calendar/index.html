@@ -10,6 +10,12 @@
        что на странице Уроков: календарь открывает её в `#modal`
        (design.md D6). Идёт после calendar.js и до alpine.min.js. #}
     <script src="/static/lessons.js" defer></script>
+    {# Диалог окна (Alpine.data `slotDialog`, переключение «Одно окно» /
+       «Несколько дней»): приходит свопом из `/tutor/slots/new` и
+       `/tutor/slots/{id}` в `#modal`. Подключается здесь же, до
+       alpine.min.js — подписка на `alpine:init` должна сработать раньше
+       обхода DOM. #}
+    <script src="/static/slots.js" defer></script>
 {% endblock %}
 
 {% block body %}
@@ -40,13 +46,17 @@
                    с видимой неделей в calendar.js при листании. #}
                 {# `data-now` — локальный момент педагога с сервера: `calendar.js` берёт
                    «сегодня» и предзаполнение нового урока отсюда, а не от часов
-                   устройства (design.md D7, задача 7.4). #}
+                   устройства (design.md D7, задача 7.4). `data-public-url` —
+                   база публичной ссылки (`/s/<tutor_id>`): понедельник
+                   дописывает `calendar.js` из видимой сетки, поэтому
+                   листание недель не оставляет в ссылке прошлую (design D7). #}
                 <div id="calendar-swap" x-data="calendarGrid"
                      data-now="{{ now_iso }}"
                      data-lesson-new="/tutor/lessons/new"
+                     data-public-url="{{ public_prefix }}/{{ tutor_id }}"
                      data-color-mode="{{ color_mode }}"
                      hx-get="/tutor/calendar?start={{ current_start }}&color={{ color_mode }}"
-                     hx-trigger="lesson-saved from:body, unavailability-saved from:body"
+                     hx-trigger="lesson-saved from:body, unavailability-saved from:body, slot-saved from:body"
                      hx-target="#calendar-swap"
                      hx-swap="innerHTML">
                     {% include "calendar/_area.html" %}

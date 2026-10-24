@@ -64,27 +64,22 @@ def test_get_owned_unavailability_returns_own_mark(tutor_factory, unavailability
         assert mark.id == mark_id
 
 
-def test_get_owned_unavailability_hides_foreign_mark(
-    tutor_factory, unavailability_factory
+@pytest.mark.parametrize(
+    "mark_exists", [True, False], ids=["foreign-mark", "missing-mark"]
+)
+def test_get_owned_unavailability_hides_foreign_and_missing(
+    mark_exists, tutor_factory, unavailability_factory
 ):
-    """Чужая отметка отвечает 404, а не 403: существование не раскрывается."""
+    """Чужая и несуществующая отметка неразличимы — обе 404, а не 403."""
     owner_id = tutor_factory()
     stranger_id = tutor_factory()
-    mark_id = unavailability_factory(tutor_id=owner_id)
+    mark_id = (
+        unavailability_factory(tutor_id=owner_id) if mark_exists else "no-such-mark"
+    )
 
     with SessionLocal() as db:
         with pytest.raises(HTTPException) as error:
             get_owned_unavailability(db, mark_id, stranger_id)
-    assert error.value.status_code == 404
-
-
-def test_get_owned_unavailability_404_for_missing(tutor_factory):
-    """Несуществующая отметка — 404."""
-    tutor_id = tutor_factory()
-
-    with SessionLocal() as db:
-        with pytest.raises(HTTPException) as error:
-            get_owned_unavailability(db, "no-such-mark", tutor_id)
     assert error.value.status_code == 404
 
 

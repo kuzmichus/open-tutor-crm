@@ -5,11 +5,9 @@
 первого не должна сохраниться.
 """
 
-from contextlib import contextmanager
 from datetime import date, datetime
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.unavailability.models.unavailability import (
@@ -21,22 +19,6 @@ from app.unavailability.models.unavailability import (
     TutorUnavailability,
 )
 
-
-@contextmanager
-def _expect_integrity_error():
-    """Контекст: `session.commit()` обязан упасть с IntegrityError.
-
-    Используется для проверок CHECK-ограничений: запись с недопустимым
-    значением не должна сохраниться (паттерн `test_lesson_models.py`).
-    """
-    with SessionLocal() as session:
-        yield session
-        try:
-            session.commit()
-        except IntegrityError:
-            session.rollback()
-            return
-    raise AssertionError("ожидался IntegrityError, но запись сохранилась")
 
 
 def _period(tutor_id: str, **overrides) -> TutorUnavailability:
@@ -155,11 +137,11 @@ def test_mark_is_saved_with_uuid_and_timestamps(tutor_factory, build, expected):
         "weekday-with-period-dates",
     ],
 )
-def test_check_constraints_reject_invalid_rows(tutor_factory, build, overrides):
+def test_check_constraints_reject_invalid_rows(tutor_factory, build, overrides, expect_integrity_error):
     """Недопустимая комбинация полей не сохраняется: CHECK'и режимов в БД."""
     tutor_id = tutor_factory()
 
-    with _expect_integrity_error() as session:
+    with expect_integrity_error() as session:
         session.add(build(tutor_id, **overrides))
 
 

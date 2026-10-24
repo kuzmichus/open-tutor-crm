@@ -153,6 +153,21 @@ def parse_starts_at(raw: str | None, tutor) -> datetime | None:
     return to_utc(parsed, tutor)
 
 
+def parse_duration_min(raw: str | None) -> int | None:
+    """Значение `?duration_min=` из окна для записи: минуты из закрытого списка.
+
+    Запись из окна создаёт урок той же длительности (спека calendar,
+    «Запись ученика из свободного окна»), поэтому префилл обязан попасть
+    в `LESSON_DURATIONS` — иначе форма открылась бы с невыделенным
+    селектом, а урок сохранился бы с чужим значением. Всё, что вне
+    списка, игнорируется: префилл — удобство, а не источник истины.
+    """
+    value = _int_or_none((raw or "").strip())
+    if value is None or value not in LESSON_DURATIONS:
+        return None
+    return value
+
+
 def parse_lesson_form(form, tutor) -> tuple[dict, list[str]]:
     """Данные формы урока и ошибки разбора полей.
 

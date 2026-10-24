@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from app.database import SessionLocal
 from app.student.models.contact import Contact
 from app.student.models.student import Student
@@ -34,8 +36,15 @@ from app.student.services.students import (
 # --------------------------------------------------------------------------
 
 
+def _student_data(**overrides) -> dict:
+    """Минимальная валидная форма ученика: имя и вид, дальше — по вкусу теста."""
+    values = {"first_name": "Маша", "kind": "child"}
+    values.update(overrides)
+    return values
+
+
 def test_minimal_form_is_valid():
-    data, errors = parse_student_form({"first_name": "Маша", "kind": "child"})
+    data, errors = parse_student_form(_student_data())
     assert errors == []
     assert data["first_name"] == "Маша"
     assert data["kind"] == "child"
@@ -44,12 +53,12 @@ def test_minimal_form_is_valid():
 
 
 def test_empty_name_is_rejected():
-    _data, errors = parse_student_form({"first_name": "  ", "kind": "child"})
+    _data, errors = parse_student_form(_student_data(first_name="  "))
     assert "Укажите имя ученика." in errors
 
 
 def test_kind_outside_two_values_is_rejected():
-    _data, errors = parse_student_form({"first_name": "Маша", "kind": "teen"})
+    _data, errors = parse_student_form(_student_data(kind="teen"))
     assert "Выберите, кто ученик: ребёнок или взрослый." in errors
 
 
@@ -60,38 +69,32 @@ def test_kind_defaults_to_child():
 
 
 def test_valid_grade_is_parsed_as_int():
-    data, errors = parse_student_form(
-        {"first_name": "Маша", "kind": "child", "grade": "5"}
-    )
+    data, errors = parse_student_form(_student_data(grade="5"))
     assert errors == []
     assert data["grade"] == 5
 
 
 def test_grade_zero_and_twelve_are_rejected():
     for raw in ("0", "12"):
-        data, errors = parse_student_form(
-            {"first_name": "Маша", "kind": "child", "grade": raw}
-        )
+        data, errors = parse_student_form(_student_data(grade=raw))
         assert "Класс должен быть числом от 1 до 11." in errors
         assert data["grade"] is None
 
 
 def test_non_numeric_grade_is_rejected():
-    _data, errors = parse_student_form(
-        {"first_name": "Маша", "kind": "child", "grade": "пятый"}
-    )
+    _data, errors = parse_student_form(_student_data(grade="пятый"))
     assert "Класс должен быть числом от 1 до 11." in errors
 
 
 def test_adult_does_not_keep_grade_and_school():
     """Для взрослого класс и школа не сохраняются, даже если пришли."""
     data, errors = parse_student_form(
-        {
-            "first_name": "Ольга",
-            "kind": "adult",
-            "grade": "5",
-            "school": "Гимназия №1",
-        }
+        _student_data(
+            first_name="Ольга",
+            kind="adult",
+            grade="5",
+            school="Гимназия №1",
+        )
     )
     assert errors == []
     assert data["grade"] is None
@@ -100,12 +103,7 @@ def test_adult_does_not_keep_grade_and_school():
 
 def test_child_keeps_grade_and_school():
     data, errors = parse_student_form(
-        {
-            "first_name": "Маша",
-            "kind": "child",
-            "grade": "5",
-            "school": "Гимназия №1",
-        }
+        _student_data(grade="5", school="Гимназия №1")
     )
     assert errors == []
     assert data["grade"] == 5
@@ -113,20 +111,13 @@ def test_child_keeps_grade_and_school():
 
 
 def test_invalid_email_is_rejected():
-    _data, errors = parse_student_form(
-        {"first_name": "Маша", "kind": "child", "email": "не-почта"}
-    )
+    _data, errors = parse_student_form(_student_data(email="не-почта"))
     assert "Укажите корректный email." in errors
 
 
 def test_reminders_are_parsed_independently():
     data, errors = parse_student_form(
-        {
-            "first_name": "Маша",
-            "kind": "child",
-            "remind_lesson": "on",
-            "remind_cancel": "on",
-        }
+        _student_data(remind_lesson="on", remind_cancel="on")
     )
     assert errors == []
     assert data["remind_lesson"] is True
@@ -336,33 +327,42 @@ def test_email_normalization_ignores_case():
 # Формат телефона
 # --------------------------------------------------------------------------
 
-def test_phone_is_formatted_to_single_style():
-    assert format_phone("+7 555 555-55-55") == "+7 555 555-55-55"
-    assert format_phone("8 555 555 55 55") == "+7 555 555-55-55"
-    assert format_phone("+7 (555) 555-55-55") == "+7 555 555-55-55"
-    assert format_phone("+79161234567") == "+7 916 123-45-67"
-
-def test_phone_formatting_keeps_empty_value_empty():
-    assert format_phone("") == ""
-    assert format_phone("   ") == ""
-    assert format_phone(None) == ""
-
-def test_phone_formatting_does_not_touch_foreign_numbers():
-    """Чужой код страны не подгоняется под российский шаблон."""
-    assert format_phone("+1 555 123 45 67") == "+1 555 123 45 67"
-    assert format_phone("+44 20 7946 0958") == "+44 20 7946 0958"
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("+7 555 555-55-55", "+7 555 555-55-55"),
+        ("8 555 555 55 55", "+7 555 555-55-55"),
+        ("+7 (555) 555-55-55", "+7 555 555-55-55"),
+        ("+79161234567", "+7 916 123-45-67"),
+        ("", ""),
+        ("   ", ""),
+        (None, ""),
+        ("+1 555 123 45 67", "+1 555 123 45 67"),
+        ("+44 20 7946 0958", "+44 20 7946 0958"),
+        ("+7 916 123-45-67 доб. 12", "+7 916 123-45-67 доб. 12"),
+        ("позвонить после 18", "позвонить после 18"),
+    ],
+    ids=[
+        "already-formatted",
+        "eight-prefix",
+        "parentheses",
+        "compact",
+        "empty",
+        "spaces-only",
+        "none",
+        "usa",
+        "uk",
+        "extension",
+        "letters",
+    ],
+)
+def test_format_phone(raw, expected):
+    """Телефон приводится к одному виду; пустое, чужое и текстовое — без порчи."""
+    assert format_phone(raw) == expected
 
 def test_phone_formatting_is_idempotent():
     once = format_phone("8(916)123-45-67")
     assert format_phone(once) == once
-
-def test_phone_with_extension_is_not_mangled():
-    """Посторонний текст в поле телефона не должен теряться."""
-    value = "+7 916 123-45-67 доб. 12"
-    assert format_phone(value) == value
-
-def test_phone_with_letters_is_not_mangled():
-    assert format_phone("позвонить после 18") == "позвонить после 18"
 
 def test_form_stores_phone_in_single_format():
     data, errors = parse_student_form(

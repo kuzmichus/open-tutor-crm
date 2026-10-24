@@ -96,10 +96,18 @@
                      data-tab-panel="payments"
                      role="tabpanel" aria-labelledby="group-tab-payments"
                      x-show="tab === 'payments'" x-cloak>
-                    <div class="tab-panel__empty">
-                        <i data-lucide="wallet"></i>
-                        <p>Оплаты группы появятся позже.</p>
-                    </div>
+                    {# Панель — не форма и приходит своим GET-маршрутом:
+                       слот грузит её при открытии модалки, чипы периода
+                       внутри панели перезапрашивают тот же адрес. Ответ
+                       подменяет слот целиком (outerHTML), поэтому форма
+                       модалки не участвует в запросах панели.
+                       hx-target="this" обязателен: hx-target наследуется,
+                       и без него слот унаследовал бы `#modal` у формы —
+                       ответ панели заменил бы собой всю модалку. #}
+                    <div hx-get="/tutor/groups/{{ group.id }}/payments"
+                         hx-trigger="load"
+                         hx-target="this"
+                         hx-swap="outerHTML"></div>
                 </div>
 
                 {% include "group/_settings_panel.html" %}

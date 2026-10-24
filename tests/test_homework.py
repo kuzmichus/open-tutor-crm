@@ -1,13 +1,11 @@
 """Тесты модуля homework: модель, форма, сохранение, панель и изоляция."""
 
 import re
-from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.homework.models.homework import (
@@ -27,22 +25,6 @@ HTMX = {"HX-Request": "true"}
 # UTC — тесты не зависят от системной зоны машины (спека tutor-timezone).
 UTC_TUTOR = SimpleNamespace(timezone="UTC")
 
-
-@contextmanager
-def _expect_integrity_error():
-    """Контекст: `session.commit()` обязан упасть с IntegrityError.
-
-    Используется для проверок CHECK-ограничений: запись с недопустимым
-    значением не должна сохраниться.
-    """
-    with SessionLocal() as session:
-        yield session
-        try:
-            session.commit()
-        except IntegrityError:
-            session.rollback()
-            return
-    raise AssertionError("ожидался IntegrityError, но запись сохранилась")
 
 
 @pytest.fixture()
@@ -133,9 +115,9 @@ def test_homework_statuses_match_labels():
     assert HOMEWORK_STATUS_LABELS["not_assigned"] == "Не задано"
 
 
-def test_homework_status_out_of_list_fails_check(lesson_id):
+def test_homework_status_out_of_list_fails_check(lesson_id, expect_integrity_error):
     """Статус вне закрытого списка отклоняется CHECK-ограничением."""
-    with _expect_integrity_error() as db:
+    with expect_integrity_error() as db:
         db.add(
             Homework(
                 lesson_id=lesson_id,
@@ -145,13 +127,13 @@ def test_homework_status_out_of_list_fails_check(lesson_id):
         )
 
 
-def test_homework_lesson_id_is_unique(lesson_id):
+def test_homework_lesson_id_is_unique(lesson_id, expect_integrity_error):
     """Вторая запись ДЗ на тот же урок невозможна (UNIQUE на lesson_id)."""
     with SessionLocal() as db:
         db.add(Homework(lesson_id=lesson_id, assignment="Первое ДЗ"))
         db.commit()
 
-    with _expect_integrity_error() as db:
+    with expect_integrity_error() as db:
         db.add(Homework(lesson_id=lesson_id, assignment="Второе ДЗ"))
 
 

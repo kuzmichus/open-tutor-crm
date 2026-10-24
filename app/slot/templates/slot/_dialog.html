@@ -1,0 +1,493 @@
+{# Диалог окна для записи (спека slot-management, «Окно создаётся из диалога
+   в двух режимах»; спека calendar, «Диалог окна в календаре»).
+
+   Один шаблон на три случая:
+   - создание (`slot is None`): два режима — «Одно окно» / «Несколько дней»;
+   - правка (`slot`): режим «Одно окно» с сохранёнными значениями и
+     действиями «Сохранить», «Удалить», «Записать ученика»;
+   - отчёт пачки (`slot_preview`): блок предпросмотра/результата.
+
+   Две независимые формы — вложенные <form> в HTML запрещены: панель
+   режима переключается Alpine (`slotDialog` в slots.js), а `template x-if`
+   убирает поля другого режима из DOM, поэтому в запрос уходят только поля
+   выбранного режима (тот же приём, что у панели недоступности).
+
+   Предпросмотр пачки — отдельный GET на `hx-trigger="change, input changed
+   delay:400ms"`: число окон зависит от уроков и отметок в БД, поэтому
+   считается сервером (design.md D6), а не в браузере.
+
+   Контекст: slot, slot_mode, slot_errors, slot_single (date, time,
+   duration_min, is_public), slot_batch (date_from, date_to, weekdays,
+   day_start, day_end, duration_min, gap_min, is_public), slot_durations,
+   slot_weekdays, slot_max_gap, slot_state, slot_booking, slot_can_delete,
+   slot_can_book, slot_preview. #}
+{# Отчёт пачки приходит тем же ответом, что и `slot-saved`: если бы диалог
+   закрывался по этому событию, пользователь не увидел бы, сколько окон
+   создано и что пропущено (спека slot-management, «Отчёт о пропущенных
+   окнах»). Поэтому после создания пачки подписка на закрытие не ставится —
+   диалог остаётся с отчётом, а неделя за ним уже перерисована. #}
+{% set slot_result = slot_preview and slot_preview.result %}
+<div class="modal-root slot-dialog"
+     id="slot-dialog"
+     x-data="slotDialog('{{ slot_mode }}')"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     {% if not slot_result %}@slot-saved.window="close()"{% endif %}>
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true"
+         aria-labelledby="slot-dialog-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="slot-dialog-title">
+                    {% if slot %}Окно для записи{% else %}Новые окна для записи{% endif %}
+                </h2>
+                <p class="modal-subtitle">
+                    {% if slot %}
+                    {{ slot_day_label }} · {{ slot_state_label(slot_state) }}
+                    {% else %}
+                    Публичное окно ученик увидит по вашей ссылке на запись.
+                    {% endif %}
+                </p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        {% if slot_errors %}
+        <div class="modal-body slot-dialog__errors">
+            <div class="error" role="alert">
+                <ul>
+                    {% for message in slot_errors %}
+                    <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── Правка существующего окна: только «Одно окно» ────────────── #}
+        {% if slot %}
+        {# Форма окна — отдельный элемент внутри `.modal-body`, а панель
+           брони и футер — её соседи, не потомки.
+
+           Вложенные <form> в HTML запрещены: браузер выбрасывает внутренний
+           тег, и кнопка «Подтвердить» отправляла внешнюю форму окна (POST
+           на /tutor/slots/<id> вместо /tutor/bookings/<id>/confirm —
+           проверено в браузере). Поэтому поля окна живут в своей форме,
+           у брони свои, а кнопка «Сохранить» стоит в футере и связана с
+           формой окна атрибутом `form` — нативный submit попадает в htmx
+           через событие `submit` самой формы. #}
+        <div class="modal-body">
+            <form class="slot-form" id="slot-form"
+                  hx-post="/tutor/slots/{{ slot.id }}"
+                  hx-target="#slot-dialog"
+                  hx-swap="outerHTML">
+                <fieldset class="form-section">
+                    <legend class="form-section__title">Окно</legend>
+
+                    <div class="field">
+                        <label class="label" for="slot-date">Дата *</label>
+                        <input class="input" id="slot-date" type="date"
+                               name="date" required
+                               value="{{ slot_single.date }}">
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="slot-time">Начало *</label>
+                        <input class="input" id="slot-time" type="time"
+                               name="time" step="300" required
+                               value="{{ slot_single.time }}">
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="slot-duration">Длительность</label>
+                        <select class="input" id="slot-duration" name="duration_min">
+                            {% for minutes in slot_durations %}
+                            <option value="{{ minutes }}"
+                                    {% if slot_single.duration_min == minutes %}selected{% endif %}>
+                                {{ minutes }} мин
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field field--full">
+                        <label class="checkbox">
+                            <input type="checkbox" name="is_public"
+                                   {% if slot_single.is_public %}checked{% endif %}>
+                            <span>Публичный слот</span>
+                        </label>
+                        <p class="form-hint">
+                            Публичное окно видно ученику по ссылке на запись.
+                        </p>
+                    </div>
+                </fieldset>
+            </form>
+
+            {% if slot_booking %}
+            {# Ожидающая или подтверждённая бронь: действия педагога.
+               Подтверждение, отклонение и отмена живут здесь же —
+               отдельной страницы «Брони» пока нет (design.md Risks).
+
+               Формы брони — соседи формы окна, а не её потомки: вложенные
+               <form> в HTML запрещены, браузер выбрасывает внутренний тег,
+               и «Подтвердить» отправляла внешнюю форму окна (POST на
+               /tutor/slots/<id> вместо /tutor/bookings/<id>/confirm —
+               проверено в браузере). #}
+            <section class="slot-booking" aria-labelledby="slot-booking-title">
+                <h3 class="slot-booking__title" id="slot-booking-title">
+                    Заявка на это окно
+                </h3>
+                <p class="slot-booking__person">{{ slot_booking.name }}</p>
+                <p class="slot-booking__contact">{{ slot_booking.contact }}</p>
+                <p class="slot-booking__status">
+                    {{ slot_state_label(slot_state) }}
+                </p>
+
+                {% if slot_booking_pending %}
+                {# Две отдельные формы, а не две кнопки в одной: `formaction`
+                   меняет адрес только при обычной отправке, а htmx шлёт
+                   запрос по своему `hx-post`. Две формы работают и с JS,
+                   и без него. #}
+                <form class="slot-booking__form"
+                      hx-post="/tutor/bookings/{{ slot_booking.id }}/confirm"
+                      hx-target="#slot-dialog"
+                      hx-swap="outerHTML">
+                    {% if slot_needs_student_choice %}
+                    {# Несколько совпадений: выбор обязателен (design D9),
+                       автоматически не подставляется ни один. #}
+                    <div class="field field--full">
+                        <label class="label" for="slot-booking-student">
+                            Ученик
+                        </label>
+                        <select class="input" id="slot-booking-student"
+                                name="student_id" required>
+                            <option value="">Выберите ученика</option>
+                            {% for candidate in slot_booking_candidates %}
+                            <option value="{{ candidate.id }}">
+                                {{ candidate.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="form-hint">
+                            Найдено несколько учеников с таким именем и
+                            контактом — выберите нужного.
+                        </p>
+                    </div>
+                    {% else %}
+                    <div class="field field--full">
+                        <label class="label" for="slot-booking-kind">
+                            Новый ученик
+                        </label>
+                        <select class="input" id="slot-booking-kind" name="kind">
+                            {% for value, label in slot_student_kinds %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="form-hint">
+                            Нужно, только если такого ученика у вас ещё нет.
+                        </p>
+                    </div>
+                    {% endif %}
+                    <div class="slot-booking__actions">
+                        <button class="btn btn--primary" type="submit">
+                            Подтвердить
+                        </button>
+                    </div>
+                </form>
+
+                <form class="slot-booking__form"
+                      hx-post="/tutor/bookings/{{ slot_booking.id }}/reject"
+                      hx-target="#slot-dialog"
+                      hx-swap="outerHTML">
+                    <div class="slot-booking__actions">
+                        <button class="btn btn--destructive" type="submit">
+                            Отклонить
+                        </button>
+                    </div>
+                </form>
+                {% elif slot_booking_confirmed %}
+                {# Отмена не удаляет урок и ученика (design D10): окно
+                   останется «Занято уроком», пока урок не удалён. #}
+                <form class="slot-booking__form"
+                      hx-post="/tutor/bookings/{{ slot_booking.id }}/cancel"
+                      hx-target="#slot-dialog"
+                      hx-swap="outerHTML">
+                    <div class="slot-booking__actions">
+                        <button class="btn btn--destructive" type="submit">
+                            Отменить бронь
+                        </button>
+                    </div>
+                    <p class="form-hint">
+                        Урок и ученик останутся: отмена брони их не удаляет.
+                    </p>
+                </form>
+                {% endif %}
+            </section>
+            {% endif %}
+        </div>
+
+        <div class="modal-actions">
+            {% if slot_can_delete %}
+            {# Двухшаговое подтверждение (паттерн _manage.html). #}
+            <button class="btn btn--destructive" type="button"
+                    x-show="!confirmingDelete"
+                    @click="confirmingDelete = true">
+                Удалить
+            </button>
+            <button class="btn btn--destructive" type="button"
+                    hx-post="/tutor/slots/{{ slot.id }}/delete"
+                    hx-target="#slot-dialog"
+                    hx-swap="outerHTML"
+                    x-show="confirmingDelete" x-cloak>
+                Точно удалить?
+            </button>
+            {% endif %}
+            {% if slot_can_book %}
+            {# «Записать ученика»: префилл формы урока датой, временем и
+               длительностью окна (спека calendar, «Запись ученика из
+               свободного окна»). #}
+            <button class="btn btn--outline" type="button"
+                    data-slot-book
+                    hx-get="/tutor/lessons/new?starts_at={{ slot_local_date }}T{{ slot_local_time_value }}&duration_min={{ slot.duration_min }}"
+                    hx-target="#modal"
+                    hx-swap="innerHTML">
+                Записать ученика
+            </button>
+            {% endif %}
+            <button class="btn btn--ghost" type="button" @click="close()">
+                Закрыть
+            </button>
+            {# `form` связывает кнопку с формой полей окна: она лежит в футере,
+               вне формы, но submit всё равно её — htmx ловит событие
+               `submit` на самой форме. #}
+            <button class="btn btn--primary" type="submit" form="slot-form">
+                Сохранить
+            </button>
+        </div>
+
+        {# ── Создание: два режима ─────────────────────────────────────── #}
+        {% else %}
+        <div class="modal-body">
+            <div class="slot-modes" role="radiogroup" aria-label="Режим создания окон">
+                <label class="slot-modes__option">
+                    <input type="radio" name="slot-mode" value="single"
+                           x-model="mode">
+                    <span>Одно окно</span>
+                </label>
+                <label class="slot-modes__option">
+                    <input type="radio" name="slot-mode" value="batch"
+                           x-model="mode">
+                    <span>Несколько дней</span>
+                </label>
+            </div>
+
+            {# Режим «Одно окно»: дата, начало, длительность, публичность.
+
+               `x-init` обязателен: `template x-if` вставляет форму уже после
+               того, как htmx обработал пришедший свопом диалог, поэтому без
+               явного `htmx.process` атрибуты `hx-*` остаются мёртвыми —
+               форма уходит нативным submit'ом (браузер проверено: пачка
+               вместо создания делала GET календаря с полями в query).
+               Повторный `process` безопасен: htmx сравнивает хеш атрибутов
+               и уже инициализированный узел не трогает. #}
+            <template x-if="mode === 'single'">
+                <form class="modal-form"
+                      x-init="window.htmx && window.htmx.process($el)"
+                      hx-post="/tutor/slots"
+                      hx-target="#slot-dialog"
+                      hx-swap="outerHTML">
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Одно окно</legend>
+
+                        <div class="field">
+                            <label class="label" for="slot-new-date">Дата *</label>
+                            <input class="input" id="slot-new-date" type="date"
+                                   name="date" required
+                                   value="{{ slot_single.date }}">
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="slot-new-time">Начало *</label>
+                            <input class="input" id="slot-new-time" type="time"
+                                   name="time" step="300" required
+                                   value="{{ slot_single.time }}">
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="slot-new-duration">Длительность</label>
+                            <select class="input" id="slot-new-duration" name="duration_min">
+                                {% for minutes in slot_durations %}
+                                <option value="{{ minutes }}"
+                                        {% if slot_single.duration_min == minutes %}selected{% endif %}>
+                                    {{ minutes }} мин
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="field field--full">
+                            <label class="checkbox">
+                                <input type="checkbox" name="is_public"
+                                       {% if slot_single.is_public %}checked{% endif %}>
+                                <span>Публичный слот</span>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <div class="modal-actions">
+                        <button class="btn btn--ghost" type="button" @click="close()">
+                            Закрыть
+                        </button>
+                        <button class="btn btn--primary" type="submit">Создать</button>
+                    </div>
+                </form>
+            </template>
+
+            {# Режим «Несколько дней»: период, дни недели, интервал, перерыв.
+
+               `x-init` — по той же причине, что у режима «Одно окно»:
+               `htmx.process` инициализирует саму форму и всё её поддерево,
+               включая блок предпросмотра с `hx-trigger="load"`, поэтому
+               предпросмотр считается сразу при переключении режима. #}
+            <template x-if="mode === 'batch'">
+                <form class="modal-form"
+                      x-init="window.htmx && window.htmx.process($el)"
+                      hx-post="/tutor/slots/batch"
+                      hx-target="#slot-dialog"
+                      hx-swap="outerHTML"
+                      hx-trigger="submit">
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Период</legend>
+
+                        <div class="field">
+                            <label class="label" for="slot-date-from">Первый день *</label>
+                            <input class="input" id="slot-date-from" type="date"
+                                   name="date_from" required
+                                   value="{{ slot_batch.date_from }}"
+                                   hx-get="/tutor/slots/plan"
+                                   hx-target="#slot-preview"
+                                   hx-swap="innerHTML"
+                                   hx-trigger="change, input changed delay:400ms">
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="slot-date-to">Последний день *</label>
+                            <input class="input" id="slot-date-to" type="date"
+                                   name="date_to" required
+                                   value="{{ slot_batch.date_to }}"
+                                   hx-get="/tutor/slots/plan"
+                                   hx-target="#slot-preview"
+                                   hx-swap="innerHTML"
+                                   hx-trigger="change, input changed delay:400ms">
+                        </div>
+
+                        <div class="field field--full">
+                            <span class="label" id="slot-weekdays-label">Дни недели *</span>
+                            <div class="slot-weekdays" role="group"
+                                 aria-labelledby="slot-weekdays-label">
+                                {% for index, label in slot_weekdays %}
+                                <label class="slot-weekdays__option">
+                                    <input type="checkbox" name="weekdays"
+                                           value="{{ index }}"
+                                           {% if index in slot_batch.weekdays %}checked{% endif %}
+                                           hx-get="/tutor/slots/plan"
+                                           hx-target="#slot-preview"
+                                           hx-swap="innerHTML"
+                                           hx-include="closest form">
+                                    <span>{{ label }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section">
+                        <legend class="form-section__title">Интервал дня</legend>
+
+                        <div class="field">
+                            <label class="label" for="slot-day-start">Окна с</label>
+                            <input class="input" id="slot-day-start" type="time"
+                                   name="day_start" step="300"
+                                   value="{{ slot_batch.day_start }}">
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="slot-day-end">До</label>
+                            <input class="input" id="slot-day-end" type="time"
+                                   name="day_end" step="300"
+                                   value="{{ slot_batch.day_end }}">
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="slot-batch-duration">Длительность</label>
+                            <select class="input" id="slot-batch-duration" name="duration_min">
+                                {% for minutes in slot_durations %}
+                                <option value="{{ minutes }}"
+                                        {% if slot_batch.duration_min == minutes %}selected{% endif %}>
+                                    {{ minutes }} мин
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label class="label" for="slot-gap">Перерыв, мин</label>
+                            <input class="input" id="slot-gap" type="number"
+                                   name="gap_min" min="0" max="{{ slot_max_gap }}"
+                                   step="5" value="{{ slot_batch.gap_min }}">
+                        </div>
+
+                        <div class="field field--full">
+                            <label class="checkbox">
+                                <input type="checkbox" name="is_public"
+                                       {% if slot_batch.is_public %}checked{% endif %}>
+                                <span>Публичные слоты</span>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    {# Предпросмотр: считается сервером тем же расчётом, что и
+                       создание (design.md D6). Поля формы уходят целиком —
+                       `hx-include="closest form"` на чекбоксах дней недели
+                       уже это делает, а change/input слушают остальные.
+
+                       После создания блок статичен: `hx-trigger="load"`
+                       перезапросил бы предпросмотр и затёр отчёт о том, что
+                       реально создано и пропущено. #}
+                    <section class="slot-preview-box" aria-live="polite">
+                        <h3 class="slot-preview-box__title">
+                            {% if slot_result %}Отчёт{% else %}Предпросмотр{% endif %}
+                        </h3>
+                        {% if slot_result %}
+                        <div id="slot-preview">
+                            {% include "slot/_batch_preview.html" %}
+                        </div>
+                        {% else %}
+                        <div id="slot-preview"
+                             hx-get="/tutor/slots/plan"
+                             hx-trigger="load, change from:closest form, input changed delay:400ms from:closest form"
+                             hx-target="#slot-preview"
+                             hx-swap="innerHTML"
+                             hx-include="closest form">
+                            {% include "slot/_batch_preview.html" %}
+                        </div>
+                        {% endif %}
+                    </section>
+
+                    <div class="modal-actions">
+                        <button class="btn btn--ghost" type="button" @click="close()">
+                            Закрыть
+                        </button>
+                        <button class="btn btn--primary" type="submit">Создать окна</button>
+                    </div>
+                </form>
+            </template>
+        </div>
+        {% endif %}
+    </div>
+</div>

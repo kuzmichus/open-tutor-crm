@@ -15,10 +15,19 @@ from app.calendar.services.color_mode import (
 )
 from app.calendar.services.schedule_day import ScheduleDay
 from app.calendar.services.schedule_event import ScheduleEvent
+from app.slot.services.presentation import is_muted as slot_is_muted
+from app.slot.services.presentation import state_label as slot_state_label
+from app.slot.services.public_link import PUBLIC_PREFIX
 
 # Границы таймлайна: часовые интервалы 6:00–23:00 (спека «Сетка времени»).
 GRID_START_HOUR = 6
 GRID_END_HOUR = 23
+
+# Акцент карточки окна: собственный токен дизайн-системы, а не цвет цели.
+# Окно — не ученик и не группа, поэтому палитра целей к нему не применима
+# (спека calendar, «Карточка окна визуально отличается от урока»). Ссылка
+# на переменную, а не литерал: тема задаёт значение сама.
+SLOT_ACCENT = "var(--cal-slot-accent)"
 # Часовые строки таймлайна: 6:00 … 22:00, плюс подписи 6:30 … 22:30.
 HOURS = tuple(range(GRID_START_HOUR, GRID_END_HOUR))
 
@@ -98,28 +107,54 @@ def build_event_view(
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
 ) -> dict:
-    """Словарь одного блока события для шаблона.
+    """Словарь одного блока события для шаблона — урока или окна.
 
-    `column`/`columns` — наложение пересекающихся уроков: каждый получает
+    `column`/`columns` — наложение пересекающихся событий: каждый получает
     свою долю ширины (спека «Пересекающиеся занятия накладываются»).
-    `color_mode` — активный режим раскраски (design.md D5): акцент считается
-    тем же правилом, что и точки в шапке дня.
+    `color_mode` — активный режим раскраски (design.md D5): акцент урока
+    считается тем же правилом, что и точки в шапке дня.
+
+    Поля урока и окна различаются (design D5): у окна нет цели, цены и
+    статуса урока, зато есть `slot_id`, `slot_state` и подпись состояния.
+    Общий словарь с пустыми значениями чужой ветки — чтобы шаблон не падал
+    на `undefined` и мог читать любое поле без `is defined`.
     """
     start_minutes = event.start.hour * 60 + event.start.minute
     end_minutes = event.end.hour * 60 + event.end.minute
     top_h = max(0, start_minutes - GRID_START_HOUR * 60) / 60
     height_h = max(15, end_minutes - start_minutes) / 60
+
+    view = {
+        "top_h": _num(top_h),
+        "height_h": _num(height_h),
+        "left_pct": f"{_num((column - 1) * 100 / columns)}%",
+        "width_pct": f"{_num(100 / columns)}%",
+        "time_label": format_time_range(event.start, event.end),
+        # Данные для клиентского drag (спека «Перетаскивание занятия»):
+        # дата колонки, начало и длительность в минутах.
+        "date": event.day.isoformat(),
+        "start_min": start_minutes,
+        "duration_min": max(15, end_minutes - start_minutes),
+        "kind": event.kind,
+        "is_slot": event.is_slot,
+    }
+    if event.is_slot:
+        view.update(_slot_fields(event))
+    else:
+        view.update(_lesson_fields(event, now=now, color_mode=color_mode))
+    return view
+
+
+def _lesson_fields(
+    event: ScheduleEvent, *, now: datetime, color_mode: str
+) -> dict:
+    """Поля карточки урока: цель, цена, акцент и признаки состояния."""
     overdue = is_overdue(event, now=now)
     price_label = format_price(event.price)
     # Имя цели — обязательная часть карточки; цена дописывается только
     # когда она задана, иначе заголовок кончался бы бесполезным «0 ₽».
     title = f"{event.student} · {price_label}" if price_label else event.student
     return {
-        "top_h": _num(top_h),
-        "height_h": _num(height_h),
-        "left_pct": f"{_num((column - 1) * 100 / columns)}%",
-        "width_pct": f"{_num(100 / columns)}%",
-        "time_label": format_time_range(event.start, event.end),
         "title": title,
         "target_name": event.student,
         "price_label": price_label,
@@ -133,15 +168,44 @@ def build_event_view(
         # (design.md D5): отличается от проведённого и от будущего.
         "is_overdue": overdue,
         "is_completed": event.is_completed,
-        # Данные реального урока: непустой id отличает его от демо-события
-        # и служит адресом формы редактирования (design.md D7).
+        # Данные реального урока: непустой id отличает его от окна и
+        # служит адресом формы редактирования (design.md D7).
         "lesson_id": event.lesson_id,
         "target_id": event.target_id,
-        # Данные для клиентского drag (спека «Перетаскивание занятия»):
-        # дата колонки, начало и длительность в минутах.
-        "date": event.day.isoformat(),
-        "start_min": start_minutes,
-        "duration_min": max(15, end_minutes - start_minutes),
+        # Поля окна пусты: шаблон читает их только в ветке `is_slot`.
+        "slot_id": "",
+        "slot_state": "",
+        "state_label": "",
+        "is_muted": False,
+    }
+
+
+def _slot_fields(event: ScheduleEvent) -> dict:
+    """Поля карточки окна: подпись состояния, приглушение, акцент токена.
+
+    Акцент окна — `--cal-slot-accent`, а не цвет цели и не цвет статуса:
+    окно не принадлежит ученику, и в режиме «По статусу» красный
+    «просрочен» к нему не применим (design D5). Приглушение считает
+    `slot_is_muted` по состоянию — занятые и прошедшие окна гаснут
+    (спека calendar, «Занятое окно приглушено»).
+    """
+    label = slot_state_label(event.slot_state)
+    return {
+        # Заголовок и подпись цели — состояние окна: имени у окна нет.
+        "title": label,
+        "target_name": label,
+        "price_label": "",
+        "color": SLOT_ACCENT,
+        "is_group": False,
+        "is_past": False,
+        "is_overdue": False,
+        "is_completed": False,
+        "lesson_id": "",
+        "target_id": "",
+        "slot_id": event.slot_id,
+        "slot_state": event.slot_state,
+        "state_label": label,
+        "is_muted": slot_is_muted(event.slot_state),
     }
 
 
@@ -218,6 +282,10 @@ def build_calendar_context(
     """Полный контекст шаблона календаря по семи дням недели."""
     monday, sunday = days[0].date, days[-1].date
     views = [build_day_view(day, now=now, color_mode=color_mode) for day in days]
+    # Публичная ссылка на эту неделю (design D7): «Ссылка на окна» копирует
+    # её, а не адрес календаря. Собирается сервером из `tutor_id` и
+    # понедельника — клиент не должен угадывать формат адреса.
+    tutor_id = getattr(tutor, "id", "") or ""
     return {
         "tutor": tutor,
         "days": views,
@@ -229,6 +297,11 @@ def build_calendar_context(
         # Текущая неделя рендера: по ней #calendar-swap перерисовывается
         # после сохранения урока, не теряя открытую неделю (design.md D6).
         "current_start": monday.isoformat(),
+        # Публичный адрес недели: префикс и id репетитора — из сервера,
+        # понедельник подставляет `calendar.js` из видимой сетки, чтобы
+        # листание недель не оставляло в ссылке прошлую.
+        "public_prefix": PUBLIC_PREFIX,
+        "tutor_id": tutor_id,
         # Активный режим раскраски: контрол панели и `?color=` при листании
         # (design.md D5).
         "color_mode": color_mode,

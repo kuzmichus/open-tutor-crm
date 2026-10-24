@@ -37,58 +37,90 @@
         <i data-lucide="globe"></i>{{ timezone_label }}
     </span>
 
-    {# Кнопки панели: «Ссылка на окна» копирует ссылку на текущую неделю и
-       показывает тост «демо»; «Цвет» — работающий контрол режима раскраски
-       (design.md D5): «По ученику» / «По статусу». Активный режим приходит
-       с сервера (`?color=`), выбор запоминается в localStorage.
+    {# Кнопки панели: «Ссылка на окна» копирует публичную ссылку на
+       просматриваемую неделю (`/s/<tutor_id>?start=<понедельник>`, design
+       D7) — ученик откроет её без входа. При недоступном буфере обмена
+       ссылка показывается в поле рядом: её можно выделить и скопировать
+       вручную, страница не ломается (спека calendar, «Буфер обмена
+       недоступен»).
+
+       «Цвет» — работающий контрол режима раскраски (design.md D5):
+       «По ученику» / «По статусу». Активный режим приходит с сервера
+       (`?color=`), выбор запоминается в localStorage.
 
        Иконка палитры стоит рядом с подписью, а не внутри неё: подпись
        обновляет `x-text`, и он заменил бы содержимое кнопки вместе с
        иконкой, поэтому `x-text` живёт на отдельном `<span>`. #}
     <button class="btn btn--ghost" type="button" id="cal-link"
             @click="copyWeekLink()">Ссылка на окна</button>
-    <div class="cal-color">
-        <button class="btn btn--ghost" type="button" id="cal-color"
-                aria-haspopup="true"
-                :aria-expanded="colorOpen ? 'true' : 'false'"
-                @click="colorOpen = !colorOpen">
-            <i data-lucide="palette" aria-hidden="true"></i>
-            <span x-text="colorMode === 'status' ? 'Цвет: по статусу' : 'Цвет: по ученику'">Цвет: по ученику</span>
-        </button>
-        <ul class="cal-color__menu" id="cal-color-menu" x-cloak x-show="colorOpen"
-            @click.outside="colorOpen = false"
-            @keydown.escape.window="colorOpen = false">
-            <li><button type="button" data-color-set="target"
-                        :class="colorMode === 'target' ? 'is-active' : ''"
-                        @click="setColorMode('target')">По ученику</button></li>
-            <li><button type="button" data-color-set="status"
-                        :class="colorMode === 'status' ? 'is-active' : ''"
-                        @click="setColorMode('status')">По статусу</button></li>
-        </ul>
+    {# Поле показа ссылки: скрыто, пока копирование удалось; открывается,
+       если браузер запретил запись в буфер обмена. Значение заполняет
+       `copyWeekLink` — сервер отдаёт только префикс и id репетитора. #}
+    <div class="cal-link-fallback" x-cloak x-show="linkFallback.open">
+        <input class="input cal-link-fallback__field" id="cal-link-url"
+               type="text" readonly x-ref="linkField"
+               :value="linkFallback.url"
+               @focus="$event.target.select()"
+               aria-label="Ссылка на окна для копирования">
     </div>
-    <button class="btn btn--primary" type="button" id="cal-add" @click="openForm()">Добавить</button>
-    {# Меню быстрого добавления «⋮» (спека calendar): паттерн .cal-color —
-       x-show + x-cloak + @click.outside + Escape; пункты «Добавить слот»
-       (переехал из панели, id и обработчик сохранены) и «Отпуск и выходные»
-       — открывает панель недоступности в #modal (design.md D1, D8). #}
-    <div class="cal-more">
-        <button class="btn btn--ghost btn--icon" type="button" id="cal-more"
-                aria-haspopup="true"
-                :aria-expanded="moreOpen ? 'true' : 'false'"
-                aria-label="Ещё"
-                @click="toggleMore()">
-            <i data-lucide="more-vertical"></i>
-        </button>
-        <ul class="cal-color__menu" id="cal-more-menu" x-cloak x-show="moreOpen"
-            @click.outside="closeMore()"
-            @keydown.escape.window="closeMore()">
-            <li><button type="button" id="cal-add-slot" @click="openSlotDialog()">Добавить слот</button></li>
-            <li><button type="button" id="cal-unavailability"
-                        hx-get="/tutor/unavailability"
-                        hx-target="#modal"
-                        hx-swap="innerHTML"
-                        @click="closeMore()">Отпуск и выходные</button></li>
-        </ul>
+    {# «Цвет», «Добавить» и «⋮» — один flex-элемент панели: панель
+       переносит строки, и без общей обёртки кнопка «⋮» оставалась на
+       второй строке одна. Её меню прижато к правому краю кнопки, поэтому
+       у левого края карточки оно уезжало за границу и обрезалось
+       (`overflow: hidden` у `.cal-card`) — пункт «Добавить слот» был
+       недоступен. Группой меню всегда открывается внутри карточки. #}
+    <div class="cal-toolbar__actions">
+        <div class="cal-color">
+            <button class="btn btn--ghost" type="button" id="cal-color"
+                    aria-haspopup="true"
+                    :aria-expanded="colorOpen ? 'true' : 'false'"
+                    @click="colorOpen = !colorOpen">
+                <i data-lucide="palette" aria-hidden="true"></i>
+                <span x-text="colorMode === 'status' ? 'Цвет: по статусу' : 'Цвет: по ученику'">Цвет: по ученику</span>
+            </button>
+            <ul class="cal-color__menu" id="cal-color-menu" x-cloak x-show="colorOpen"
+                @click.outside="colorOpen = false"
+                @keydown.escape.window="colorOpen = false">
+                <li><button type="button" data-color-set="target"
+                            :class="colorMode === 'target' ? 'is-active' : ''"
+                            @click="setColorMode('target')">По ученику</button></li>
+                <li><button type="button" data-color-set="status"
+                            :class="colorMode === 'status' ? 'is-active' : ''"
+                            @click="setColorMode('status')">По статусу</button></li>
+            </ul>
+        </div>
+        <button class="btn btn--primary" type="button" id="cal-add" @click="openForm()">Добавить</button>
+        {# Меню быстрого добавления «⋮» (спека calendar): паттерн .cal-color —
+           x-show + x-cloak + @click.outside + Escape; пункты «Добавить слот»
+           (открывает диалог окна в #modal) и «Отпуск и выходные» — открывает
+           панель недоступности в #modal (design.md D1, D8).
+
+           «Добавить слот» — обычный hx-get, а не клиентская модалка: диалог
+           окна живёт в `slot/_dialog.html` и считается на сервере (design D6),
+           поэтому календарь не держит второй копии формы окна. #}
+        <div class="cal-more">
+            <button class="btn btn--ghost btn--icon" type="button" id="cal-more"
+                    aria-haspopup="true"
+                    :aria-expanded="moreOpen ? 'true' : 'false'"
+                    aria-label="Ещё"
+                    @click="toggleMore()">
+                <i data-lucide="more-vertical"></i>
+            </button>
+            <ul class="cal-color__menu" id="cal-more-menu" x-cloak x-show="moreOpen"
+                @click.outside="closeMore()"
+                @keydown.escape.window="closeMore()">
+                <li><button type="button" id="cal-add-slot"
+                            hx-get="/tutor/slots/new"
+                            hx-target="#modal"
+                            hx-swap="innerHTML"
+                            @click="closeMore()">Добавить слот</button></li>
+                <li><button type="button" id="cal-unavailability"
+                            hx-get="/tutor/unavailability"
+                            hx-target="#modal"
+                            hx-swap="innerHTML"
+                            @click="closeMore()">Отпуск и выходные</button></li>
+            </ul>
+        </div>
     </div>
 </div>
 
@@ -159,9 +191,41 @@
             {% endfor %}
 
             {% for event in day.lessons %}
+            {% if event.is_slot %}
+            {# Карточка окна для записи (спека calendar, «Окна отображаются в
+               календаре во всех режимах»): клик открывает диалог окна в
+               #modal, а не форму урока. Вид события задан явно (`kind`),
+               потому что пустой `lesson_id` больше ничего не значит —
+               окно и урок оба приходят из БД (design D5).
+
+               Приглушение (`cal-event--muted`) — у занятых и прошедших
+               окон: подпись состояния остаётся читаемой, но карточка
+               уходит на второй план. Акцент — собственный токен
+               `--cal-slot-accent`, а не цвет цели и не цвет статуса. #}
+            <div class="cal-event cal-event--slot cal-event--slot-{{ event.slot_state }}{% if event.is_muted %} cal-event--muted{% endif %}"
+                 hx-get="/tutor/slots/{{ event.slot_id }}"
+                 hx-target="#modal"
+                 hx-swap="innerHTML"
+                 data-slot-id="{{ event.slot_id }}"
+                 data-slot-state="{{ event.slot_state }}"
+                 data-date="{{ event.date }}"
+                 data-start-min="{{ event.start_min }}"
+                 data-duration-min="{{ event.duration_min }}"
+                 title="{{ event.state_label }} · {{ event.time_label }}"
+                 style="--top: {{ event.top_h }};
+                        --dur: {{ event.height_h }};
+                        --left: {{ event.left_pct }};
+                        --width: {{ event.width_pct }};
+                        --accent: {{ event.color }};">
+                <span class="cal-event__strip" aria-hidden="true"></span>
+                <span class="cal-event__title">{{ event.state_label }}</span>
+                <span class="cal-event__meta">
+                    <span class="cal-event__time">{{ event.time_label }}</span>
+                </span>
+            </div>
+            {% else %}
             {# Карточка реального урока открывает его форму редактирования в
-               #modal (design.md D7). Демо-события (отпуск, слоты) id урока
-               не имеют и ссылку не получают. `data-completed` запрещает
+               #modal (design.md D7). `data-completed` запрещает
                перетаскивание проведённого урока (design.md D8).
 
                Имя цели — отдельная строка без цены: в коротком уроке
@@ -198,99 +262,12 @@
                 <span class="cal-event__tag">Группа</span>
                 {% endif %}
             </div>
+            {% endif %}
             {% endfor %}
         </div>
         {% endfor %}
     </div>
 </div>
-
-{#
-   Модалка «Новый слот» (design.md D9: демо-форма урока удалена — урок
-   создаётся настоящей формой страницы Уроков в `#modal`).
-   Точка входа — пункт «Добавить слот» (design.md D1); поля даты/времени
-   редактируемые (спека slot-booking), сохранение добавляет карточку
-   только в DOM.
-#}
-<div class="cal-modal" x-cloak x-show="modal.open" role="dialog"
-     aria-modal="true" aria-labelledby="cal-modal-title"
-     @keydown.escape.window="closeModal()">
-    <div class="cal-modal__backdrop" @click="closeModal()"></div>
-    <div class="cal-modal__panel">
-        <h3 id="cal-modal-title" class="cal-modal__title">Новый слот</h3>
-
-        {# Редактируемые дата и время (design.md D2), шаг времени
-           900 с = граница четверти часа #}
-        <div class="field">
-            <label class="label" for="cal-slot-date">Дата</label>
-            <input class="input" id="cal-slot-date" type="date" x-model="slotForm.date">
-        </div>
-        <div class="field">
-            <label class="label" for="cal-slot-time">Время</label>
-            <input class="input" id="cal-slot-time" type="time" step="900" x-model="slotForm.time">
-        </div>
-
-        <div class="field">
-            <label class="label" for="cal-duration">Длительность, мин</label>
-            <input class="input" id="cal-duration" type="number"
-                   min="15" step="5" value="40" x-model.number="modal.duration">
-        </div>
-
-        <div class="cal-modal__actions">
-            <button class="btn btn--ghost" type="button" @click="closeModal()">Отмена</button>
-            <button class="btn btn--primary" type="button" @click="createSlot()">Создать</button>
-        </div>
-    </div>
-</div>
-
-{# Диалог записи на слот (спека slot-booking): отдельный блок разметки —
-   семантически иной, чем форма создания (design.md D1). Два обязательных
-   поля, нативная валидация формы (required); данные живут только в DOM. #}
-<div class="cal-modal" x-cloak x-show="booking.open" role="dialog"
-     aria-modal="true" aria-labelledby="cal-booking-title"
-     @keydown.escape.window="closeBooking()">
-    <div class="cal-modal__backdrop" @click="closeBooking()"></div>
-    <form class="cal-modal__panel" id="cal-booking-form"
-          @submit="confirmBooking($event)">
-        <h3 id="cal-booking-title" class="cal-modal__title">Запись на слот</h3>
-
-        <div class="field">
-            <label class="label" for="cal-book-name">Имя</label>
-            <input class="input" id="cal-book-name" type="text"
-                   required autocomplete="name" x-model="booking.name">
-        </div>
-
-        <div class="field">
-            <label class="label" for="cal-book-contact">Телефон/Telegram</label>
-            <input class="input" id="cal-book-contact" type="text"
-                   required autocomplete="tel" x-model="booking.contact">
-        </div>
-
-        <div class="cal-modal__actions">
-            <button class="btn btn--ghost" type="button" @click="closeBooking()">Отмена</button>
-            <button class="btn btn--primary" type="submit">Записаться</button>
-        </div>
-    </form>
-</div>
-
-{# Единый рендерер карточки: серверные уроки и демо-слоты собираются из
-   одной разметки, чтобы позиционирование не расходилось (design.md D6).
-   Inert-шаблон, в поток не выводится; класс `cal-event` рендерер
-   добавляет при клонировании — иначе шаблон читался бы как карточка
-   в «пустой неделе». #}
-<template id="cal-event-template">
-    <div data-student=""
-         data-date=""
-         data-start-min=""
-         data-duration-min=""
-         style="--top: 0; --dur: 1; --left: 0%; --width: 100%; --accent: #3b82f6;">
-        <span class="cal-event__strip" aria-hidden="true"></span>
-        <span class="cal-event__title"></span>
-        <span class="cal-event__meta">
-            <span class="cal-event__price"></span>
-            <span class="cal-event__time"></span>
-        </span>
-    </div>
-</template>
 
 {# Плавающая кнопка добавления (узкие экраны, спека «Поведение на узких
    экранах»): видна только в мобильном медиа-запросе styles.css. #}
