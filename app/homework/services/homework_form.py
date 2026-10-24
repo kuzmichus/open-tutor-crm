@@ -9,10 +9,14 @@
 - пустое или пробельное «Задание» → ошибка «Укажите задание.»;
 - статус вне закрытого `HOMEWORK_STATUSES` → ошибка;
 - пустой «Срок сдачи» → `None` без ошибки, кривая строка → ошибка.
+
+Настенное время «Срока сдачи» трактуется как время в зоне педагога и
+переводится в UTC (спека tutor-timezone).
 """
 
 from datetime import datetime
 
+from app.common.services.tutor_time import to_utc
 from app.homework.models.homework import HOMEWORK_STATUSES
 
 
@@ -32,14 +36,19 @@ def _checked(form, name: str) -> bool:
     return value.strip().lower() in {"1", "on", "true", "yes"}
 
 
-def _parse_due_at(raw: str) -> tuple[datetime | None, bool]:
-    """`datetime-local` → datetime; пусто — (None, False), кривое — ошибка."""
+def _parse_due_at(raw: str, tutor) -> tuple[datetime | None, bool]:
+    """`datetime-local` → aware UTC; пусто — (None, False), кривое — ошибка.
+
+    Настенное время из формы трактуется как время в зоне педагога и сразу
+    переводится в UTC (спека tutor-timezone, «Ввод срока сдачи»).
+    """
     if raw == "":
         return None, False
     try:
-        return datetime.fromisoformat(raw), False
+        parsed = datetime.fromisoformat(raw)
     except ValueError:
         return None, True
+    return to_utc(parsed, tutor), False
 
 
 def validate_homework_data(data: dict) -> list[str]:
@@ -61,14 +70,15 @@ def validate_homework_data(data: dict) -> list[str]:
     return errors
 
 
-def parse_homework_form(form) -> tuple[dict, list[str]]:
+def parse_homework_form(form, tutor) -> tuple[dict, list[str]]:
     """Данные формы ДЗ и ошибки разбора полей.
 
     Возвращает `(данные, ошибки)`; данные содержат только очищенные
     значения полей панели ДЗ (урок не затрагивается — спека «Сохранение
-    ДЗ отдельно от урока»).
+    ДЗ отдельно от урока»). `due_at` переводится из зоны педагога в UTC
+    (спека tutor-timezone).
     """
-    due_at, due_at_error = _parse_due_at(_text(form, "due_at"))
+    due_at, due_at_error = _parse_due_at(_text(form, "due_at"), tutor)
 
     data = {
         "assignment": _text(form, "assignment"),

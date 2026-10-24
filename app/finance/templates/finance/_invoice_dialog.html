@@ -1,0 +1,144 @@
+{# Счёт за период — диалог второго слоя модалок (design D10/D13).
+
+   Ничего не сохраняет: период и тумблер баланса живут в query-параметрах,
+   а всё остальное — расчёт. Форма отправляется GET-запросом на этот же
+   маршрут и подменяет только свой фрагмент (`hx-swap="outerHTML"`), поэтому
+   смена даты сразу пересчитывает счёт.
+
+   «Скопировать текст» кладёт в буфер готовый текст с сервера
+   (`data-invoice-text`) — в браузере нет ни одной денежной формулы.
+   «Отправить ученику» неактивна: отправка в мессенджеры вне объёма
+   change'а, а нерабочая ссылка запрещена спекой student-management.
+
+   Контекст: invoice_student, invoice_lines, invoice_errors, invoice_from,
+   invoice_to, invoice_from_label, invoice_to_label, invoice_total,
+   invoice_balance, invoice_due, invoice_use_balance, invoice_text. #}
+<div class="modal-root modal-root--stack"
+     id="modal-payment"
+     x-data="invoiceDialog()"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true"
+         aria-labelledby="invoice-dialog-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="invoice-dialog-title">Счёт за период</h2>
+                <p class="modal-subtitle">{{ student_full_name(invoice_student) }}</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-get="/tutor/students/{{ invoice_student.id }}/invoice"
+              hx-target="#modal-payment"
+              hx-swap="outerHTML"
+              x-data="{ useBalance: {{ 'true' if invoice_use_balance else 'false' }} }">
+            <div class="modal-body">
+                {% if invoice_errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in invoice_errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <fieldset class="form-section">
+                    <legend class="form-section__title">Период</legend>
+
+                    <div class="field">
+                        <label class="label" for="invoice-from">С</label>
+                        <input class="input" id="invoice-from" type="date"
+                               name="from" value="{{ invoice_from }}"
+                               @change="$el.form.requestSubmit()">
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="invoice-to">По</label>
+                        <input class="input" id="invoice-to" type="date"
+                               name="to" value="{{ invoice_to }}"
+                               @change="$el.form.requestSubmit()">
+                    </div>
+
+                    <div class="field field--full">
+                        {# Скрытое поле всегда отправляет `1`/`0`: checkbox сам
+                           по себе не пришёл бы в запрос выключенным, и сервер
+                           не отличил бы «выключили» от «не передали». #}
+                        <input type="hidden" name="balance"
+                               value="{{ '1' if invoice_use_balance else '0' }}"
+                               :value="useBalance ? '1' : '0'">
+                        <label class="checkbox">
+                            <input type="checkbox" x-model="useBalance"
+                                   @change="$el.form.requestSubmit()">
+                            <span>Учесть остатки на балансе</span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <section class="finance-section">
+                    <h3 class="finance-section__title">Занятия периода</h3>
+                    {% if invoice_lines %}
+                    <ul class="finance-list">
+                        {% for line in invoice_lines %}
+                        <li class="finance-row">
+                            <div class="finance-row__main">
+                                <span class="finance-row__title">{{ line.label }}</span>
+                                <span class="finance-row__meta">
+                                    {{ line.local.strftime('%d.%m.%Y, %H:%M') }}
+                                </span>
+                            </div>
+                            <span class="finance-row__amount">{{ money(line.price) }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="finance-empty">Занятий в периоде нет.</p>
+                    {% endif %}
+                </section>
+
+                <section class="invoice-summary">
+                    <div class="invoice-summary__row">
+                        <span>Стоимость занятий</span>
+                        <span class="invoice-summary__amount">{{ money(invoice_total) }}</span>
+                    </div>
+                    <div class="invoice-summary__row">
+                        <span>Баланс ученика</span>
+                        <span class="invoice-summary__amount">{{ balance_label(invoice_balance) }}</span>
+                    </div>
+                    <div class="invoice-summary__row invoice-summary__row--total">
+                        <span>К оплате</span>
+                        <span class="invoice-summary__amount">{{ money(invoice_due) }}</span>
+                    </div>
+                </section>
+
+                <p class="card__desc">
+                    Отправка ученику пока не подключена — скопируйте текст и отправьте сами.
+                </p>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn--ghost" type="button"
+                        data-invoice-text="{{ invoice_text }}"
+                        @click="copyInvoice($el)">
+                    Скопировать текст
+                </button>
+                <button class="btn btn--ghost" type="button" disabled>
+                    Отправить ученику
+                </button>
+                <button class="btn btn--primary" type="button" @click="close()">
+                    Закрыть
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="cal-toast" x-cloak x-show="toastOpen" x-text="toastText"
+         role="status" aria-live="polite"></div>
+</div>

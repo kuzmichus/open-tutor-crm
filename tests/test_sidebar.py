@@ -142,3 +142,51 @@ def test_sidebar_groups_link_opens_working_page(client):
     assert "<h1>Группы</h1>" in response.text
     # Пункт подсвечен как активный.
     assert 'nav-item nav-item--active' in response.text
+
+def test_sidebar_has_theme_switch_above_profile(client):
+    """В футере сайдбара, выше строки пользователя, есть переключатель темы."""
+    _login(client, email="theme-user@example.com")
+    page = client.get("/tutor/").text
+    start = page.index('<aside class="sidebar"')
+    sidebar_html = page[start : page.index("</aside>", start)]
+
+    # Оба сегмента с иконками и подписями.
+    assert 'data-theme-toggle="light"' in sidebar_html
+    assert 'data-theme-toggle="dark"' in sidebar_html
+    assert 'data-lucide="sun"' in sidebar_html
+    assert 'data-lucide="moon"' in sidebar_html
+    assert "Светлая" in sidebar_html
+    assert "Тёмная" in sidebar_html
+
+    # Переключатель стоит выше профиля пользователя, внутри футера.
+    assert sidebar_html.index("theme-switch") < sidebar_html.index("user-row-wrap")
+    assert sidebar_html.index("sidebar__footer") < sidebar_html.index("theme-switch")
+
+
+def test_theme_switch_has_css_and_js(client):
+    """Подсветка сегментов описана в CSS, переключение — в app.js."""
+    from pathlib import Path
+
+    static = Path(__file__).resolve().parent.parent / "app" / "static"
+    css = (static / "styles.css").read_text(encoding="utf-8")
+    js = (static / "app.js").read_text(encoding="utf-8")
+
+    assert ".theme-switch__btn" in css
+    # Активный сегмент выбирается по классу .dark на <html>, а не в JS.
+    assert 'html.dark .theme-switch__btn[data-theme-toggle="dark"]' in css
+    assert 'html:not(.dark) .theme-switch__btn[data-theme-toggle="light"]' in css
+
+    assert "data-theme-toggle" in js
+    assert "opentutorcrm:theme" in js
+    assert 'classList.toggle("dark"' in js
+
+
+def test_theme_is_applied_before_paint(client):
+    """Класс .dark ставится бутстрап-скриптом в <head>, до отрисовки страницы.
+
+    Иначе сохранённая тёмная тема мигает светлым фоном до загрузки app.js.
+    """
+    page = client.get("/tutor/login").text
+    head = page[: page.index("</head>")]
+    assert "opentutorcrm:theme" in head
+    assert 'classList.add("dark")' in head

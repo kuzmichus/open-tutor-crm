@@ -18,6 +18,7 @@ from datetime import date, datetime, time
 
 from sqlalchemy.orm import Session
 
+from app.common.services.tutor_time import to_local, to_utc
 from app.group.models.group import Group
 from app.homework.services.homework_context import homework_panel_context
 from app.lesson.models.lesson import (
@@ -50,6 +51,18 @@ def _int_or_none(raw: str) -> int | None:
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _checked(form, name: str) -> bool:
+    """Флаг подтверждения: `on`/`1`/`true` — включён, всё остальное — нет.
+
+    Одна и та же проверка обслуживает скрытое поле формы и query-параметр
+    календаря (`?ack_unavailable=1`), поэтому значение нормализуется здесь.
+    """
+    value = form.get(name, "")
+    if not isinstance(value, str):
+        return False
+    return value.strip().lower() in {"1", "on", "true", "yes"}
 
 
 def _parse_datetime(raw: str) -> datetime | None:
@@ -123,8 +136,45 @@ def _parse_slots(raw: str) -> list[dict] | None:
     return slots
 
 
-def parse_lesson_form(form) -> tuple[dict, list[str]]:
+def parse_starts_at(raw: str | None, tutor) -> datetime | None:
+    """Значение `?starts_at=` из календаря: aware UTC или None.
+
+    Пустой или некорректный параметр — не ошибка: форма открывается с
+    пустым «Началом» (спека lesson-management, «Префилл из календаря»).
+    Валидное значение трактуется как настенное время в зоне педагога и
+    переводится в UTC сразу при разборе (design D6).
+    """
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return to_utc(parsed, tutor)
+
+
+def parse_duration_min(raw: str | None) -> int | None:
+    """Значение `?duration_min=` из окна для записи: минуты из закрытого списка.
+
+    Запись из окна создаёт урок той же длительности (спека calendar,
+    «Запись ученика из свободного окна»), поэтому префилл обязан попасть
+    в `LESSON_DURATIONS` — иначе форма открылась бы с невыделенным
+    селектом, а урок сохранился бы с чужим значением. Всё, что вне
+    списка, игнорируется: префилл — удобство, а не источник истины.
+    """
+    value = _int_or_none((raw or "").strip())
+    if value is None or value not in LESSON_DURATIONS:
+        return None
+    return value
+
+
+def parse_lesson_form(form, tutor) -> tuple[dict, list[str]]:
     """Данные формы урока и ошибки разбора полей.
+
+    `starts_at` приходит наивным (`datetime-local`) и сразу переводится в
+    aware UTC по зоне педагога (design D6): дальше по цепочке
+    (`lesson_writer`, предупреждения) время уже в UTC — повторно его не
+    переводит ни один сервис.
 
     `rating` остаётся «как пришло» (int, None или мусор): проверка 1–5 —
     на стороне редактирования (`validate_edit_fields`), создание поле
@@ -135,11 +185,12 @@ def parse_lesson_form(form) -> tuple[dict, list[str]]:
     if price_error:
         errors.append("Оплата ученика — целое число не меньше нуля.")
 
+    starts_at = _parse_datetime(_text(form, "starts_at"))
     data = {
         "student_id": _text(form, "student_id") or None,
         "group_id": _text(form, "group_id") or None,
         "type": _text(form, "type"),
-        "starts_at": _parse_datetime(_text(form, "starts_at")),
+        "starts_at": to_utc(starts_at, tutor) if starts_at is not None else None,
         "duration_min": _int_or_none(_text(form, "duration_min")),
         "note": _text(form, "note") or None,
         "meeting_url": _text(form, "meeting_url") or None,
@@ -151,6 +202,9 @@ def parse_lesson_form(form) -> tuple[dict, list[str]]:
         "status": _text(form, "status") or None,
         "rating": _rating_value(_text(form, "rating")),
         "family_comment": _text(form, "family_comment") or None,
+        # Признак подтверждения, а не поле урока (design.md D5, п. 2):
+        # относится только к этой отправке и в запись урока не попадает.
+        "ack_unavailable": _checked(form, "ack_unavailable"),
     }
     return data, errors
 
@@ -192,14 +246,19 @@ def validate_edit_fields(data: dict) -> list[str]:
     return errors
 
 
-def _input_datetime(value) -> str:
-    """Значение для `input[type=datetime-local]`: «YYYY-MM-DDTHH:MM»."""
+def _input_datetime(value, tutor) -> str:
+    """Значение для `input[type=datetime-local]`: «YYYY-MM-DDTHH:MM».
+
+    Значение (aware UTC из разбора или из БД) переводится в зону педагога
+    перед показом (спека lesson-management, «Значение поля «Начало»»):
+    поле формы всегда показывает настенное время педагога.
+    """
     if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%dT%H:%M")
+        return to_local(value, tutor).strftime("%Y-%m-%dT%H:%M")
     return str(value or "")
 
 
-def _form_values(lesson, data: dict | None) -> dict:
+def _form_values(lesson, data: dict | None, tutor) -> dict:
     """Значения полей формы из урока (правка) или из разбора (ошибка)."""
     if lesson is not None:
         return {
@@ -207,7 +266,7 @@ def _form_values(lesson, data: dict | None) -> dict:
             "duration_min": lesson.duration_min,
             "note": lesson.note,
             "meeting_url": lesson.meeting_url,
-            "starts_at_value": _input_datetime(lesson.starts_at),
+            "starts_at_value": _input_datetime(lesson.starts_at, tutor),
             "price": str(lesson.price) if lesson.price is not None else "",
             "until_date": "",
             "status": lesson.status,
@@ -221,7 +280,7 @@ def _form_values(lesson, data: dict | None) -> dict:
         "duration_min": data.get("duration_min"),
         "note": data.get("note"),
         "meeting_url": data.get("meeting_url"),
-        "starts_at_value": _input_datetime(data.get("starts_at")),
+        "starts_at_value": _input_datetime(data.get("starts_at"), tutor),
         "price": str(price) if price is not None else "",
         "until_date": data.get("until_date") or "",
         "status": data.get("status") or (lesson.status if lesson else None),
@@ -233,16 +292,30 @@ def _form_values(lesson, data: dict | None) -> dict:
 def lesson_form_context(
     db: Session,
     *,
+    tutor,
     lesson=None,
     data: dict | None = None,
     errors: list[str] | None = None,
+    unavailable_warning: dict | None = None,
+    ack_unavailable: bool = False,
 ) -> dict:
     """Контекст `lesson/_form.html`: `lesson=None` — создание, иначе правка.
 
+    `tutor` — карточка репетитора: её зона определяет значения полей
+    «Начало» и подписи времени (спека tutor-timezone, «Показ времени идёт
+    в зоне педагога»).
+
     При ошибке валидации переданные `data` перекрывают значения урока —
     модалка показывает присланные пользователем поля, а не старые.
+
+    `unavailable_warning` — баннер предупреждения о постановке в отмеченный
+    день (`warning_context`): отдельный ключ контекста, **не** элемент
+    `errors` — предупреждение означает «сохранится, если подтвердите», а
+    список ошибок — «не сохранено и не сохранится» (design.md D5, п. 3).
+    `ack_unavailable` — скрытое поле подтверждения, чтобы повторная отправка
+    не спрашивала снова (design.md D5, п. 4).
     """
-    values = _form_values(lesson, data)
+    values = _form_values(lesson, data, tutor)
 
     if lesson is not None:
         student_name = _target_student_name(db, lesson.student_id)
@@ -251,8 +324,8 @@ def lesson_form_context(
         group_id = lesson.group_id
         action = f"/tutor/lessons/{lesson.id}"
         title = format_target(student_name, group_name, lesson.type)
-        title = f"{title} · {format_lesson_datetime(lesson.starts_at)}"
-        subtitle = format_time_span(lesson)
+        title = f"{title} · {format_lesson_datetime(lesson.starts_at, tutor)}"
+        subtitle = format_time_span(lesson, tutor)
     else:
         student_id = data.get("student_id") if data else None
         group_id = data.get("group_id") if data else None
@@ -288,10 +361,13 @@ def lesson_form_context(
             "type": values["type"],
             "priceInitial": values["price"],
         },
+        # Баннер недоступности: отдельно от `errors` (design.md D5, п. 3).
+        "unavailable_warning": unavailable_warning or {},
+        "ack_unavailable": ack_unavailable,
         # Контекст панели ДЗ (ключи `hw_*`) — только в редактировании:
         # вкладка «ДЗ» и её форма в создании отсутствуют (спека).
         **(
-            homework_panel_context(db, lesson=lesson)
+            homework_panel_context(db, lesson=lesson, tutor=tutor)
             if lesson is not None
             else {}
         ),

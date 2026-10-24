@@ -1,0 +1,106 @@
+{# Диалог возврата по платежу (design D5, D11).
+
+   Показывает то, чего не знает форма: сумму платежа и остаток к возврату.
+   Оба числа считает `refunds.py` — шаблон не вычитает деньги сам, иначе
+   кнопка «Полный возврат» могла бы подставить не то, что примет сервис.
+
+   «Полный возврат» — `type="button"` с `@click` на Alpine: подставляет
+   остаток в поле суммы и **не отправляет** запрос (требование спеки
+   «Диалог возврата показывает остаток»). Поэтому у кнопки нет ни `hx-*`,
+   ни `type="submit"`.
+
+   Живёт во втором слое модалок (`#modal-payment`, design D10) — поверх
+   карточки ученика, не затрагивая её несохранённые поля.
+
+   Контекст: refund_payment, refund_student, refund_student_name,
+   refund_form (amount, comment), refund_errors, refund_payment_amount,
+   refund_available, refund_already. #}
+<div class="modal-root modal-root--stack"
+     id="modal-payment"
+     x-data="refundDialog()"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     @payment-saved.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true"
+         aria-labelledby="refund-dialog-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="refund-dialog-title">Оформить возврат</h2>
+                <p class="modal-subtitle">{{ refund_student_name }}</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-post="/tutor/payments/{{ refund_payment.id }}/refund"
+              hx-target="#modal-payment"
+              hx-swap="outerHTML">
+            <div class="modal-body">
+                {% if refund_errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in refund_errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <fieldset class="form-section">
+                    <legend class="form-section__title">Возврат</legend>
+
+                    {# Суммы — только чтение: они посчитаны сервисом и в
+                       запрос не уходят (у строк нет `name`). #}
+                    <div class="field">
+                        <span class="label">Сумма платежа</span>
+                        <span class="refund-summary__amount">{{ money(refund_payment_amount) }}</span>
+                    </div>
+
+                    <div class="field">
+                        <span class="label">Доступно к возврату</span>
+                        <span class="refund-summary__available">{{ money(refund_available) }}</span>
+                    </div>
+
+                    <div class="field field--full">
+                        <label class="label" for="refund-amount">Сумма возврата (₽) *</label>
+                        <input class="input" id="refund-amount" type="number"
+                               name="amount" min="1" max="{{ refund_available }}"
+                               step="1" required inputmode="numeric"
+                               value="{{ refund_form.amount }}">
+                        {# Подставляет остаток на клиенте, без запроса к
+                           серверу (спека «Диалог возврата показывает
+                           остаток»). #}
+                        <button class="btn btn--ghost btn--sm" type="button"
+                                x-data
+                                @click="$root.querySelector('#refund-amount').value = '{{ refund_available }}'">
+                            Полный возврат
+                        </button>
+                    </div>
+
+                    <div class="field field--full">
+                        <label class="label" for="refund-comment">Причина</label>
+                        <textarea class="input" id="refund-comment"
+                                  name="comment" rows="2">{{ refund_form.comment }}</textarea>
+                        <p class="form-hint">
+                            Статус платежа не меняется: возврат — отдельная
+                            операция в истории.
+                        </p>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn--ghost" type="button" @click="close()">
+                    Отмена
+                </button>
+                <button class="btn btn--primary" type="submit">Оформить возврат</button>
+            </div>
+        </form>
+    </div>
+</div>

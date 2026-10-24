@@ -1,0 +1,72 @@
+{# Сводка счёта на странице карточки ученика (design D12).
+
+   Заменяет заглушку «Уроки и оплаты»: показывает настоящий баланс и
+   последние операции. Все числа считает `card_summary_context`, шаблон
+   вызывает только форматтеры — выдуманных значений здесь нет по
+   построению.
+
+   Действие «Платежи» открывает карточку в `#modal` сразу на вкладке
+   «Платежи» (`?tab=payments`): репетитор приходит сюда, чтобы поправить
+   счёт, и лишний клик по табу ему не нужен.
+
+   Перезапрос: платёж вносится в модалке поверх страницы, поэтому после
+   `payment-saved` блок запрашивает себя заново — иначе на странице
+   остался бы старый баланс, пока её не перезагрузят.
+
+   Контекст: finance_student, finance_tutor, finance_balance,
+   finance_history, finance_history_limit. #}
+<section class="card mt-4"
+         id="student-finance-summary"
+         hx-get="/tutor/students/{{ finance_student.id }}/finance/summary"
+         hx-trigger="payment-saved from:body"
+         hx-swap="outerHTML">
+    <div class="card-header">
+        <h2 class="card__title">Счёт ученика</h2>
+        <button class="btn btn--ghost btn--sm" type="button"
+                hx-get="/tutor/students/{{ finance_student.id }}/edit?from_card=1&tab=payments"
+                hx-target="#modal"
+                hx-swap="innerHTML">
+            <i data-lucide="wallet"></i>
+            Платежи
+        </button>
+    </div>
+
+    <div class="finance-balance mt-4">
+        <span class="finance-balance__label">Баланс ученика</span>
+        <span class="finance-balance__value">{{ balance_label(finance_balance) }}</span>
+        <span class="finance-balance__hint">
+            {% if finance_balance < 0 %}
+            Ученик должен — внесите оплату или проверьте списания.
+            {% elif finance_balance > 0 %}
+            На счёте есть остаток в пользу ученика.
+            {% else %}
+            Оплаты и списания сходятся.
+            {% endif %}
+        </span>
+    </div>
+
+    <h3 class="finance-section__title mt-4">Последние операции</h3>
+    {% if finance_history %}
+    <ul class="finance-list">
+        {% for operation in finance_history %}
+        <li class="finance-row">
+            <div class="finance-row__main">
+                <span class="finance-row__title">{{ operation_kind_label(operation) }}</span>
+                <span class="finance-row__meta">
+                    {{ operation_datetime(operation.occurred_at, finance_tutor) }}
+                    {% if operation.comment %}· {{ operation.comment }}{% endif %}
+                </span>
+            </div>
+            <span class="finance-row__amount
+                         {% if operation.kind == 'payment' %}finance-row__amount--in{% else %}finance-row__amount--out{% endif %}">
+                {{ signed_money(operation) }}
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="finance-empty">
+        Операций пока нет — внесите оплату или пересчитайте баланс.
+    </p>
+    {% endif %}
+</section>

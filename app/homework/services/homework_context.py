@@ -14,6 +14,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.common.services.tutor_time import to_local
 from app.homework.models.homework import (
     HOMEWORK_STATUS_LABELS,
     HOMEWORK_STATUSES,
@@ -22,14 +23,18 @@ from app.homework.services.homework_writer import get_homework
 from app.lesson.models.lesson import Lesson
 
 
-def _input_datetime(value) -> str:
-    """Значение для `input[type=datetime-local]`: «YYYY-MM-DDTHH:MM»."""
+def _input_datetime(value, tutor) -> str:
+    """Значение для `input[type=datetime-local]`: «YYYY-MM-DDTHH:MM».
+
+    `due_at` хранится в UTC, значение поля — в зоне педагога (спека
+    tutor-timezone, «Показ срока сдачи»).
+    """
     if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%dT%H:%M")
+        return to_local(value, tutor).strftime("%Y-%m-%dT%H:%M")
     return str(value or "")
 
 
-def panel_values(homework) -> dict:
+def panel_values(homework, tutor) -> dict:
     """Значения полей панели из записи ДЗ; записи нет — дефолты панели."""
     if homework is None:
         return {
@@ -44,7 +49,7 @@ def panel_values(homework) -> dict:
         }
     return {
         "assignment": homework.assignment,
-        "due_at_value": _input_datetime(homework.due_at),
+        "due_at_value": _input_datetime(homework.due_at, tutor),
         "deadline_enabled": homework.deadline_enabled,
         "status": homework.status,
         "recording_url": homework.recording_url or "",
@@ -57,11 +62,16 @@ def homework_panel_context(
     db: Session,
     lesson: Lesson,
     *,
+    tutor,
     data: dict | None = None,
     errors: list[str] | None = None,
     saved: bool = False,
 ) -> dict:
     """Контекст панели ДЗ: значения из БД, при ошибке — присланные поля.
+
+    `tutor` — карточка репетитора: её зона задаёт значение поля «Срок
+    сдачи» — хранится срок в UTC, а поле показывает настенное время
+    (спека tutor-timezone).
 
     Ключи с префиксом `hw_`: панель вставляется в модалку урока через
     include и не должна подменять контекст полей урока (`form`,
@@ -73,12 +83,12 @@ def homework_panel_context(
     кнопку в состоянии успеха («Успешно сохранено»), которую `lessons.js`
     через пару секунд возвращает в обычный вид (design D8).
     """
-    values = panel_values(get_homework(db, lesson.id))
+    values = panel_values(get_homework(db, lesson.id), tutor)
     if data is not None:
         values.update(
             {
                 "assignment": data.get("assignment") or "",
-                "due_at_value": _input_datetime(data.get("due_at")),
+                "due_at_value": _input_datetime(data.get("due_at"), tutor),
                 "deadline_enabled": bool(data.get("deadline_enabled")),
                 "status": data.get("status") or "not_assigned",
                 "recording_url": data.get("recording_url") or "",

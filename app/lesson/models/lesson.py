@@ -73,6 +73,10 @@ def _sql_int_in(column: str, values: tuple[int, ...]) -> str:
 class Lesson(Base):
     """Урок репетитора: индивидуальный, групповой, пробный или отработка.
 
+    Моменты времени (`starts_at`, `created_at`, `updated_at`) хранятся в
+    UTC; настенное время зоны педагога — только на входе и на выводе
+    (спека tutor-timezone).
+
     Ровно одна цель урока — ученик XOR группа — обеспечивается
     CHECK-ограничением на уровне БД (решение D3). Владелец урока
     выводится из цели (у ученика и группы есть `tutor_id`), отдельной
@@ -139,6 +143,12 @@ class Lesson(Base):
         nullable=False,
         default="individual",
     )
+    # Начало урока хранится в UTC (aware, смещение 0): ввод формы трактуется
+    # как настенное время в зоне педагога и переводится на сервере, показ —
+    # обратный перевод на выводе (спека tutor-timezone). Тип колонки не
+    # менялся: DateTime(timezone=True) стоял с самого начала, меняется
+    # только то, что в неё кладут. SQLite теряет tzinfo, поэтому чтение
+    # нормализуется через `as_utc`.
     starts_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

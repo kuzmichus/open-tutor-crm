@@ -71,6 +71,9 @@ class Student(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default="new", index=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Цвет цели для календаря: назначается при создании из палитры
+    # `app/common/colors.py` и далее не меняется.
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     # Напоминания ученику. У контактов такие же три флага живут на привязке
     # «ученик — контакт», а не на самом контакте.
     remind_lesson: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

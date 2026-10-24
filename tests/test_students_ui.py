@@ -6,6 +6,7 @@
 """
 
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -144,7 +145,7 @@ def test_card_hides_grade_and_school_for_adult(client, owner, student_factory):
 
 
 # --------------------------------------------------------------------------
-# 7.3 Заглушка вместо выдуманных метрик
+# Сводка счёта на странице ученика (задача 9.1, design D12)
 # --------------------------------------------------------------------------
 
 
@@ -157,14 +158,68 @@ def test_stub_block_has_no_invented_numbers_or_dead_links(client, owner, student
         assert forbidden not in card, f"В карточке не должно быть {forbidden!r}"
 
 
-def test_card_page_stub_has_no_invented_numbers(client, owner, student_factory):
+def test_card_page_shows_balance_summary(client, owner, student_factory):
+    """Вместо заглушки «Уроки и оплаты» — настоящий баланс ученика."""
     student_id = student_factory(tutor_id=owner, first_name="Маша")
     html = client.get(f"/tutor/students/{student_id}").text
-    start = html.index("Уроки и оплаты")
-    stub = html[start : html.index("</section>", start)]
 
-    for forbidden in ("0 ₽", "Проведено", "/lessons", "/report", 'href="#"'):
-        assert forbidden not in stub, f"В заглушке не должно быть {forbidden!r}"
+    assert "Уроки и оплаты" not in html
+    assert "Счёт ученика" in html
+    # Ученик без операций: баланс ноль, и это единственное честное число.
+    assert "Баланс ученика" in html
+    assert "0\u00a0₽" in html
+    assert "Операций пока нет" in html
+
+
+def test_card_page_shows_balance_from_operations(
+    client, owner, student_factory, operation_factory
+):
+    """Платёж 2000 и списание 1200 дают баланс 800 на странице ученика."""
+    from app.database import SessionLocal
+    from app.lesson.models.lesson import Lesson
+
+    student_id = student_factory(tutor_id=owner, first_name="Маша")
+    operation_factory(student_id=student_id, amount=2000)
+    with SessionLocal() as session:
+        session.add(
+            Lesson(
+                student_id=student_id,
+                type="individual",
+                starts_at=datetime(2026, 10, 19, 10, 0, tzinfo=UTC),
+                duration_min=60,
+                price=1200,
+                status="completed",
+            )
+        )
+        session.commit()
+    client.post(f"/tutor/students/{student_id}/balance/recalculate")
+
+    html = client.get(f"/tutor/students/{student_id}").text
+    start = html.index("Счёт ученика")
+    block = html[start : html.index("</section>", start)]
+
+    assert "800\u00a0₽" in block
+    assert "+2\u00a0000\u00a0₽" in block
+    assert "\u22121\u00a0200\u00a0₽" in block
+
+
+def test_card_page_has_payments_action(client, owner, student_factory):
+    """Действие «Платежи» открывает карточку на вкладке «Платежи»."""
+    student_id = student_factory(tutor_id=owner, first_name="Маша")
+    html = client.get(f"/tutor/students/{student_id}").text
+
+    start = html.index("Счёт ученика")
+    block = html[start : html.index("</section>", start)]
+
+    assert (
+        f'hx-get="/tutor/students/{student_id}/edit?from_card=1&tab=payments"'
+        in block
+    )
+    assert 'hx-target="#modal"' in block
+    assert "Платежи" in block
+    # Ни одной выдуманной метрики в сводке.
+    for forbidden in ("Проведено", "/lessons", "/report", 'href="#"'):
+        assert forbidden not in block
 
 
 # --------------------------------------------------------------------------

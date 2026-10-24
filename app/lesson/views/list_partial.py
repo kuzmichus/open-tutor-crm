@@ -8,6 +8,7 @@ from app.common.access import require_tutor_id
 from app.database import get_db
 from app.lesson.services.lessons import list_lessons, normalize_period
 from app.templating import templates
+from app.tutor.models.tutor import Tutor
 
 router = APIRouter()
 
@@ -22,10 +23,19 @@ def lessons_list_partial(
     q = request.query_params.get("q", "")
     period = normalize_period(request.query_params.get("period", ""))
     student_id = request.query_params.get("student", "")
-    rows = list_lessons(db, tutor_id, q=q, period=period, student_id=student_id)
+    tutor = db.get(Tutor, tutor_id)
+    rows = list_lessons(
+        db, tutor_id, q=q, period=period, student_id=student_id, tutor=tutor
+    )
 
     return templates.TemplateResponse(
         request,
         "lesson/_table.html",
-        {"rows": rows, "q": q, "period": period, "student_id": student_id},
+        {
+            "rows": rows,
+            "q": q,
+            "period": period,
+            "student_id": student_id,
+            "tutor": tutor,
+        },
     )

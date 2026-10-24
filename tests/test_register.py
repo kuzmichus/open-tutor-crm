@@ -2,6 +2,9 @@
 
 import re
 
+import pytest
+
+from app.common.services.tutor_time import system_zone_name
 from app.database import SessionLocal
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.password_hasher import PasswordHasher
@@ -37,26 +40,25 @@ def test_form_asks_only_name_email_password_and_confirm(client):
         assert optional not in field_names
 
 
-def test_password_confirmation_mismatch_rejected(client):
-    before = _count_tutors("maria@example.com")
-    response = client.post(
-        "/tutor/register",
-        data={**FULL_DATA, "password_confirm": "Другой-Пароль"},
-    )
-    assert response.status_code == 200
-    assert "Пароли не совпадают" in response.text
-    assert _count_tutors("maria@example.com") == before
+@pytest.mark.parametrize(
+    ("override", "message"),
+    [
+        ({"password_confirm": "Другой-Пароль"}, "Пароли не совпадают"),
+        ({"password_confirm": ""}, "Пароли не совпадают"),
+        ({"email": "не-email"}, "корректный email"),
+        ({"password": ""}, "Укажите пароль"),
+    ],
+    ids=["password-mismatch", "missing-confirmation", "invalid-email", "empty-password"],
+)
+def test_invalid_registration_is_rejected(client, override, message):
+    """Форма с невалидным полем возвращается с подписью ошибки и не создаёт запись."""
+    data = {**FULL_DATA, **override}
 
+    response = client.post("/tutor/register", data=data)
 
-def test_missing_confirmation_rejected(client):
-    before = _count_tutors("maria@example.com")
-    response = client.post(
-        "/tutor/register",
-        data={**FULL_DATA, "password_confirm": ""},
-    )
     assert response.status_code == 200
-    assert "Пароли не совпадают" in response.text
-    assert _count_tutors("maria@example.com") == before
+    assert message in response.text
+    assert _count_tutors(data["email"]) == 0
 
 
 def test_successful_registration_creates_tutor(client):
@@ -71,6 +73,20 @@ def test_successful_registration_creates_tutor(client):
         # Пароль в базе отличается от открытого и проверяется хешером.
         assert tutor.password_hash != FULL_DATA["password"]
         assert PasswordHasher().verify(FULL_DATA["password"], tutor.password_hash)
+
+
+def test_registration_fills_timezone_with_system_zone(client):
+    """Спека (задача 8.1): новый репетитор сразу получает зону.
+
+    Иначе карточка осталась бы с `NULL`, и показ времени падал бы в
+    системную зону сервера (design.md D9). Значение — IANA-имя зоны
+    (или `UTC`, если системную зону определить не удалось).
+    """
+    client.post("/tutor/register", data=FULL_DATA, follow_redirects=False)
+
+    with SessionLocal() as db:
+        tutor = db.query(Tutor).filter_by(email="maria@example.com").one()
+        assert tutor.timezone == (system_zone_name() or "UTC")
 
 
 def test_password_plaintext_not_stored(client):
@@ -104,7 +120,9 @@ def test_extra_post_fields_are_ignored(client):
         assert tutor.subject is None
         assert tutor.experience is None
         assert tutor.hourly_rate is None
-        assert tutor.timezone is None
+        # Зона не берётся из формы: подставляется системная (design.md D9).
+        assert tutor.timezone != "Europe/Moscow"
+        assert tutor.timezone == (system_zone_name() or "UTC")
 
 
 def test_uuid_ids_are_unique(client):
@@ -118,28 +136,6 @@ def test_uuid_ids_are_unique(client):
     assert len(ids) >= 2
     assert len(set(ids)) == len(ids)
     assert all(len(i) == 36 for i in ids)
-
-
-def test_invalid_email_rejected(client):
-    before = _count_tutors("bad@example.com")
-    response = client.post(
-        "/tutor/register",
-        data={**FULL_DATA, "email": "не-email"},
-    )
-    assert response.status_code == 200
-    assert "корректный email" in response.text
-    assert _count_tutors("bad@example.com") == before
-
-
-def test_empty_password_rejected(client):
-    before = _count_tutors("maria@example.com")
-    response = client.post(
-        "/tutor/register",
-        data={**FULL_DATA, "password": ""},
-    )
-    assert response.status_code == 200
-    assert "Укажите пароль" in response.text
-    assert _count_tutors("maria@example.com") == before
 
 
 def test_duplicate_email_rejected(client):

@@ -1,0 +1,78 @@
+{# Сводка оплат группы — вкладка «Оплаты» модалки управления (design D1/D6).
+
+   Панель — не форма: модалка группы обёрнута в единственную `<form>`,
+   поэтому панель не содержит ни `<form>`, ни полей, ни кнопок отправки.
+   Приходит своим GET-маршрутом: слот вкладки грузит её с
+   `hx-trigger="load"`, чипы периода перезапрашивают тот же маршрут
+   (hx-target — корень панели) — суммы рисует сервер, а не JS.
+
+   Контекст: payments = {group_id, period, period_options, totals,
+   members (id, name, balance, charged, lesson_count, debt)}. #}
+<div class="group-payments" id="group-payments-content">
+    <div class="period-chips" role="group" aria-label="Период оплат группы">
+        {% for key, label in payments.period_options %}
+        <label class="period-chip">
+            <input class="period-chip__input" type="radio"
+                   name="period" value="{{ key }}"
+                   {% if key == payments.period %}checked{% endif %}
+                   hx-get="/tutor/groups/{{ payments.group_id }}/payments"
+                   hx-trigger="change"
+                   hx-target="#group-payments-content"
+                   hx-swap="outerHTML">
+            <span class="period-chip__view">{{ label }}</span>
+        </label>
+        {% endfor %}
+    </div>
+
+    <div class="group-payments__stats">
+        <div class="group-payments-stat">
+            <span class="group-payments-stat__label">Списано за занятия группы</span>
+            <span class="group-payments-stat__value">{{ money(payments.totals.charged) }}</span>
+        </div>
+        <div class="group-payments-stat">
+            <span class="group-payments-stat__label">Возвращено</span>
+            <span class="group-payments-stat__value">{{ money(payments.totals.refunded) }}</span>
+        </div>
+        <div class="group-payments-stat">
+            <span class="group-payments-stat__label">Долг участников сейчас</span>
+            <span class="group-payments-stat__value{% if payments.totals.debt %} group-payments-stat__value--danger{% endif %}">
+                {{ money(payments.totals.debt) }}
+            </span>
+        </div>
+    </div>
+
+    {% if payments.members %}
+    <ul class="group-payments__list">
+        {% for row in payments.members %}
+        <li class="group-payments-member">
+            <div class="group-payments-member__head">
+                {# Обычная ссылка, а не модалка: карточка ученика — страница
+                   со своим таббаром; «Платежи» открывается через ?tab=payments. #}
+                <a class="group-payments-member__name"
+                   href="/tutor/students/{{ row.id }}?tab=payments">{{ row.name }}</a>
+                <span class="group-payments-member__balance{% if row.balance < 0 %} group-payments-member__balance--danger{% endif %}">
+                    Баланс: {{ balance_label(row.balance) }}
+                </span>
+            </div>
+            <div class="group-payments-member__meta">
+                <span class="group-payments-member__charged">
+                    Списано: {{ money(row.charged) }}{% if row.lesson_count %} ({{ lessons_count_label(row.lesson_count) }}){% endif %}
+                </span>
+                {% if row.debt %}
+                <span class="group-payments-member__debt group-payments-member__debt--danger">Долг: {{ money(row.debt) }}</span>
+                {% else %}
+                <span class="group-payments-member__debt">Долг: {{ money(row.debt) }}</span>
+                {% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="group-payments__empty">В группе пока нет учеников.</p>
+    {% endif %}
+
+    <p class="group-payments__note">
+        Баланс и долг — по всем занятиям ученика, списания — только за занятия
+        этой группы. Оплату вносят в карточке ученика (нажмите на имя — «Платежи»).
+    </p>
+</div>

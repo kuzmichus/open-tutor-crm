@@ -350,6 +350,57 @@
     padding: calc(var(--space) * 3);
   }
 
+  /* --------------------------------------------------------------------------
+     Переключатель темы (светлая / тёмная) в футере сайдбара.
+     Активный сегмент красит CSS по классу .dark на <html>: подсветка верна
+     ещё до выполнения app.js и не «прыгает» при загрузке страницы.
+     -------------------------------------------------------------------------- */
+  .sidebar__theme {
+    margin-bottom: calc(var(--space) * 2); /* 8px до строки пользователя */
+  }
+
+  .theme-switch {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    background: var(--sidebar-accent);
+  }
+
+  .theme-switch__btn {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--space) * 2);          /* 8px */
+    min-height: 32px;
+    padding: 0 calc(var(--space) * 2);
+    border-radius: 6px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    transition: background-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    & [data-lucide] { width: 16px; height: 16px; }
+
+    &:hover { color: var(--foreground); }
+
+    & span {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+  }
+
+  /* Активный сегмент: светлая тема — «Светлая», тёмная — «Тёмная» */
+  html:not(.dark) .theme-switch__btn[data-theme-toggle="light"],
+  html.dark .theme-switch__btn[data-theme-toggle="dark"] {
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: var(--shadow-card);
+  }
+
   /* Пункт меню */
   .nav-item {
     display: flex;
@@ -461,6 +512,16 @@
       & .user-row {
         justify-content: center;
         padding: calc(var(--space) * 2) 0;
+      }
+
+      /* Переключатель темы в свёрнутом сайдбаре — только иконки:
+         подписи не влезают в полосу 72px. */
+      & .theme-switch__btn {
+        padding: 0;
+      }
+
+      & .theme-switch__btn span {
+        display: none;
       }
 
       /* «Язычок» разворачивает обратно */
@@ -1102,6 +1163,28 @@
 
   .form-hint--warning {
     color: var(--status-cancelled);
+    font-weight: 500;
+  }
+
+  /* Баннер формы: предупреждение, которое НЕ блокирует сохранение
+     (design.md D5, п. 3). Отличается от `.error` и видом, и ролью:
+     `.error` — «не сохранено», баннер — «сохранится, если подтвердите». */
+  .form-banner {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--status-cancelled);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--status-cancelled) 12%, transparent);
+    color: var(--foreground);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+
+  .form-banner__text {
+    margin: 0;
     font-weight: 500;
   }
 
@@ -1869,6 +1952,14 @@
     padding: calc(var(--space) * 4);
   }
 
+  /* Второй слой модалок (design D10): диалоги счёта открываются поверх
+     карточки ученика, которая остаётся в `#modal` со своими
+     несохранёнными полями. Отдельный z-index — чтобы оверлей верхнего
+     слоя перекрывал нижний, а не наоборот. */
+  .modal-root--stack {
+    z-index: 60;
+  }
+
   .modal-overlay {
     position: absolute;
     inset: 0;
@@ -1911,6 +2002,36 @@
     flex-direction: column;
   }
 
+  /* Обёртка вкладок карточки ученика (design D9): три соседние панели
+     делят одно место под таббаром. Без неё `flex: 1` пришлось бы вешать
+     на каждую панель, и они растягивали бы модалку втрое. */
+  .tab-shell {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Панель вкладки: своё скроллящееся тело и свой футер. `min-height: 0`
+     обязателен — иначе `overflow-y` у `.modal-body` не включится внутри
+     flex-родителя. Панели — соседи, поэтому `<form>` в них не вложены
+     (вложенные формы браузер выбрасывает). */
+  .tab-form {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Форма полей окна внутри `.modal-body`: панель брони и футер лежат
+     рядом с ней, а не внутри (вложенные <form> браузер выбрасывает, и
+     «Подтвердить» отправляла форму окна). Собственного оформления не
+     требует — поля уже разложены `.form-section`; `min-width: 0` не даёт
+     длинному значению поля распереть модалку. */
+  .slot-form {
+    min-width: 0;
+  }
+
   .modal-body {
     flex: 1;
     min-height: 0;
@@ -1929,6 +2050,343 @@
     padding: calc(var(--space) * 4) calc(var(--space) * 6) calc(var(--space) * 6);
     border-top: 1px solid var(--border);
     background: var(--card);
+  }
+
+  /* ==========================================================================
+     Счёт ученика (модуль finance)
+     ========================================================================== */
+  /* Суммы «Сумма платежа / Доступно к возврату» в диалоге возврата:
+     числа посчитаны сервисом, шаблон их только выводит. Моноширинный
+     шрифт — чтобы цифры сравнивались глазом, как в остальных суммах. */
+  .refund-summary__amount,
+  .refund-summary__available {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+  }
+
+  /* Панель платежей во вкладке карточки ученика: действия, баланс, списки.
+     Панель не форма — кнопки самостоятельные, поэтому сетка колонки. */
+  .finance-panel {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+
+  .finance-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  .finance-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--warning-border, var(--border));
+    border-radius: var(--radius-md);
+    background: var(--warning-soft, var(--muted));
+    font-size: var(--text-sm);
+  }
+
+  .finance-banner__text {
+    flex: 1 1 240px;
+    color: var(--foreground);
+  }
+
+  .finance-balance {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    padding: calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .finance-balance__label {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .finance-balance__value {
+    font-family: var(--font-mono);
+    font-size: var(--text-xl, 1.5rem);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .finance-balance__hint {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .finance-section {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .finance-section__title {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+
+  .finance-list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .finance-row {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    background: var(--card);
+
+    & + & {
+      border-top: 1px solid var(--border);
+    }
+  }
+
+  .finance-row__main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    min-width: 0;
+  }
+
+  .finance-row__title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .finance-row__status {
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 400;
+    color: var(--muted-foreground);
+  }
+
+  .finance-row__meta {
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+
+  .finance-row__amount {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--foreground);
+  }
+
+  .finance-row__amount--in {
+    color: var(--success, var(--foreground));
+  }
+
+  .finance-row__amount--out {
+    color: var(--destructive, var(--foreground));
+  }
+
+  .finance-row__actions {
+    display: flex;
+    gap: calc(var(--space) * 1);
+  }
+
+  .finance-empty {
+    margin: 0;
+    padding: calc(var(--space) * 4);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Итоги счёта за период: строки «стоимость / баланс / к оплате».
+     «К оплате» выделено — это то число, ради которого открыт диалог. */
+  .invoice-summary {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .invoice-summary__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .invoice-summary__row--total {
+    padding-top: calc(var(--space) * 2);
+    border-top: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .invoice-summary__amount {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--foreground);
+  }
+
+  /* ==========================================================================
+     Счёт группы: вкладка «Оплаты» модалки управления (модуль finance)
+     ========================================================================== */
+  /* Панель — не форма: чипы периода, три сводки и строки участников.
+     Чипы переиспользуют `.period-chips` из дизайн-системы. */
+  .group-payments {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+
+  .group-payments__stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: calc(var(--space) * 2);
+
+    @media (max-width: 560px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .group-payments-stat {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .group-payments-stat__label {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .group-payments-stat__value {
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--foreground);
+  }
+
+  /* Долг участников — предупреждение, а не просто число (референс). */
+  .group-payments-stat__value--danger {
+    color: var(--destructive);
+  }
+
+  .group-payments__list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .group-payments-member {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    background: var(--card);
+
+    & + & {
+      border-top: 1px solid var(--border);
+    }
+  }
+
+  .group-payments-member__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+  }
+
+  .group-payments-member__name {
+    font-weight: 500;
+    color: var(--brand);
+    text-decoration: none;
+
+    &:hover { text-decoration: underline; }
+  }
+
+  .group-payments-member__balance {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--foreground);
+  }
+
+  .group-payments-member__balance--danger {
+    color: var(--destructive);
+  }
+
+  .group-payments-member__meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .group-payments-member__charged {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .group-payments-member__debt {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .group-payments-member__debt--danger {
+    color: var(--destructive);
+  }
+
+  .group-payments__empty {
+    margin: 0;
+    padding: calc(var(--space) * 4);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .group-payments__note {
+    margin: 0;
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted-foreground);
   }
 
   .form-section {
@@ -2301,8 +2759,10 @@
     --cal-time-w: 64px;             /* ширина колонки времени */
     --cal-line: var(--border);      /* линии сетки */
     --cal-line-soft: color-mix(in srgb, var(--border) 55%, transparent);
-    --cal-weekend: color-mix(in srgb, var(--muted) 70%, transparent);
-    --cal-hatch: color-mix(in srgb, var(--muted-foreground) 22%, transparent);
+    /* Тон недоступности: единственный способ «выключить» день в сетке.
+       Выходных «по календарю» нет — суббота и воскресенье выглядят как
+       будни, пока репетитор не занёс отметку в таблицу. */
+    --cal-off: color-mix(in srgb, var(--status-cancelled) 30%, transparent);
 
     flex: 1;
     min-height: 0;                  /* иначе flex-колонка не даёт скролл */
@@ -2343,6 +2803,21 @@
   }
 
   .cal-toolbar__spacer { flex: 1; }
+
+  /* Группа кнопок действий («Цвет», «Добавить», «⋮»): один flex-элемент,
+     поэтому перенос строки панели не отрывает «⋮» от соседей. Иначе на
+     средней ширине кнопка «⋮» уезжала на вторую строку к левому краю, и её
+     меню (прижатое к правому краю кнопки) обрезалось `overflow: hidden`
+     карточки — пункт «Добавить слот» становился недоступен (найдено в
+     браузере при прогоне сценария). */
+  .cal-toolbar__actions {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    /* Перенос строки прижимает группу к правому краю: она продолжает ряд
+       кнопок панели, а не начинается заново от левого края. */
+    margin-left: auto;
+  }
 
   /* Бейдж часового пояса из профиля репетитора */
   .cal-tz {
@@ -2414,8 +2889,6 @@
     text-align: center;
   }
 
-  .cal-dayhead--weekend { background: var(--cal-weekend); }
-
   .cal-dayhead__name {
     color: var(--muted-foreground);
     font-size: var(--text-xs);
@@ -2454,6 +2927,16 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.02em;
+  }
+
+  /* Причина отметки в шапке дня (design.md D4): заменяет плашку
+     «Выходной» и подпись числа занятий, поэтому несёт тон причины —
+     тот же `--cal-off`, что и штриховка тела дня. */
+  .cal-dayhead__off--unavailable {
+    background: var(--cal-off);
+    color: var(--foreground);
+    font-weight: 600;
+    text-transform: none;
   }
 
   .cal-dayhead__dots {
@@ -2515,14 +2998,17 @@
     border-left: 1px solid var(--cal-line-soft);
   }
 
-  /* Штриховка выходных в теле сетки */
-  .cal-day--weekend {
+  /* Штриховка недоступности: единственный способ «выключить» день в сетке.
+     Выходных «по календарю» нет — суббота и воскресенье выглядят как будни,
+     пока репетитор не занёс отметку в таблицу `tutor_unavailability`
+     (спека calendar, «Выходные задаёт репетитор отметками»). */
+  .cal-day--unavailable {
     background-image: repeating-linear-gradient(
       45deg,
-      transparent 0 6px,
-      var(--cal-hatch) 6px 7px
+      transparent 0 4px,
+      var(--cal-off) 4px 6px
     );
-    background-color: var(--cal-weekend);
+    background-color: color-mix(in srgb, var(--cal-off) 40%, transparent);
   }
 
   .cal-hour {
@@ -2558,7 +3044,10 @@
     transform: translateY(-4px);
   }
 
-  /* Карточка занятия: позиция и размер — в часах от 6:00, наложение — в % */
+  /* Карточка занятия: позиция и размер — в часах от 6:00, наложение — в %.
+     `container-type: size` превращает карточку в контейнер запросов: от её
+     высоты зависит, какие строки помещаются (см. .cal-event__time ниже).
+     Высота у карточки задана явно, поэтому size-контейнмент безопасен. */
   .cal-event {
     position: absolute;
     top: calc(var(--top) * var(--cal-hour-h));
@@ -2566,16 +3055,18 @@
     left: var(--left);
     width: var(--width);
     box-sizing: border-box;
+    container-type: size;
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    padding: calc(var(--space)) calc(var(--space) * 2);
+    gap: 0;
+    padding: 1px calc(var(--space) * 2);
     border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
     border-left: 3px solid var(--accent);
     border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--accent) 12%, var(--card));
     color: var(--card-foreground);
     font-size: var(--text-xs);
+    line-height: 1.15;                /* две строки влезают в 40-минутный урок */
     overflow: hidden;
     cursor: grab;
     touch-action: none;               /* drag без конфликта со скроллом */
@@ -2597,6 +3088,12 @@
     cursor: default;
   }
 
+  /* Просроченный урок: запланирован, но время прошло (design.md D5) —
+     акцент остаётся цветом цели, красной становится только рамка. */
+  .cal-event--overdue {
+    border-color: color-mix(in srgb, #ef4444 55%, transparent);
+  }
+
   /* Карточка в процессе перетаскивания: transform двигает calendar.js;
      сам hit-тест по сетке делает calendar.js (elementUnder), поэтому
      pointer-events здесь не трогаем — они нужны для pointer capture. */
@@ -2616,19 +3113,57 @@
 
   .cal-event__strip { display: none; }  /* полоса — через border-left */
 
+  /* Имя цели (ученик или группа) — главная строка карточки: она не сжимается
+     и не исчезает даже в самом коротком уроке. */
   .cal-event__title {
+    flex: 0 0 auto;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
+  /* Вторая строка: цена и интервал времени. Обрезается первой, когда
+     высоты карточки не хватает (см. @container ниже). */
+  .cal-event__meta {
+    flex: 0 0 auto;
+    display: flex;
+    gap: var(--space);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .cal-event__price {
+    color: var(--muted-foreground);
+  }
+
   .cal-event__time {
+    flex: 0 0 auto;
     font-family: var(--font-mono);
     color: var(--muted-foreground);
   }
 
+  /* Короткий урок (30 минут, карточка 24 px): вторая строка целиком не
+     помещается — остаётся только имя. Иначе сжимались обе строки и карточка
+     читалась как «одно время» без ученика. Полный текст всегда доступен во
+     всплывающей подсказке `title`. Порог — по content-box контейнера:
+     30 минут ≈ 20 px, 40 минут ≈ 28 px. */
+  @container (max-height: 24px) {
+    .cal-event__meta {
+      display: none;
+    }
+  }
+
+  /* Пометка «Группа» — третья строка: она появляется только там, где есть
+     запас высоты (урок от 50 минут). Название группы говорит о ней и так. */
+  @container (max-height: 38px) {
+    .cal-event__tag {
+      display: none;
+    }
+  }
+
   .cal-event__tag {
+    flex: 0 0 auto;
     align-self: flex-start;
     padding: 0 calc(var(--space));
     border-radius: var(--radius-full);
@@ -2637,9 +3172,16 @@
     font-size: 10px;
   }
 
-  /* Карточка слота (спека slot-booking): собственный цвет --cal-slot-accent
-     вместо цветов учеников, пунктирная рамка, курсор указателя — слот
-     не перетаскивается. Тёмная тема — только через токен (см. .dark). */
+  /* Карточка окна для записи (спека calendar, «Окна отображаются в
+     календаре во всех режимах»): собственный цвет `--cal-slot-accent`
+     вместо цветов учеников, курсор указателя — окно не перетаскивается.
+     Тёмная тема задаёт только токен (см. `.dark`), компонентные правила
+     тему не дублируют.
+
+     Состояние окна задаёт отдельный класс (`cal-event--slot-free`,
+     `--slot-pending`, `--slot-booking`, `--slot-lesson`, `--slot-past`):
+     подпись состояния считается на сервере, а вид карточки — из этого
+     класса, поэтому новое состояние нельзя показать, забыв стиль. */
   .cal-event--slot {
     border-width: 1px;
     border-style: dashed;
@@ -2652,56 +3194,57 @@
     touch-action: auto;                /* без драга — не мешает скроллу */
   }
 
-  /* Занятый слот: сплошная рамка и залитый фон — состояние читается */
-  .cal-event--booked {
+  /* Свободно: пунктирная рамка — «место, которое можно занять» */
+  .cal-event--slot-free {
+    border-style: dashed;
+  }
+
+  /* Ожидает подтверждения: сплошная рамка, штриховка фона — заявка есть,
+     но время ещё не закреплено за учеником (design D9). */
+  .cal-event--slot-pending {
+    border-style: solid;
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0 5px,
+      color-mix(in srgb, var(--cal-slot-accent) 14%, transparent) 5px 10px
+    );
+  }
+
+  /* Занято записью и занято уроком: сплошная рамка и залитый фон —
+     время ушло, окно больше не предлагается ученику. */
+  .cal-event--slot-booking,
+  .cal-event--slot-lesson {
     border-style: solid;
     background: color-mix(in srgb, var(--cal-slot-accent) 22%, var(--card));
+  }
+
+  /* Время прошло: рамка гаснет вместе с подписью (приглушение — ниже) */
+  .cal-event--slot-past {
+    border-style: dotted;
+    background: color-mix(in srgb, var(--cal-slot-accent) 6%, var(--card));
+  }
+
+  /* Приглушение занятых и прошедших окон: карточка уходит на второй план,
+     но остаётся читаемой — подпись состояния важнее декора. */
+  .cal-event--muted {
+    opacity: 0.6;
     cursor: default;
   }
 
-  /* Подпись состояния: «Свободен · запись по ссылке» / «Занят: <имя>» */
-  .cal-event__state {
-    font-weight: 600;
-    overflow: hidden;
+  /* Подпись состояния окна («Свободно», «Занято уроком», …).
+     Как и имя цели у урока, она не сжимается: без `flex: 0 0 auto`
+     подпись схлопывалась до нуля, и окно читалось как одно время. */
+  .cal-event--slot .cal-event__title {
+    flex: 0 0 auto;
   }
 
-  /* Кнопка «Записаться» — только на карточке свободного слота */
-  .cal-event__book {
-    align-self: flex-start;
-    margin-top: 1px;
-    padding: 0 calc(var(--space) * 2);
-    border: 1px solid var(--cal-slot-accent);
-    border-radius: var(--radius-full);
-    background: var(--cal-slot-accent);
-    color: var(--background);
-    font-size: 10px;
-    line-height: 1.5;
-    cursor: pointer;
-  }
-
-  .cal-event__book:hover {
-    background: color-mix(in srgb, var(--cal-slot-accent) 82%, var(--foreground));
-  }
-
-  /* Блок отпуска: занимает весь день, визуально не урок */
-  .cal-vacation {
-    position: absolute;
-    inset: 2px;
-    z-index: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px dashed var(--cal-line);
-    border-radius: var(--radius-sm);
-    background: repeating-linear-gradient(
-      -45deg,
-      var(--cal-weekend) 0 8px,
-      transparent 8px 16px
-    );
-    color: var(--muted-foreground);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    pointer-events: none;             /* не перехватывает клики по сетке */
+  /* Окно ниже 48 px (40 минут ≈ 32 px): три строки не помещаются —
+     убираем интервал времени, оставляя подпись состояния, то есть то,
+     по чему окно и опознаётся. */
+  @container (max-height: 47px) {
+    .cal-event--slot .cal-event__meta {
+      display: none;
+    }
   }
 
   /* Выпадающий список «Цвет» (заглушка без битых ссылок) */
@@ -2752,7 +3295,30 @@
     background: var(--muted);
   }
 
-  /* Тост подтверждений демо-режима */
+  /* Активный режим раскраски в меню «Цвет» (design.md D5) */
+  .cal-color__menu button.is-active {
+    background: var(--muted);
+    font-weight: 600;
+  }
+
+  /* Поле показа публичной ссылки, когда буфер обмена недоступен (спека
+     calendar, «Буфер обмена недоступен»): ссылку можно выделить и
+     скопировать вручную. Ширина ограничена, чтобы панель не разъезжалась
+     на узких экранах, а поле прокручивало длинный адрес. */
+  .cal-link-fallback {
+    flex: 1 1 100%;
+    display: flex;
+    gap: calc(var(--space) * 2);
+  }
+
+  .cal-link-fallback__field {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  /* Тост подтверждений действий панели (копирование ссылки) */
   .cal-toast {
     position: fixed;
     left: 50%;
@@ -2769,56 +3335,9 @@
     pointer-events: none;
   }
 
-  /* Модалка «Новый урок»: затемнение + панель поверх любой страницы */
-  .cal-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: calc(var(--space) * 2);
-  }
-
-  .cal-modal__backdrop {
-    position: absolute;
-    inset: 0;
-    background: color-mix(in srgb, var(--background) 55%, transparent);
-    backdrop-filter: blur(2px);
-  }
-
-  .cal-modal__panel {
-    position: relative;
-    width: min(22rem, calc(100vw - 2rem));
-    display: flex;
-    flex-direction: column;
-    gap: calc(var(--space) * 3);
-    padding: calc(var(--space) * 4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--card);
-    color: var(--card-foreground);
-    box-shadow: var(--shadow-card);
-  }
-
-  .cal-modal__title {
-    font-size: var(--text-base);
-    font-weight: 700;
-  }
-
-  /* Дата и время, подставленные из четверти часа */
-  .cal-modal__slot {
-    margin: calc(var(--space) * -2) 0 0;
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--muted-foreground);
-  }
-
-  .cal-modal__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: calc(var(--space) * 2);
-  }
+  /* Модалки календаря удалены вместе с демо-слоем: диалог окна приходит
+     серверным фрагментом `slot/_dialog.html` и использует общие
+     `.modal-*` из дизайн-системы. */
 
   /* Плавающая кнопка «+» (узкие экраны): добавление урока без FAB-вида
      «День», который отложен в следующий change */
@@ -2852,6 +3371,583 @@
   @media (max-width: 639.98px) {
     .cal-toolbar { padding: calc(var(--space) * 2) calc(var(--space) * 3); }
     .cal-toolbar__title { font-size: var(--text-base); width: 100%; margin-left: 0; }
+  }
+
+  /* ==========================================================================
+     Панель «Отпуск и выходные» (.un-*)
+
+     Форма новой отметки и список «Уже отмечено» в одной панели модалки
+     (design.md D8/D11). Цвета — только токены темы: панель живёт и в
+     светлой, и в тёмной теме.
+     ======================================================================= */
+
+  /* Корень панели: своя ширина — список отметок уже формы урока */
+  .un-panel .modal-content {
+    max-width: 640px;
+  }
+
+  /* Переключатель режима: «Период» / «Постоянный выходной» */
+  .un-modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  .un-modes__option {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space));
+    padding: calc(var(--space)) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--background);
+    color: var(--foreground);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  /* Выбранный режим: акцентная рамка и фон — как у активного таба */
+  .un-modes__option:has(input:checked) {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .un-modes__option input {
+    accent-color: var(--primary);
+  }
+
+  /* Поля выбранного режима: `template x-if` вставляет их одной группой,
+     поэтому им нужна своя двухколоночная сетка внутри `form-section`. */
+  .un-fields {
+    display: contents;
+  }
+
+  /* Список «Уже отмечено» */
+  .un-marks {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .un-marks__title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .un-marks__empty {
+    padding: calc(var(--space) * 3);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .un-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Строка отметки: причина и срок слева, действия справа */
+  .un-mark {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+  }
+
+  /* Прошедшая отметка приглушена: она уже не влияет на будущие недели */
+  .un-mark--past {
+    opacity: 0.72;
+  }
+
+  .un-mark__main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 8rem;
+  }
+
+  .un-mark__reason {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .un-mark__span {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .un-mark__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space));
+  }
+
+  .un-mark__field {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Свёрнутый блок прошедших отметок (design.md D11) */
+  .un-past {
+    margin-top: calc(var(--space));
+  }
+
+  .un-past__summary {
+    padding: calc(var(--space)) 0;
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  /* ==========================================================================
+     Окно для записи: диалог и предпросмотр пачки (спека slot-management)
+     ========================================================================== */
+
+  /* Корень диалога: чуть шире формы урока — в режиме пачки две колонки
+     полей и блок предпросмотра. */
+  .slot-dialog .modal-content {
+    max-width: 40rem;
+  }
+
+  /* Блок ошибок в диалоге: отдельная полоса над формой, чтобы сообщение о
+     конфликте времени не смешивалось с полями. */
+  .slot-dialog__errors {
+    padding-bottom: 0;
+  }
+
+  /* Переключатель режима: «Одно окно» / «Несколько дней» — та же геометрия,
+     что у режимов панели недоступности. */
+  .slot-modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 3);
+  }
+
+  .slot-modes__option {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space));
+    padding: calc(var(--space)) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--background);
+    color: var(--foreground);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .slot-modes__option:has(input:checked) {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .slot-modes__option input {
+    accent-color: var(--primary);
+  }
+
+  /* Дни недели пачки: компактные пилюли, выбранный день — акцентный. */
+  .slot-weekdays {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  .slot-weekdays__option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    padding: calc(var(--space)) calc(var(--space) * 2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--background);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .slot-weekdays__option:has(input:checked) {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  /* Чекбокс скрыт визуально, но остаётся доступным для клавиатуры и
+     скринридера: подпись целиком — цель клика. */
+  .slot-weekdays__option input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Блок предпросмотра пачки: отдельная секция с рамкой — число окон не
+     должно теряться среди полей формы. */
+  .slot-preview-box {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .slot-preview-box__title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .slot-preview {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Число окон — главная строка отчёта: крупнее остальных подписей. */
+  .slot-preview__count {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .slot-preview__empty {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  /* Времена одного дня: подпись дня и чипы времени в одну строку с переносом. */
+  .slot-preview__times {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space));
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .slot-preview__day {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .slot-preview__time {
+    padding: 0 calc(var(--space) * 2);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .slot-preview__skips {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space));
+  }
+
+  .slot-preview__skips-title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+
+  .slot-skip-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) / 2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Строка пропуска: когда и почему — причина справа, серым. */
+  .slot-skip {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+  }
+
+  .slot-skip__when {
+    font-family: var(--font-mono);
+    color: var(--foreground);
+  }
+
+  .slot-skip__reason {
+    color: var(--muted-foreground);
+  }
+
+  /* Карточка заявки в диалоге окна: имя, контакт и статус брони. */
+  .slot-booking {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) / 2);
+    margin-top: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3);
+    border: 1px solid color-mix(in srgb, var(--cal-slot-accent) 45%, var(--border));
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--cal-slot-accent) 8%, var(--card));
+  }
+
+  .slot-booking__title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .slot-booking__person {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .slot-booking__contact {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .slot-booking__status {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Форма действия с бронью: своя, а не часть формы окна (вложенные <form>
+     в HTML запрещены). Внутри — поля выбора ученика и кнопки действия. */
+  .slot-booking__form {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) / 2);
+    margin-top: calc(var(--space) * 2);
+  }
+
+  /* Кнопки действия: слева «Отклонить»/«Отменить», справа «Подтвердить».
+     Перенос разрешён — на узком экране кнопки встают в столбец. */
+  .slot-booking__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) / 2);
+    justify-content: flex-end;
+  }
+
+  /* ==========================================================================
+     Публичная страница записи (спека public-booking)
+     ========================================================================== */
+
+  /* Страница без сайдбара и навигации CRM: ученик приходит по ссылке из
+     мессенджера и не должен видеть интерфейс кабинета. */
+  .public-page {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    justify-content: center;
+    padding: calc(var(--space) * 4);
+    background: var(--surface);
+  }
+
+  .public-card {
+    width: 100%;
+    max-width: 44rem;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+    padding: calc(var(--space) * 6);
+    height: fit-content;
+  }
+
+  .public-card__header {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) / 2);
+  }
+
+  .public-card__brand {
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--brand);
+    letter-spacing: -0.01em;
+  }
+
+  .public-card__title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--foreground);
+  }
+
+  .public-card__tutor {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .public-card__subject {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Подпись о часовом поясе: предупреждение, а не украшение — поэтому
+     рамка, а не мелкий серый текст (спека public-booking). */
+  .public-card__zone {
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .public-card__notice {
+    margin: 0;
+  }
+
+  .public-card__errors {
+    margin: 0;
+  }
+
+  .public-card__empty {
+    padding: calc(var(--space) * 4) 0;
+    text-align: center;
+    color: var(--muted-foreground);
+  }
+
+  .public-card__footer {
+    padding-top: calc(var(--space) * 3);
+    border-top: 1px solid var(--border);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Переключение недели: те же стрелки, что у календаря, но без кнопок
+     управления — ученику доступен только просмотр. */
+  .public-week {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    padding-bottom: calc(var(--space) * 2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .public-week__nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .public-week__nav:hover {
+    color: var(--foreground);
+    background: var(--muted);
+  }
+
+  .public-week__label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .public-day {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .public-day__title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+
+  .public-slots {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .public-slot {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+  }
+
+  /* Форма одного окна: время и длительность слева, поля и кнопка — ниже.
+     Одна форма на окно, потому что вложенные <form> в HTML запрещены. */
+  .public-slot__form {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3);
+  }
+
+  .public-slot__time {
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--cal-slot-accent);
+  }
+
+  .public-slot__duration {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .public-slot__fields {
+    display: grid;
+    gap: calc(var(--space) * 2);
+  }
+
+  .public-slot__field {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) / 2);
+  }
+
+  .public-slot__submit {
+    align-self: flex-start;
+  }
+
+  /* На широком экране поля встают в две колонки: форма окна остаётся
+     компактной, а кнопка — на своём месте. */
+  @media (min-width: 640px) {
+    .public-slot__fields {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   /* ==========================================================================

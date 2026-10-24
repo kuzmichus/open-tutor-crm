@@ -16,6 +16,19 @@ from app.student.services.presentation import (
 )
 from app.student.services.students import contact_links, contact_options_json
 
+# Вкладки карточки ученика: закрытый список для `?tab=` (design D12).
+# Сводка счёта на карточке открывает модалку сразу на «Платежах».
+FORM_TABS = ("general", "payments", "settings")
+
+
+def normalize_tab(value: str | None) -> str:
+    """Имя вкладки из адреса; неизвестное или пустое — «Общее».
+
+    Проверка на сервере, а не в шаблоне: `?tab=что-угодно` не должно
+    открывать пустой таб, и в разметку не попадает значение из URL.
+    """
+    return value if value in FORM_TABS else FORM_TABS[0]
+
 
 def form_context(
     db: Session,
@@ -26,6 +39,7 @@ def form_context(
     errors: list[str] | None = None,
     rows: list[dict] | None = None,
     from_card: bool = False,
+    tab: str = "general",
 ) -> dict:
     """Готовит контекст `_form.html` для создания или редактирования.
 
@@ -35,6 +49,10 @@ def form_context(
 
     `from_card` — форма открыта со страницы карточки: после сохранения
     обновляется вся страница, а не карточка в сетке (её там нет).
+
+    `tab` — вкладка, на которой открывается модалка: сводка на карточке
+    ученика ведёт сразу на «Платежи» (`?tab=payments`, design D12).
+    Неизвестное значение сводится к «Общему» — иначе открылся бы пустой таб.
 
     Блок контактов по умолчанию не содержит пустых строк: привязанные
     контакты показываются свёрнутым списком, а добавление идёт через
@@ -82,6 +100,9 @@ def form_context(
         "action": action,
         "title": title,
         "from_card": from_card,
+        # Вкладка, на которой открывается модалка. Пришло из адреса —
+        # проверено вьюхой по закрытому списку (см. `TAB_NAMES`).
+        "tab": tab,
         # Порядок статусов в селекте задаётся моделью, а не шаблоном.
         "statuses": STUDENT_STATUSES,
         # Справочник часовых зон (IANA) для селекта с поиском.

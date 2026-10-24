@@ -1,12 +1,11 @@
 """Тесты модуля homework: модель, форма, сохранение, панель и изоляция."""
 
 import re
-from contextlib import contextmanager
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.homework.models.homework import (
@@ -22,22 +21,10 @@ from app.lesson.models.lesson_series import LessonSeries
 PASSWORD = "Секретный-Пароль-1"
 HTMX = {"HX-Request": "true"}
 
+# Карточка репетитора для разбора формы: сервисам нужен только её зона.
+# UTC — тесты не зависят от системной зоны машины (спека tutor-timezone).
+UTC_TUTOR = SimpleNamespace(timezone="UTC")
 
-@contextmanager
-def _expect_integrity_error():
-    """Контекст: `session.commit()` обязан упасть с IntegrityError.
-
-    Используется для проверок CHECK-ограничений: запись с недопустимым
-    значением не должна сохраниться.
-    """
-    with SessionLocal() as session:
-        yield session
-        try:
-            session.commit()
-        except IntegrityError:
-            session.rollback()
-            return
-    raise AssertionError("ожидался IntegrityError, но запись сохранилась")
 
 
 @pytest.fixture()
@@ -128,9 +115,9 @@ def test_homework_statuses_match_labels():
     assert HOMEWORK_STATUS_LABELS["not_assigned"] == "Не задано"
 
 
-def test_homework_status_out_of_list_fails_check(lesson_id):
+def test_homework_status_out_of_list_fails_check(lesson_id, expect_integrity_error):
     """Статус вне закрытого списка отклоняется CHECK-ограничением."""
-    with _expect_integrity_error() as db:
+    with expect_integrity_error() as db:
         db.add(
             Homework(
                 lesson_id=lesson_id,
@@ -140,13 +127,13 @@ def test_homework_status_out_of_list_fails_check(lesson_id):
         )
 
 
-def test_homework_lesson_id_is_unique(lesson_id):
+def test_homework_lesson_id_is_unique(lesson_id, expect_integrity_error):
     """Вторая запись ДЗ на тот же урок невозможна (UNIQUE на lesson_id)."""
     with SessionLocal() as db:
         db.add(Homework(lesson_id=lesson_id, assignment="Первое ДЗ"))
         db.commit()
 
-    with _expect_integrity_error() as db:
+    with expect_integrity_error() as db:
         db.add(Homework(lesson_id=lesson_id, assignment="Второе ДЗ"))
 
 
@@ -158,7 +145,7 @@ def test_homework_lesson_id_is_unique(lesson_id):
 def test_parse_empty_assignment_is_error():
     """Пустое или пробельное «Задание» — ошибка «Укажите задание.»."""
     for raw in ("", "   "):
-        data, errors = parse_homework_form({"assignment": raw})
+        data, errors = parse_homework_form({"assignment": raw}, UTC_TUTOR)
         assert "Укажите задание." in errors, raw
         assert data["assignment"] == ""
 
@@ -166,7 +153,7 @@ def test_parse_empty_assignment_is_error():
 def test_parse_empty_due_at_is_not_error():
     """Пустой «Срок сдачи» — не ошибка, значение None."""
     data, errors = parse_homework_form(
-        {"assignment": "§ 12, упр. 4", "due_at": ""}
+        {"assignment": "§ 12, упр. 4", "due_at": ""}, UTC_TUTOR
     )
     assert errors == []
     assert data["due_at"] is None
@@ -175,25 +162,39 @@ def test_parse_empty_due_at_is_not_error():
 def test_parse_broken_due_at_is_error():
     """Кривая строка срока сдачи — ошибка, значение не сохраняется."""
     data, errors = parse_homework_form(
-        {"assignment": "§ 12", "due_at": "позже"}
+        {"assignment": "§ 12", "due_at": "позже"}, UTC_TUTOR
     )
     assert "Укажите корректный срок сдачи." in errors
     assert data["due_at"] is None
 
 
-def test_parse_valid_due_at():
-    """Корректный `datetime-local` разбирается в datetime без ошибок."""
+@pytest.mark.parametrize(
+    ("timezone", "expected"),
+    [
+        ("UTC", datetime(2026, 10, 25, 18, 0, tzinfo=UTC)),
+        ("Europe/Ulyanovsk", datetime(2026, 10, 25, 14, 0, tzinfo=UTC)),
+    ],
+    ids=["utc", "utc-plus4"],
+)
+def test_parse_due_at_converts_tutor_zone_to_utc(timezone, expected):
+    """Срок `datetime-local` хранится в aware UTC по зоне педагога.
+
+    Спека (задача 6.1): 18:00 настенного времени при зоне UTC+04 — это
+    14:00 UTC; при зоне UTC настенное время совпадает с UTC-значением.
+    """
     data, errors = parse_homework_form(
-        {"assignment": "§ 12", "due_at": "2026-10-25T18:00"}
+        {"assignment": "§ 12", "due_at": "2026-10-25T18:00"},
+        SimpleNamespace(timezone=timezone),
     )
+
     assert errors == []
-    assert data["due_at"] == datetime(2026, 10, 25, 18, 0)
+    assert data["due_at"] == expected
 
 
 def test_parse_status_out_of_list_is_error():
     """Статус вне закрытого списка отклоняется валидацией (спека)."""
     data, errors = parse_homework_form(
-        {"assignment": "§ 12", "status": "in_progress"}
+        {"assignment": "§ 12", "status": "in_progress"}, UTC_TUTOR
     )
     assert "Выберите статус домашнего задания." in errors
     assert data["status"] == "in_progress"
@@ -207,7 +208,8 @@ def test_parse_clears_optional_text_fields():
             "recording_url": "  ",
             "teacher_note": "",
             "teacher_comment": "",
-        }
+        },
+        UTC_TUTOR,
     )
     assert errors == []
     assert data["assignment"] == "§ 12"
@@ -485,6 +487,83 @@ def test_edit_prefills_saved_homework(owner, client, owner_lesson):
     assert re.search(r'<option value="checked"[^>]*selected', page)
     # Чекбокс дедлайна сохранён выключенным.
     assert not re.search(r'name="deadline_enabled"[^>]*checked', page)
+
+
+# --------------------------------------------------------------------------
+# Срок сдачи в зоне педагога (change store-datetimes-in-utc, 6.1–6.2)
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def owner_utc_plus4(client, tutor_factory, student_factory):
+    """Репетитор с зоной UTC+04 и его урок; возвращает id урока."""
+    tutor_id = tutor_factory(
+        email="homework-tz@example.com",
+        password=PASSWORD,
+        timezone="Europe/Ulyanovsk",
+    )
+    client.post(
+        "/tutor/login",
+        data={"email": "homework-tz@example.com", "password": PASSWORD},
+        follow_redirects=False,
+    )
+    student = student_factory(tutor_id=tutor_id, first_name="Мария")
+    with SessionLocal() as db:
+        lesson = Lesson(
+            student_id=student,
+            type="individual",
+            starts_at=datetime(2026, 10, 19, 6, 0, tzinfo=UTC),
+            duration_min=60,
+        )
+        db.add(lesson)
+        db.commit()
+        return str(lesson.id)
+
+
+def _saved_due_at(lesson_id: str):
+    """Срок сдачи из БД (naive-формат SQLite: UTC без tzinfo)."""
+    with SessionLocal() as db:
+        return get_homework(db, lesson_id).due_at
+
+
+def test_homework_due_at_stored_and_shown_in_tutor_zone(client, owner_utc_plus4):
+    """Спека (задача 6.1): ввод 18:00 при зоне UTC+04 → 14:00 в БД.
+
+    При повторном открытии панели поле снова показывает 18:00 — обратный
+    перевод на выводе (спека tutor-timezone, «Показ срока сдачи»).
+    """
+    response = client.post(
+        f"/tutor/lessons/{owner_utc_plus4}/homework",
+        data=_hw_form(due_at="2026-10-25T18:00"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+
+    # 18:00 в UTC+04 — это 14:00 UTC того же дня.
+    assert _saved_due_at(owner_utc_plus4) == datetime(2026, 10, 25, 14, 0)
+
+    # Панель показывает настенное время педагога, а не UTC.
+    page = client.get(f"/tutor/lessons/{owner_utc_plus4}/edit").text
+    assert 'value="2026-10-25T18:00"' in page
+
+
+def test_homework_resave_without_due_change_keeps_deadline(client, owner_utc_plus4):
+    """Спека (задача 6.2): повторное сохранение без правки срока не сдвигает его."""
+    client.post(
+        f"/tutor/lessons/{owner_utc_plus4}/homework",
+        data=_hw_form(due_at="2026-10-25T18:00"),
+        headers=HTMX,
+    )
+    before = _saved_due_at(owner_utc_plus4)
+
+    # Панель прислала то же настенное время — перевода «туда-обратно» быть не должно.
+    response = client.post(
+        f"/tutor/lessons/{owner_utc_plus4}/homework",
+        data=_hw_form(due_at="2026-10-25T18:00"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+    assert _saved_due_at(owner_utc_plus4) == before == datetime(2026, 10, 25, 14, 0)
 
 
 # --------------------------------------------------------------------------

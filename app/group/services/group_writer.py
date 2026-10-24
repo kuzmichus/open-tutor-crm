@@ -14,6 +14,7 @@ from datetime import UTC, datetime, time
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.common.colors import assign_color
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
 from app.group.services.group_form import (
@@ -83,6 +84,7 @@ def create_group(
         description=data["description"],
         price_per_lesson=data["price"],
         meeting_url=data.get("meeting_url"),
+        color=assign_color(db, tutor_id),
     )
     db.add(group)
     db.flush()

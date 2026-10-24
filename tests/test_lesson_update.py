@@ -116,9 +116,53 @@ def _update_form(student_id: str, **extra) -> dict:
     return data
 
 
+def _owner_utc_plus4(client, tutor_factory):
+    """Репетитор с зоной Europe/Ulyanovsk (UTC+04), вошедший в клиент."""
+    email = "lessons-update-tz@example.com"
+    tutor_id = tutor_factory(
+        email=email, password=PASSWORD, timezone="Europe/Ulyanovsk"
+    )
+    client.post(
+        "/tutor/login",
+        data={"email": email, "password": PASSWORD},
+        follow_redirects=False,
+    )
+    return tutor_id
+
+
 # --------------------------------------------------------------------------
 # 6.1 Модалка редактирования
 # --------------------------------------------------------------------------
+
+
+def test_edit_form_prefills_local_and_saving_keeps_utc(
+    client, tutor_factory, student_factory
+):
+    """Спека (задача 3.2): урок `06:00 UTC` при зоне UTC+04.
+
+    Поле «Начало» показывает настенное время 10:00, а сохранение без
+    правки не сдвигает хранимое значение в БД.
+    """
+    owner = _owner_utc_plus4(client, tutor_factory)
+    student = student_factory(tutor_id=owner)
+    # Хранимое значение — 06:00 UTC, что в зоне UTC+04 есть 22.10 10:00.
+    lesson_id = _insert_lesson(
+        owner, student_id=student, starts_at=datetime(2026, 10, 22, 6, 0)
+    )
+
+    page = client.get(f"/tutor/lessons/{lesson_id}/edit").text
+    assert 'value="2026-10-22T10:00"' in page
+    # Подзаголовок модалки — интервал в зоне педагога: 10:00–11:00 (задача 5.1).
+    assert "10:00–11:00" in page
+
+    # Сохранение без правки не меняет хранимое UTC-значение.
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}",
+        data=_update_form(student, starts_at="2026-10-22T10:00"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 22, 6, 0)
 
 
 def test_edit_form_renders(owner, client, student_factory):
@@ -496,3 +540,187 @@ def test_delete_series_of_single_lesson_404(owner, client, student_factory):
     )
     assert response.status_code == 404
     assert _exists(Lesson, single)
+
+
+# --------------------------------------------------------------------------
+# Перенос урока перетаскиванием (change calendar-real-lessons, 5.1–5.2)
+# --------------------------------------------------------------------------
+
+def test_move_lesson_changes_only_starts_at(owner, client, student_factory):
+    """5.1: успешный перенос меняет только начало и шлёт `lesson-saved`."""
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(
+        owner, student_id=student, note="Не трогать",
+        starts_at=datetime(2026, 10, 19, 10, 0),
+    )
+    before = _lesson(lesson_id)
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}/move",
+        data={"date": "2026-10-23", "time": "16:30"},
+        headers=HTMX,
+    )
+
+    assert response.status_code == 200
+    assert response.headers["HX-Trigger"] == "lesson-saved"
+    assert response.text == ""  # пустое тело — неделя перерисовывается
+
+    after = _lesson(lesson_id)
+    assert after["starts_at"] == datetime(2026, 10, 23, 16, 30)
+    # Остальные поля урока не изменились: drag трогает только начало.
+    for field in (
+        "student_id", "type", "duration_min", "note", "meeting_url",
+        "price", "status", "rating", "family_comment", "series_id",
+    ):
+        assert after[field] == before[field], field
+
+
+def test_move_lesson_in_tutor_zone_saves_utc(
+    client, tutor_factory, student_factory
+):
+    """Спека (задача 5.3): перенос 16:30 при зоне UTC+04 сохраняет 12:30 UTC.
+
+    Переданные дата и время трактуются как настенное время в зоне педагога.
+    """
+    owner = _owner_utc_plus4(client, tutor_factory)
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(
+        owner, student_id=student, starts_at=datetime(2026, 10, 19, 6, 0)
+    )
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}/move",
+        data={"date": "2026-10-23", "time": "16:30"},
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+
+    # 16:30 в UTC+04 — это 12:30 UTC того же дня.
+    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 23, 12, 30)
+
+    # Календарь показывает урок в настенном времени педагога: 16:30, а не 12:30
+    # (спека tutor-timezone, «Показ времени урока»).
+    calendar = client.get("/tutor/calendar?start=2026-10-19").text
+    assert 'hx-get="/tutor/lessons/' + lesson_id in calendar
+    assert "16:30 – 17:30" in calendar
+
+
+def test_move_lesson_without_htmx_redirects(owner, client, student_factory):
+    """5.1: прямая POST-навигация без htmx уводит на календарь."""
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(owner, student_id=student)
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}/move",
+        data={"date": "2026-10-23", "time": "16:30"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/tutor/calendar"
+    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 23, 16, 30)
+
+
+def test_move_foreign_lesson_is_missing(owner, client, tutor_factory, student_factory):
+    """5.1: чужой урок отвечает как несуществующий (404), время не меняется."""
+    stranger = tutor_factory(email="move-stranger@example.com")
+    foreign_student = student_factory(tutor_id=stranger)
+    foreign_lesson = _insert_lesson(stranger, student_id=foreign_student)
+    before = _lesson(foreign_lesson)["starts_at"]
+
+    response = client.post(
+        f"/tutor/lessons/{foreign_lesson}/move",
+        data={"date": "2026-10-23", "time": "16:30"},
+        headers=HTMX,
+    )
+    assert response.status_code == 404
+    assert _lesson(foreign_lesson)["starts_at"] == before
+
+
+def test_move_completed_lesson_is_rejected(owner, client, student_factory):
+    """5.1: проведённый урок переносить нельзя — 409, время не меняется."""
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(
+        owner, student_id=student, status="completed",
+        starts_at=datetime(2026, 10, 19, 10, 0),
+    )
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}/move",
+        data={"date": "2026-10-23", "time": "16:30"},
+        headers=HTMX,
+    )
+    assert response.status_code == 409
+    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 19, 10, 0)
+
+
+def test_move_lesson_with_bad_datetime_is_rejected(owner, client, student_factory):
+    """5.1: кривые дата/время — 400, урок остаётся на месте."""
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(
+        owner, student_id=student, starts_at=datetime(2026, 10, 19, 10, 0)
+    )
+
+    for payload in (
+        {"date": "banana", "time": "16:30"},
+        {"date": "2026-10-23", "time": "25:99"},
+        {"date": "", "time": ""},
+    ):
+        response = client.post(
+            f"/tutor/lessons/{lesson_id}/move", data=payload, headers=HTMX
+        )
+        assert response.status_code == 400, payload
+    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 19, 10, 0)
+
+
+def test_move_lesson_requires_session(client, tutor_factory, student_factory):
+    """5.1: без входа перенос не выполняется — редирект на вход."""
+    tutor_id = tutor_factory(email="move-anon@example.com")
+    student = student_factory(tutor_id=tutor_id)
+    lesson_id = _insert_lesson(tutor_id, student_id=student)
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}/move",
+        data={"date": "2026-10-23", "time": "16:30"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/tutor/login"
+    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 19, 10, 0)
+
+
+def test_move_route_does_not_shadow_static_lesson_routes(
+    owner, client, student_factory, group_factory
+):
+    """5.2: `/move` не перехватывает статические маршруты модуля lesson.
+
+    `POST /tutor/lessons/{lesson_id}/move` зарегистрирован после
+    статических путей; `/students` и `/groups` по-прежнему отвечают своими
+    обработчиками (мини-формы цели урока), а не 404/422 от `{lesson_id}`.
+    """
+    # Мини-форма ученика: свой обработчик, не маршрут с параметром.
+    created = client.post(
+        "/tutor/lessons/students",
+        data={"first_name": "Мини", "last_name": "Ученик"},
+        headers=HTMX,
+    )
+    assert created.status_code == 200
+    assert "data-selected" in created.text
+
+    created_group = client.post(
+        "/tutor/lessons/groups",
+        data={"name": "Мини-группа"},
+        headers=HTMX,
+    )
+    assert created_group.status_code == 200
+    assert "data-selected" in created_group.text
+
+    # И сам перенос доступен.
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(owner, student_id=student)
+    moved = client.post(
+        f"/tutor/lessons/{lesson_id}/move",
+        data={"date": "2026-10-20", "time": "09:15"},
+        headers=HTMX,
+    )
+    assert moved.status_code == 200
+    assert moved.headers["HX-Trigger"] == "lesson-saved"

@@ -6,17 +6,17 @@
 добавляет ученика в состав формы с датой вступления «сегодня» (D9).
 """
 
-from datetime import date
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.common.access import require_tutor_id
+from app.common.services.tutor_time import today_local
 from app.database import get_db
 from app.group.services.members import addable_students, student_full_name, student_option
 from app.group.services.student_mini import create_student, parse_mini_form
 from app.templating import templates
+from app.tutor.models.tutor import Tutor
 
 router = APIRouter()
 
@@ -64,7 +64,10 @@ async def create_group_student(
         "id": student.id,
         "name": student_full_name(student),
         "grade": student.grade,
-        "joined": date.today().isoformat(),
+        # Дата вступления — «сегодня» в зоне педагога (design.md D7): у
+        # репетитора на UTC+04 календарная дата может отличаться от даты
+        # сервера, и запись в списке состава была бы на сутки старше.
+        "joined": today_local(db.get(Tutor, tutor_id)).isoformat(),
         "price": "",
     }
     return _update_response(request, member=member, options=options)

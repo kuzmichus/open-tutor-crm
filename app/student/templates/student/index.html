@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Ученики — Open Tutor CRM{% endblock %}
 
+{% block head %}
+    {# Диалоги счёта ученика (платёж, возврат, счёт за период) — второй слой
+       модалок. Идёт до alpine.min.js: подписка на `alpine:init` должна
+       сработать раньше обхода DOM (тот же порядок, что у calendar.js). #}
+    <script src="/static/payments.js" defer></script>
+{% endblock %}
+
 {% block body %}
     {% include "sidebar.html" %}
 
@@ -101,6 +108,10 @@
 
             <!-- Сюда htmx вставляет форму создания/редактирования -->
             <div id="modal"></div>
+            <!-- Второй слой модалок (design D10): платёж, возврат, счёт.
+                 Сосед `#modal`, а не его потомок: карточка ученика со своими
+                 несохранёнными полями остаётся открытой под ним. -->
+            <div id="modal-payment"></div>
         </div>
     </main>
 

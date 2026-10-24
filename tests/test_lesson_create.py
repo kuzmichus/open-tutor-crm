@@ -223,6 +223,37 @@ def test_create_single_lesson(owner, client, student_factory):
     assert lesson["series_id"] is None
 
 
+def test_create_single_lesson_converts_zone_to_utc(client, tutor_factory, student_factory):
+    """Спека (задача 3.1): форма при зоне UTC+04 хранит начало в UTC.
+
+    Отправленное `starts_at=2026-10-22T10:00` — настенное время педагога;
+    в БД уходит `06:00+00:00`, а не локальное 10:00.
+    """
+    email = "lessons-create-tz@example.com"
+    tutor_id = tutor_factory(
+        email=email, password=PASSWORD, timezone="Europe/Ulyanovsk"
+    )
+    client.post(
+        "/tutor/login",
+        data={"email": email, "password": PASSWORD},
+        follow_redirects=False,
+    )
+    student = student_factory(tutor_id=tutor_id)
+
+    response = client.post(
+        "/tutor/lessons",
+        data=_form(student, starts_at="2026-10-22T10:00"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+
+    lessons = _all_lessons()
+    assert len(lessons) == 1
+    # 10:00 в UTC+04 (Europe/Ulyanovsk) — это 06:00 UTC того же дня
+    # (SQLite отдаёт наивное значение в формате хранения).
+    assert lessons[0]["starts_at"] == datetime(2026, 10, 22, 6, 0)
+
+
 def test_create_without_htmx_redirects(owner, client, student_factory):
     """Прямая POST-навигация без htmx — редиректом на список."""
     student = student_factory(tutor_id=owner)
@@ -461,3 +492,28 @@ def test_create_repeat_requires_slots(owner, client, student_factory):
     assert "Панель расписания пуста: добавьте хотя бы один слот." in response.text
     assert _all_lessons() == []
     assert _all_series() == []
+
+
+# --------------------------------------------------------------------------
+# Префилл «Начала» из календаря (change calendar-real-lessons, задача 3.1)
+# --------------------------------------------------------------------------
+
+def _starts_input(page: str) -> str:
+    """Тег поля «Начало» из разметки формы."""
+    match = re.search(r'<input class="input" id="lesson-starts-at".*?>', page, re.S)
+    assert match is not None, "Поля «Начало» нет в форме"
+    return match.group(0)
+
+
+def test_new_lesson_form_prefills_start_from_calendar(owner, client):
+    """`?starts_at=` заполняет «Начало» (спека «Префилл из календаря»)."""
+    page = client.get("/tutor/lessons/new?starts_at=2026-10-15T07:15").text
+    assert 'value="2026-10-15T07:15"' in _starts_input(page)
+
+
+def test_new_lesson_form_ignores_bad_start(owner, client):
+    """Некорректный `starts_at` — форма открыта, «Начало» пустое."""
+    response = client.get("/tutor/lessons/new?starts_at=abc")
+    assert response.status_code == 200
+    assert "Новый урок" in response.text
+    assert 'value=""' in _starts_input(response.text)

@@ -1,0 +1,64 @@
+{# Блок предпросмотра пачки (спека slot-management, «Предпросмотр пачки
+   считается сервером», design.md D6).
+
+   Отдаётся двумя путями с одним расчётом: `GET /tutor/slots/plan` —
+   предпросмотр, `POST /tutor/slots/batch` — отчёт после создания
+   (`slot_preview.result`). Поэтому число в предпросмотре физически не
+   может разойтись с результатом: это один и тот же `batch.plan()`.
+
+   Контекст: slot_preview = {result, create, created, skips, skip_count,
+   total, errors, day, day_times} или None (форма ещё невалидна). #}
+{% if slot_preview %}
+<div class="slot-preview">
+    {% if slot_preview.errors %}
+    <div class="error" role="alert">
+        <ul>
+            {% for message in slot_preview.errors %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% elif slot_preview.result %}
+    {# Отчёт после создания: сколько создано и что пропущено с причиной. #}
+    <p class="slot-preview__count" data-slot-created="{{ slot_preview.created }}">
+        Создано окон: {{ slot_preview.created }}
+    </p>
+    {% else %}
+    <p class="slot-preview__count" data-slot-plan="{{ slot_preview.create }}">
+        Будет создано окон: {{ slot_preview.create }}
+    </p>
+    {% endif %}
+
+    {% if slot_preview.day_times %}
+    <p class="slot-preview__times">
+        <span class="slot-preview__day">{{ slot_local_day(slot_preview.day) }}:</span>
+        {% for moment in slot_preview.day_times %}
+        <span class="slot-preview__time">{{ moment }}</span>
+        {% endfor %}
+    </p>
+    {% endif %}
+
+    {% if slot_preview.skips %}
+    <div class="slot-preview__skips">
+        <p class="slot-preview__skips-title">
+            Пропущено окон: {{ slot_preview.skip_count }}
+        </p>
+        <ul class="slot-skip-list">
+            {% for skip in slot_preview.skips %}
+            <li class="slot-skip" data-slot-skip="{{ skip.reason }}">
+                <span class="slot-skip__when">
+                    {{ slot_local_day(skip.day) }}, {{ slot_local_time(skip.start) }}
+                </span>
+                <span class="slot-skip__reason">
+                    {{ slot_skip_reason_label(skip.reason) }}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+{# Форма ещё невалидна: предпросмотр пуст, ошибки появятся при сохранении. #}
+<p class="slot-preview__empty">Заполните период и интервал — покажем число окон.</p>
+{% endif %}

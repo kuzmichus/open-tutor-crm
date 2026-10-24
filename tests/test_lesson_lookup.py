@@ -8,6 +8,8 @@ import html
 import json
 import re
 
+from app.common.colors import PALETTE
+
 PASSWORD = "Секретный-Пароль-1"
 
 
@@ -157,6 +159,8 @@ def test_mini_form_creates_student_and_returns_selection(
         assert student.status == "new"
         assert student.kind == "child"
         assert student.phone is not None  # телефон нормализован
+        # Мини-форма назначает цвет из палитры (1.4).
+        assert student.color in PALETTE
 
 
 def test_mini_form_student_requires_name(client, tutor_factory):

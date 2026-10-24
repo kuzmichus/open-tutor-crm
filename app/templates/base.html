@@ -45,6 +45,14 @@
                     document.documentElement.classList.add("sidebar-collapsed");
                 }
             } catch (e) { /* localStorage недоступен */ }
+
+            /* Тема — тоже до отрисовки: иначе сохранённая тёмная тема
+               мигает светлым фоном, пока не выполнится app.js. */
+            try {
+                if (localStorage.getItem("opentutorcrm:theme") === "dark") {
+                    document.documentElement.classList.add("dark");
+                }
+            } catch (e) { /* localStorage недоступен — остаётся светлая */ }
         })();
     </script>
 </head>

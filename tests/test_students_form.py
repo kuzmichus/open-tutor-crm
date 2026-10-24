@@ -171,17 +171,77 @@ def test_form_has_tabs_and_sections(client, owner):
         assert f'id="{tab_id}"' in html
         assert f'aria-controls="{tab_id.replace("tab-", "panel-")}"' in html
         assert re.search(rf'{tab_id}"[^>]*>\s*{label}\s*</button>', html, re.S)
-    # «Платежи» — заглушка: текст о будущих счетах и оплатах.
-    assert "появятся здесь позже" in html
+    # Нового ученика ещё нет в БД — счёт появится после сохранения.
+    assert "Счёт появится после сохранения карточки" in html
     # Секции остались: общее, контакты, плательщик и напоминания.
     assert "Контакты" in html
     assert "Плательщик" in html
     assert "Напоминания" in html
     assert html.count('class="form-section"') >= 4
-    # Панели скрываются через x-show: поля всех вкладок уходят в POST.
+    # Панели скрываются через x-show: правки «Общего» доживают до сохранения.
     for panel in ("general", "payments", "settings"):
         assert f'x-show="tab === \'{panel}\'"' in html
         assert f'data-tab-panel="{panel}"' in html
+
+
+def test_payments_tab_has_no_form(client, owner, student_factory):
+    """Вкладка «Платежи» — панель без `<form>`: карточку она не отправляет."""
+    student_id = student_factory(tutor_id=owner)
+    html = client.get(f"/tutor/students/{student_id}/edit?tab=payments").text
+
+    start = html.index('id="student-panel-payments"')
+    # Конец панели — начало тега формы «Настроек»: он идёт следующим соседом.
+    end = html.index('<form class="tab-form"', start)
+    panel = html[start:end]
+
+    assert "<form" not in panel
+    assert 'type="submit"' not in panel
+    # Единственная кнопка футера — «Закрыть».
+    assert "Закрыть" in panel[panel.index('class="modal-actions"') :]
+    assert "Сохранить" not in panel
+    # Панель грузит счёт ученика своим маршрутом.
+    assert f'hx-get="/tutor/students/{student_id}/payments/panel"' in panel
+
+
+def test_tab_forms_are_siblings_with_own_footers(client, owner):
+    """Три панели — соседи: вложенных `<form>` нет, у каждой свой футер."""
+    html = client.get("/tutor/students/new").text
+
+    # Форма «Общего» закрывается до начала панели «Платежи», а форма
+    # «Настроек» — единственная форма в своём хвосте. Значит они соседи,
+    # а не вложены друг в друга (внутреннюю форму браузер выбросил бы).
+    general = html[
+        html.index('id="student-form-general"') : html.index(
+            'id="student-panel-payments"'
+        )
+    ]
+    assert "<form" not in general
+    assert general.count("</form>") == 1
+
+    settings = html[html.index('id="student-form-settings"') :]
+    assert settings.count("</form>") == 1
+
+    # У каждой формы вкладки — свой футер с «Сохранить».
+    for block in (general, settings):
+        assert 'class="modal-actions"' in block
+        assert 'type="submit"' in block
+
+
+def test_each_tab_form_includes_the_other(client, owner):
+    """Поля соседней формы добираются `hx-include` — иначе они бы терялись."""
+    html = client.get("/tutor/students/new").text
+
+    general_start = html.index('id="student-form-general"')
+    settings_start = html.index('id="student-form-settings"')
+    general_tag = html[general_start : html.index(">", general_start)]
+    settings_tag = html[settings_start : html.index(">", settings_start)]
+
+    # Сохранение «Общего» не должно сбрасывать напоминания…
+    assert 'hx-include="#student-form-settings"' in general_tag
+    # …а сохранение «Настроек» — стирать имя и контакты.
+    assert 'hx-include="#student-form-general"' in settings_tag
+    assert 'hx-post="/tutor/students"' in general_tag
+    assert 'hx-post="/tutor/students"' in settings_tag
 
 
 def test_settings_tab_holds_reminders(client, owner):
@@ -216,7 +276,25 @@ def test_submit_switches_tab_to_invalid_field():
     assert "revealInvalidField" in STUDENTS_JS
     assert 'querySelector(":invalid")' in STUDENTS_JS
     assert "closest(\"[data-tab-panel]\")" in STUDENTS_JS
-    assert 'tab: "general"' in STUDENTS_JS
+    # Вкладка по умолчанию «Общее»; её же подставляет сервер без `?tab=`.
+    assert 'tab: TAB_NAMES.indexOf(initialTab) === -1 ? "general" : initialTab' in STUDENTS_JS
+    assert 'var TAB_NAMES = ["general", "payments", "settings"];' in STUDENTS_JS
+
+
+def test_hidden_tab_field_switches_tab_before_htmx_halts():
+    """Невалидное поле соседней формы: htmx молчит, вкладку переключаем мы.
+
+    Каждая форма вкладки добирает поля другой через `hx-include`, и htmx
+    валидирует их сам. Своя форма при этом валидна (пустое имя лежит
+    в «Общем»), поэтому браузер не показывает подсказку, а htmx
+    останавливает запрос — со стороны это выглядит как «кнопка не работает».
+    """
+    assert "htmx:validation:halted" in STUDENTS_JS
+    assert "event.detail.errors" in STUDENTS_JS
+    assert "reportValidity" in STUDENTS_JS
+    # Подписка снимается вместе с модалкой, иначе обработчики копились бы
+    # после каждого открытия карточки.
+    assert "removeEventListener" in STUDENTS_JS
 
 
 def test_grade_and_school_depend_on_kind(client, owner):
@@ -228,11 +306,49 @@ def test_grade_and_school_depend_on_kind(client, owner):
     assert "x-show=\"kind === 'child'\"" in html
 
 def test_modal_uses_alpine_and_closes_by_escape(client, owner):
+    """Escape закрывает только верхний слой: счёт поверх карточки — первым."""
     html = client.get("/tutor/students/new").text
     assert "x-data=\"studentForm(" in html
     assert "x-show=\"open\"" in html
     assert "x-cloak" in html
-    assert '@keydown.escape.window="close()"' in html
+    # Нижний слой спрашивает `paymentsStackedOpen()`: иначе одно нажатие
+    # закрывало бы сразу и диалог счёта, и карточку (design D10).
+    assert '@keydown.escape.window="if (!paymentsStackedOpen()) close()"' in html
+    assert "window.paymentsStackedOpen = stackedOpen;" in (
+        STATIC_DIR / "payments.js"
+    ).read_text(encoding="utf-8")
+
+
+def test_pages_have_second_modal_layer(client, owner, student_factory):
+    """`#modal-payment` — сосед `#modal` на обеих страницах учеников."""
+    student_id = student_factory(tutor_id=owner)
+
+    for url in ("/tutor/students", f"/tutor/students/{student_id}"):
+        html = client.get(url).text
+        assert '<div id="modal"></div>' in html
+        assert '<div id="modal-payment"></div>' in html
+        # Скрипт диалогов идёт до alpine.min.js (подписка на alpine:init).
+        assert html.index("/static/payments.js") < html.index("/static/alpine.min.js")
+
+
+def test_edit_with_tab_payments_opens_on_payments(client, owner, student_factory):
+    """`?tab=payments` открывает карточку сразу на вкладке «Платежи»."""
+    student_id = student_factory(tutor_id=owner)
+
+    html = client.get(f"/tutor/students/{student_id}/edit?tab=payments").text
+
+    assert "studentForm('child', 'payments')" in html or "studentForm(" in html
+    assert "'payments')" in html
+
+
+def test_edit_with_unknown_tab_falls_back_to_general(client, owner, student_factory):
+    """Неизвестная вкладка в адресе не открывает пустой таб."""
+    student_id = student_factory(tutor_id=owner)
+
+    html = client.get(f"/tutor/students/{student_id}/edit?tab=что-то").text
+
+    assert "'general')" in html
+    assert "'что-то'" not in html
 
 # --------------------------------------------------------------------------
 # 8.3 Контакты: аккордеон строк, поле добавления с поиском

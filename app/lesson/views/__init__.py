@@ -17,6 +17,7 @@ from app.lesson.views import (
     list_partial,
     lookup_group,
     lookup_student,
+    move,
     update,
 )
 
@@ -34,3 +35,6 @@ router.include_router(create.router)
 router.include_router(update.router)
 router.include_router(delete.router)
 router.include_router(delete_series.router)
+# Перенос перетаскиванием — свой путь `/{lesson_id}/move`, поэтому
+# статические маршруты выше он не перехватывает (design.md D8).
+router.include_router(move.router)

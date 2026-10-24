@@ -8,14 +8,21 @@
 только импорты-регистраторы.
 """
 
+from app.booking.models.booking import Booking  # noqa: F401
+from app.booking.models.booking_attempt import BookingAttempt  # noqa: F401
+from app.finance.models.account_operation import AccountOperation  # noqa: F401
 from app.group.models.group import Group  # noqa: F401
 from app.group.models.group_member import GroupMember  # noqa: F401
 from app.homework.models.homework import Homework  # noqa: F401
 from app.lesson.models.lesson import Lesson  # noqa: F401
 from app.lesson.models.lesson_series import LessonSeries  # noqa: F401
+from app.slot.models.slot import Slot  # noqa: F401
 from app.student.models.contact import Contact  # noqa: F401
 from app.student.models.student import Student  # noqa: F401
 from app.student.models.student_contact import StudentContact  # noqa: F401
 from app.tutor.models.password_reset_token import PasswordResetToken  # noqa: F401
 from app.tutor.models.tutor import Tutor  # noqa: F401
 from app.tutor.models.tutor_session import TutorSession  # noqa: F401
+from app.unavailability.models.unavailability import (  # noqa: F401
+    TutorUnavailability,
+)

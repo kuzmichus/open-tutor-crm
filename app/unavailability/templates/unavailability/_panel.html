@@ -1,0 +1,268 @@
+{# Панель «Отпуск и выходные» — форма новой отметки и список «Уже отмечено»
+   (спека tutor-unavailability, design.md D8/D11).
+
+   Открывается пунктом меню «⋯» календаря в контейнере `#modal`. Вся панель —
+   одна форма: сохранение возвращает этот же фрагмент (`hx-target` — корень
+   панели, `hx-swap="outerHTML"`), поэтому список «Уже отмечено» обновляется
+   без отдельного запроса. Успех несёт `HX-Trigger: unavailability-saved`:
+   неделя календаря перерисовывается с сервера (design.md D8).
+
+   Действия в списке — кнопки `type="button"` с `hx-post` (а не вложенные
+   формы: вложенные `<form>` запрещены HTML). «Изменить срок» включает поля
+   своей строки (`hx-include="closest .un-mark"`), «Снять» — двухшаговое
+   подтверждение (design.md D10).
+
+   Режимы переключаются Alpine (`unavailabilityPanel` в calendar.js):
+   `template x-if` убирает поля другого режима из DOM, поэтому в запрос
+   уходят только поля выбранного режима (спека «Поля дат периода в этом
+   режиме MUST отсутствовать»).
+
+   Контекст: un_form (mode, reason, start_date, end_date, weekday,
+   until_date), un_errors, un_saved, un_active, un_past, un_modes,
+   un_mode_labels, un_reasons, un_reason_labels, un_dayoff_reason,
+   un_weekdays. #}
+<div class="modal-root un-panel"
+     id="unavailability-panel"
+     x-data="unavailabilityPanel('{{ un_form.mode }}')"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true"
+         aria-labelledby="unavailability-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="unavailability-title">Отпуск и выходные</h2>
+                <p class="modal-subtitle">
+                    Отмеченные дни видны в календаре, а урок в такой день
+                    ставится с предупреждением.
+                </p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-post="/tutor/unavailability"
+              hx-target="#unavailability-panel"
+              hx-swap="outerHTML">
+            <div class="modal-body">
+                {% if un_errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in un_errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <fieldset class="form-section">
+                    <legend class="form-section__title">Новая отметка</legend>
+
+                    {# Переключатель режима: «Период» / «Постоянный выходной». #}
+                    <div class="field field--full">
+                        <span class="label" id="un-mode-label">Режим</span>
+                        <div class="un-modes" role="radiogroup"
+                             aria-labelledby="un-mode-label">
+                            {% for mode in un_modes %}
+                            <label class="un-modes__option">
+                                <input type="radio" name="mode" value="{{ mode }}"
+                                       x-model="mode"
+                                       {% if un_form.mode == mode %}checked{% endif %}>
+                                <span>{{ un_mode_labels[mode] }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <template x-if="mode === 'period'">
+                        <div class="un-fields">
+                            <div class="field">
+                                <label class="label" for="un-reason">Причина</label>
+                                <select class="input" id="un-reason" name="reason">
+                                    {% for reason in un_reasons %}
+                                    <option value="{{ reason }}"
+                                            {% if un_form.reason == reason %}selected{% endif %}>
+                                        {{ un_reason_labels[reason] }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label class="label" for="un-start">Первый день *</label>
+                                <input class="input" id="un-start" type="date"
+                                       name="start_date"
+                                       value="{{ un_form.start_date }}">
+                            </div>
+
+                            <div class="field">
+                                <label class="label" for="un-end">Последний день</label>
+                                <input class="input" id="un-end" type="date"
+                                       name="end_date"
+                                       value="{{ un_form.end_date }}">
+                                <p class="form-hint">
+                                    Пусто — бессрочно, до снятия отметки.
+                                </p>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="mode === 'weekday'">
+                        <div class="un-fields">
+                            <div class="field">
+                                <label class="label" for="un-weekday">День недели *</label>
+                                <select class="input" id="un-weekday" name="weekday">
+                                    <option value="">—</option>
+                                    {% for label in un_weekdays %}
+                                    <option value="{{ loop.index0 }}"
+                                            {% if un_form.weekday == loop.index0|string %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label class="label" for="un-until">Действует по</label>
+                                <input class="input" id="un-until" type="date"
+                                       name="until_date"
+                                       value="{{ un_form.until_date }}">
+                                <p class="form-hint">Пусто — без ограничения срока.</p>
+                            </div>
+                        </div>
+                    </template>
+                </fieldset>
+
+                <section class="un-marks" aria-labelledby="un-marks-title">
+                    <h3 class="un-marks__title" id="un-marks-title">Уже отмечено</h3>
+
+                    {% if not un_active and not un_past %}
+                    <p class="un-marks__empty">Отметок пока нет.</p>
+                    {% endif %}
+
+                    {% if un_active %}
+                    <ul class="un-list">
+                        {% for row in un_active %}
+                        {% set mark = row.mark %}
+                        <li class="un-mark" x-data="{ confirming: false }">
+                            <div class="un-mark__main">
+                                <span class="un-mark__reason">
+                                    {{ unavailability_reason_label(mark) }}
+                                </span>
+                                <span class="un-mark__span">
+                                    {{ unavailability_span(mark) }}
+                                </span>
+                            </div>
+
+                            <div class="un-mark__actions">
+                                <label class="un-mark__field">
+                                    <span class="sr-only">
+                                        Новый срок для отметки
+                                        {{ unavailability_reason_label(mark) }}
+                                    </span>
+                                    <input class="input input--sm" type="date"
+                                           name="new_end"
+                                           value="{{ mark.end_date or mark.until_date or '' }}">
+                                </label>
+                                <button class="btn btn--outline btn--sm" type="button"
+                                        hx-post="/tutor/unavailability/{{ mark.id }}/end"
+                                        hx-target="#unavailability-panel"
+                                        hx-swap="outerHTML"
+                                        hx-include="closest .un-mark">
+                                    Изменить срок
+                                </button>
+
+                                {# Двухшаговое снятие (design.md D10). #}
+                                <button class="btn btn--destructive btn--sm" type="button"
+                                        x-show="!confirming"
+                                        @click="confirming = true">
+                                    Снять
+                                </button>
+                                <button class="btn btn--destructive btn--sm" type="button"
+                                        x-show="confirming" x-cloak
+                                        hx-post="/tutor/unavailability/{{ mark.id }}/delete"
+                                        hx-target="#unavailability-panel"
+                                        hx-swap="outerHTML">
+                                    Точно снять?
+                                </button>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    {% if un_past %}
+                    {# Прошедшие свёрнуты: иначе список вытеснит форму (D11). #}
+                    <details class="un-past">
+                        <summary class="un-past__summary">Показать прошедшие</summary>
+                        <ul class="un-list">
+                            {% for row in un_past %}
+                            {% set mark = row.mark %}
+                            <li class="un-mark un-mark--past"
+                                x-data="{ confirming: false }">
+                                <div class="un-mark__main">
+                                    <span class="un-mark__reason">
+                                        {{ unavailability_reason_label(mark) }}
+                                    </span>
+                                    <span class="un-mark__span">
+                                        {{ unavailability_span(mark) }}
+                                    </span>
+                                </div>
+
+                                <div class="un-mark__actions">
+                                    <label class="un-mark__field">
+                                        <span class="sr-only">
+                                            Новый срок для отметки
+                                            {{ unavailability_reason_label(mark) }}
+                                        </span>
+                                        <input class="input input--sm" type="date"
+                                               name="new_end"
+                                               value="{{ mark.end_date or mark.until_date or '' }}">
+                                    </label>
+                                    <button class="btn btn--outline btn--sm" type="button"
+                                            hx-post="/tutor/unavailability/{{ mark.id }}/end"
+                                            hx-target="#unavailability-panel"
+                                            hx-swap="outerHTML"
+                                            hx-include="closest .un-mark">
+                                        Изменить срок
+                                    </button>
+                                    <button class="btn btn--destructive btn--sm" type="button"
+                                            x-show="!confirming"
+                                            @click="confirming = true">
+                                        Снять
+                                    </button>
+                                    <button class="btn btn--destructive btn--sm" type="button"
+                                            x-show="confirming" x-cloak
+                                            hx-post="/tutor/unavailability/{{ mark.id }}/delete"
+                                            hx-target="#unavailability-panel"
+                                            hx-swap="outerHTML">
+                                        Точно снять?
+                                    </button>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </details>
+                    {% endif %}
+                </section>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn--ghost" type="button" @click="close()">
+                    Закрыть
+                </button>
+                <button class="btn {% if un_saved %}btn--success{% else %}btn--primary{% endif %}"
+                        type="submit"
+                        data-un-save
+                        {% if un_saved %}disabled{% endif %}>
+                    {% if un_saved %}Успешно сохранено{% else %}Добавить{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

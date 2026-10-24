@@ -27,6 +27,7 @@ from app.homework.services.homework_form import parse_homework_form
 from app.homework.services.homework_writer import save_homework
 from app.lesson.services.access import get_owned_lesson, require_tutor_id
 from app.templating import templates
+from app.tutor.models.tutor import Tutor
 
 router = APIRouter()
 
@@ -40,10 +41,15 @@ async def save_homework_view(
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 ):
-    """Сохраняет ДЗ урока; чужой урок отвечает как несуществующий (404)."""
+    """Сохраняет ДЗ урока; чужой урок отвечает как несуществующий (404).
+
+    Зона педагога берётся из его карточки: «Срок сдачи» — настенное время
+    педагога, в БД уходит aware UTC (design D6).
+    """
     lesson = get_owned_lesson(db, lesson_id, tutor_id)
+    tutor = db.get(Tutor, tutor_id)
     form = await request.form()
-    data, errors = parse_homework_form(form)
+    data, errors = parse_homework_form(form, tutor)
 
     if not errors:
         errors = save_homework(db, lesson, data)
@@ -52,7 +58,7 @@ async def save_homework_view(
         return templates.TemplateResponse(
             request,
             "homework/_panel.html",
-            homework_panel_context(db, lesson, data=data, errors=errors),
+            homework_panel_context(db, lesson, tutor=tutor, data=data, errors=errors),
         )
 
     if request.headers.get("HX-Request") != "true":
@@ -63,5 +69,5 @@ async def save_homework_view(
     return templates.TemplateResponse(
         request,
         "homework/_panel.html",
-        homework_panel_context(db, lesson, saved=True),
+        homework_panel_context(db, lesson, tutor=tutor, saved=True),
     )

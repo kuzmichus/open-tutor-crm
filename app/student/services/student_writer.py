@@ -9,6 +9,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.common.colors import assign_color
 from app.student.models.contact import Contact
 from app.student.models.student import Student
 from app.student.models.student_contact import StudentContact
@@ -113,7 +114,7 @@ def create_student(
     rows: list[dict],
 ) -> tuple[Student | None, list[str]]:
     """Создаёт ученика и его контакты; при ошибке ничего не сохраняет."""
-    student = Student(tutor_id=tutor_id)
+    student = Student(tutor_id=tutor_id, color=assign_color(db, tutor_id))
     _apply_student_fields(student, data)
     db.add(student)
     db.flush()

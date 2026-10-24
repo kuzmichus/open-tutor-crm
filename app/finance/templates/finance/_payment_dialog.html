@@ -1,0 +1,125 @@
+{# Диалог платежа — один шаблон на создание и правку (design D11).
+
+   `payment is None` — новая форма с умолчаниями «Оплачено»/«Перевод» и
+   сегодняшней датой; иначе — значения сохранённого платежа. Значения,
+   адрес сохранения и подписи собирает `payment_dialog_context`: шаблон
+   не решает, создают платёж или меняют.
+
+   Живёт во втором слое модалок (`#modal-payment`, design D10): форма
+   карточки ученика со своими несохранёнными полями остаётся в `#modal`
+   и этим диалогом не затрагивается.
+
+   «Ученик» — статичный текст, а не `<select>`: диалог открывается из
+   карточки конкретного ученика, перенос платежа другому ученику —
+   отдельный сценарий, которого в требованиях нет. Поле не имеет `name`,
+   поэтому в POST уходят только поля платежа.
+
+   Контекст: payment_student, payment, payment_form (amount, method,
+   status, date_value, comment), payment_errors, payment_action,
+   payment_title, payment_methods, payment_method_labels, payment_statuses,
+   payment_status_labels. #}
+<div class="modal-root modal-root--stack"
+     id="modal-payment"
+     x-data="paymentDialog()"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     @payment-saved.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true"
+         aria-labelledby="payment-dialog-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="payment-dialog-title">{{ payment_title }}</h2>
+                <p class="modal-subtitle">
+                    {{ student_full_name(payment_student) }}
+                </p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-post="{{ payment_action }}"
+              hx-target="#modal-payment"
+              hx-swap="outerHTML">
+            <div class="modal-body">
+                {% if payment_errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in payment_errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <fieldset class="form-section">
+                    <legend class="form-section__title">Платёж</legend>
+
+                    {# Ученик — только подпись: у поля нет `name`, и в
+                       запрос оно не попадает (design D11). #}
+                    <div class="field field--full">
+                        <span class="label">Ученик</span>
+                        <span>{{ student_full_name(payment_student) }}</span>
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="payment-amount">Сумма (₽) *</label>
+                        <input class="input" id="payment-amount" type="number"
+                               name="amount" min="1" step="1" required
+                               inputmode="numeric"
+                               value="{{ payment_form.amount }}">
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="payment-method">Способ</label>
+                        <select class="input" id="payment-method" name="method">
+                            {% for value in payment_methods %}
+                            <option value="{{ value }}"
+                                    {% if payment_form.method == value %}selected{% endif %}>
+                                {{ payment_method_labels[value] }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="payment-status">Статус</label>
+                        <select class="input" id="payment-status" name="status">
+                            {% for value in payment_statuses %}
+                            <option value="{{ value }}"
+                                    {% if payment_form.status == value %}selected{% endif %}>
+                                {{ payment_status_labels[value] }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="payment-date">Дата *</label>
+                        <input class="input" id="payment-date" type="date"
+                               name="date" required
+                               value="{{ payment_form.date_value }}">
+                    </div>
+
+                    <div class="field field--full">
+                        <label class="label" for="payment-comment">Комментарий</label>
+                        <textarea class="input" id="payment-comment"
+                                  name="comment" rows="2">{{ payment_form.comment }}</textarea>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn--ghost" type="button" @click="close()">
+                    Отмена
+                </button>
+                <button class="btn btn--primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>

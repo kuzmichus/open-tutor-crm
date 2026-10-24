@@ -281,10 +281,13 @@ def test_mini_form_creates_student_and_returns_member_row(owner, client):
         assert student.phone == "+7 916 123-45-67"
         student_id = student.id
 
-    from datetime import date
+    # Дата вступления — «сегодня» в зоне педагога (design D7 задачи
+    # store-datetimes-in-utc), а не дата машины: фикстура задаёт зону UTC,
+    # поэтому ожидание строится на UTC-моменте, а не на `date.today()`.
+    from app.tutor.services.clock import utcnow
 
     assert member["id"] == student_id
-    assert member["joined"] == date.today().isoformat()
+    assert member["joined"] == utcnow().date().isoformat()
     assert member["price"] == ""
 
 
