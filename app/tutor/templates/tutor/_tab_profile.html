@@ -1,0 +1,40 @@
+{# Вкладка «Профиль»: личная информация и тарифы (поля «Предметы»
+   референса в форме нет — по решению владельца `subject` не трогаем). #}
+<form method="post" action="{{ action }}">
+    <section class="card settings-card">
+        <h2 class="card__title">Личная информация и Тарифы</h2>
+
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-name">Имя</label>
+                <input class="input" id="tutor-name" type="text" name="name"
+                       value="{{ form.name }}" required>
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-phone">Телефон</label>
+                <input class="input" id="tutor-phone" type="tel" name="phone"
+                       value="{{ form.phone }}" inputmode="tel"
+                       placeholder="+7 (999) 999-99-99">
+            </div>
+            <div class="field form-grid__full">
+                <label class="label" for="tutor-about">О себе</label>
+                <textarea class="input" id="tutor-about" name="about" rows="4"
+                          placeholder="Расскажите о себе, своём опыте и методах обучения">{{ form.about }}</textarea>
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-hourly-rate">Стоимость часа (₽)</label>
+                <input class="input" id="tutor-hourly-rate" type="number" name="hourly_rate"
+                       min="0" step="0.01" value="{{ form.hourly_rate }}" inputmode="decimal">
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-experience">Опыт работы (лет)</label>
+                <input class="input" id="tutor-experience" type="text" name="experience"
+                       value="{{ form.experience }}" inputmode="numeric">
+            </div>
+        </div>
+
+        <div class="settings-actions">
+            <button class="btn btn--primary btn--block" type="submit">Сохранить изменения</button>
+        </div>
+    </section>
+</form>

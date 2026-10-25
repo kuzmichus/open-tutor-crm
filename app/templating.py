@@ -25,6 +25,7 @@ TEMPLATE_DIRS = [
     _APP_DIR / "slot" / "templates",  # модуль slot
     _APP_DIR / "booking" / "templates",  # модуль booking
     _APP_DIR / "finance" / "templates",  # модуль finance
+    _APP_DIR / "stats" / "templates",  # модуль stats
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
@@ -77,3 +78,19 @@ from app.finance.services.presentation import (  # noqa: E402
 )
 
 register_finance_template_helpers()
+
+# Функции отображения модуля репетитора (интервал урока «23:30 - 00:30»,
+# дата платежа «21 окт.», подпись месяца «За октябрь» дашборда главной).
+from app.tutor.services.presentation import (  # noqa: E402
+    register_template_helpers as register_tutor_template_helpers,
+)
+
+register_tutor_template_helpers()
+
+# Функции отображения модуля статистики («Занятий/нед» «0,5», проценты,
+# конверсия «мало данных», причины в раскрытии пробных).
+from app.stats.services.presentation import (  # noqa: E402
+    register_template_helpers as register_stats_template_helpers,
+)
+
+register_stats_template_helpers()

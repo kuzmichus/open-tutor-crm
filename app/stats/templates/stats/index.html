@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Статистика — Open Tutor CRM{% endblock %}
+
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            {% include "_notice_banner.html" %}
+
+            <a class="back-link" href="/tutor/">
+                <i data-lucide="arrow-left"></i>
+                Назад
+            </a>
+
+            <div class="page-header">
+                <div>
+                    <h1>Статистика и Аналитика</h1>
+                    <p>Показатели эффективности и удержания учеников</p>
+                </div>
+            </div>
+
+            {# Вкладки — ссылки с query-параметром: страница работает без JS,
+               состояние вкладки видно в адресе и в истории браузера. #}
+            <nav class="tabs stats-tabs" aria-label="Разделы статистики">
+                <a class="tab{% if tab == 'overview' %} tab--active{% endif %}"
+                   href="/tutor/stats?tab=overview">Обзор</a>
+                <a class="tab{% if tab == 'students' %} tab--active{% endif %}"
+                   href="/tutor/stats?tab=students">Ученики ({{ students_total }})</a>
+                <a class="tab{% if tab == 'new' %} tab--active{% endif %}"
+                   href="/tutor/stats?tab=new">Новые и пробные</a>
+            </nav>
+
+            {% if tab == 'students' %}
+                {% include "stats/_students.html" %}
+            {% elif tab == 'new' %}
+                {% include "stats/_new.html" %}
+            {% else %}
+                {% include "stats/_overview.html" %}
+            {% endif %}
+
+            {# Модалка редактирования ученика из таблицы вкладки «Ученики» #}
+            <div id="modal"></div>
+        </div>
+    </main>
+
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/tutor/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/tutor/students" class="bottom-bar__item">
+            <i data-lucide="users"></i><span>Ученики</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
+{% endblock %}

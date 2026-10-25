@@ -224,8 +224,9 @@
      в создании вкладка «ДЗ» disabled и остаётся неактивной), тип урока
      (переключает цель и скрывает оплату у группового), поле «Начало»
      (подсказка об окончании, минуты по умолчанию 00), панель
-     расписания серии, предупреждение о пересчёте списания и
-     двухшаговое удаление. */
+     расписания серии с пресетами «До даты» и двухшаговое удаление.
+     Цена проведённого урока блокируется на сервере (`price_locked` —
+     readonly-поле), Alpine-состояния для неё нет. */
   window.lessonForm = function () {
     return {
       open: true,
@@ -237,8 +238,6 @@
       durationMin: 60,   /* «Длительность» в минутах */
       startPrefill: "",  /* значение, подставленное при открытии пикера */
       startTouched: false, /* пользователь сам менял поле (не только мы) */
-      priceInitial: "",
-      priceDirty: false,
       confirmingDelete: false,
       confirmingSeriesDelete: false,
 
@@ -246,7 +245,6 @@
       init: function () {
         var config = parseJson(this.$root.dataset.config, {}) || {};
         if (config.type) this.type = config.type;
-        this.priceInitial = String(config.priceInitial || "");
         var startsEl = document.getElementById("lesson-starts-at");
         var durationEl = document.getElementById("lesson-duration");
         if (startsEl && startsEl.value) this.startsAt = startsEl.value;
@@ -354,10 +352,12 @@
         );
       },
 
-      /* Предупреждение о пересчёте списания (проведённый урок) —
-         до сохранения, как только оплата отличается от сохранённой. */
-      markPriceDirty: function (value) {
-        this.priceDirty = String(value) !== this.priceInitial;
+      /* Чип пресета «До даты» (значения — из настроек календаря
+         репетитора): подставляет дату в поле «Дата окончания»; поле
+         остаётся обычным input — выбранное можно поправить вручную. */
+      setUntil: function (value) {
+        var el = document.getElementById("lesson-until");
+        if (el) el.value = value;
       },
     };
   };
@@ -367,28 +367,31 @@
     Alpine.data("lessonForm", window.lessonForm);
   });
 
-  /* Подтверждение сохранения ДЗ (design D8): сервер отдаёт кнопку в
-     состоянии успеха — зелёную и неактивную с надписью «Успешно
-     сохранено». Через пару секунд возвращаем ей обычный вид и надпись,
-     чтобы панель снова можно было сохранить. Таймер вешаем на узел,
-     пришедший свопом: повторное сохранение подменяет кнопку, поэтому
-     сработавший позже таймер старого узла уже ни на что не влияет. */
+  /* Успех сохранения ДЗ (design D8): кнопка «Сохранить ДЗ» живёт в
+     зафиксированном футере модалки, вне свопаемой панели, поэтому сервер
+     помечает успех атрибутом `data-hw-saved="1"` на форме панели; здесь
+     переводим футерную кнопку в зелёное неактивное состояние «Успешно
+     сохранено», через пару секунд возвращаем обычный вид. Таймер висит
+     на кнопке футера: футер свопом не подменяется, узел остаётся живым. */
   var HW_SUCCESS_MS = 2000;
   var HW_IDLE_LABEL = "Сохранить ДЗ";
 
-  function restoreHwButtons(root) {
-    var scope = root && root.querySelectorAll ? root : document;
-    var buttons = scope.querySelectorAll("[data-hw-save]");
-    Array.prototype.forEach.call(buttons, function (button) {
-      if (!button.disabled) return;
-      setTimeout(function () {
-        if (!button.isConnected) return;
-        button.disabled = false;
-        button.classList.remove("btn--success");
-        button.classList.add("btn--primary");
-        button.textContent = HW_IDLE_LABEL;
-      }, HW_SUCCESS_MS);
-    });
+  function flashHwSave() {
+    var panel = document.getElementById("homework-panel");
+    if (!panel || panel.getAttribute("data-hw-saved") !== "1") return;
+    var button = document.querySelector("[data-hw-save]");
+    if (!button) return;
+    button.disabled = true;
+    button.classList.remove("btn--primary");
+    button.classList.add("btn--success");
+    button.textContent = "Успешно сохранено";
+    setTimeout(function () {
+      if (!button.isConnected) return;
+      button.disabled = false;
+      button.classList.remove("btn--success");
+      button.classList.add("btn--primary");
+      button.textContent = HW_IDLE_LABEL;
+    }, HW_SUCCESS_MS);
   }
 
   document.addEventListener("htmx:afterSwap", function (event) {
@@ -401,7 +404,7 @@
         new CustomEvent("lesson-target-created", { detail: payload, bubbles: true })
       );
     }
-    restoreHwButtons(document.getElementById("homework-panel"));
+    flashHwSave();
     if (typeof window.renderIcons === "function") window.renderIcons();
   });
 })();

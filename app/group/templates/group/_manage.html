@@ -67,8 +67,8 @@
 
                 {% include "group/_general_panel.html" %}
 
-                {# Заглушки будущих разделов: пояснение есть, действий,
-                   ведущих в 404, нет (правило спеки календаря). #}
+                {# Расписание — заглушка будущего раздела: пояснение есть,
+                   действий, ведущих в 404, нет (правило спеки календаря). #}
                 <div class="tab-panel"
                      id="group-schedule-panel"
                      data-tab-panel="schedule"
@@ -85,10 +85,21 @@
                      data-tab-panel="lessons"
                      role="tabpanel" aria-labelledby="group-tab-lessons"
                      x-show="tab === 'lessons'" x-cloak>
-                    <div class="tab-panel__empty">
-                        <i data-lucide="book-open"></i>
-                        <p>Занятия группы появятся позже.</p>
-                    </div>
+                    {# Панель занятий — не форма и приходит своим
+                       GET-маршрутом: слот грузит её при открытии модалки,
+                       чипы статуса внутри панели перезапрашивают тот же
+                       адрес. Событие `lesson-saved` (сохранили/удалили
+                       урок во втором слое) и `homework-saved` (индикатор
+                       «ДЗ: есть/нет» устарел) перезапрашивают панель.
+                       Ответ подменяет слот целиком (outerHTML), поэтому
+                       форма модалки не участвует в запросах панели.
+                       hx-target="this" обязателен: hx-target наследуется,
+                       и без него слот унаследовал бы `#modal` у формы —
+                       ответ панели заменил бы собой всю модалку. #}
+                    <div hx-get="/tutor/groups/{{ group.id }}/lessons"
+                         hx-trigger="load, lesson-saved from:body, homework-saved from:body"
+                         hx-target="this"
+                         hx-swap="outerHTML"></div>
                 </div>
 
                 <div class="tab-panel"

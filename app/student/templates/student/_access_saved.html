@@ -1,0 +1,53 @@
+{# Экран «Доступ создан»: логин и пароль показываются один раз.
+
+   Это единственный ответ с паролем открытым текстом: он пришёл из формы
+   и существовать дальше открытым текстом не может — в БД только хеш
+   (design D3 change'а student-list-reference). Закрытие модалки убирает
+   экран; повторное открытие показывает форму с уже созданным входом,
+   без пароля.
+
+   Контекст: student, login_value, password_once. #}
+<div class="modal-root"
+     x-data="{ open: true }"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="open = false">
+    <div class="modal-overlay" @click="open = false"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="student-access-saved-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="student-access-saved-title">Вход создан</h2>
+                <p class="modal-subtitle">{{ student_full_name(student) }}</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button" @click="open = false" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="modal-body">
+            <div class="access-note access-note--warn">
+                <i data-lucide="triangle-alert" aria-hidden="true"></i>
+                <p>
+                    Данные показываются один раз. Передайте их ученику
+                    и закройте окно — потом пароль можно только сменить.
+                </p>
+            </div>
+
+            <div class="access-credentials">
+                <div class="field">
+                    <span class="label">Логин</span>
+                    <p class="access-credentials__value">{{ login_value }}</p>
+                </div>
+                <div class="field">
+                    <span class="label">Пароль</span>
+                    <p class="access-credentials__value">{{ password_once }}</p>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn--primary" type="button" @click="open = false">Готово</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,63 @@
+{# Содержимое окна «Уроки» — отдельный партиал.
+
+   Чипы статуса перезапрашивают маршрут модалки; вьюха по заголовку
+   `HX-Target: student-lessons-content` отвечает этим блоком без оболочки
+   окна — иначе ответ целиком вкладывался бы в открытую модалку (второй
+   оверлей темнил фон, крестик закрывал вложенный слой). Контейнер с id
+   обязан приходить в обоих ответах: htmx заменяет его через outerHTML,
+   и свежие чипы получают свои htmx-привязки заново.
+
+   Имя radio — `status`, как у панели группы: htmx отправляет значение
+   под именем поля, и вьюха читает тот же параметр. Иное имя («вдруг
+   пересечётся с фильтром списка») молча роняло фильтр: запрос уходил
+   без `status`, сервер отдавал «Все».
+
+   Контекст: student, tutor, status, rows ({lesson, subject}). #}
+<div class="student-lessons" id="student-lessons-content">
+    <div class="period-chips" role="group" aria-label="Фильтр уроков">
+        {% for key, label in [('', 'Все'), ('completed', 'Прошедшие'), ('planned', 'Запланированные')] %}
+        <label class="period-chip">
+            <input class="period-chip__input" type="radio"
+                   name="status" value="{{ key }}"
+                   {% if key == status %}checked{% endif %}
+                   hx-get="/tutor/students/{{ student.id }}/lessons"
+                   hx-trigger="change"
+                   hx-target="#student-lessons-content"
+                   hx-swap="outerHTML">
+            <span class="period-chip__view">{{ label }}</span>
+        </label>
+        {% endfor %}
+    </div>
+
+    {% if rows %}
+    <div class="student-lessons__list">
+        {% for row in rows %}
+        {% set lesson = row.lesson %}
+        <button class="student-lesson" type="button"
+                hx-get="/tutor/lessons/{{ lesson.id }}/edit"
+                hx-target="#modal-lesson"
+                hx-swap="innerHTML">
+            <span class="student-lesson__head">
+                <span class="student-lesson__time">
+                    <i data-lucide="{{ 'circle-check' if lesson.status == 'completed' else 'calendar' }}"
+                       aria-hidden="true"></i>
+                    {{ lesson_date(lesson.starts_at, tutor) }} {{ lesson_time_span(lesson, tutor) }}
+                </span>
+                <span class="chip chip--{{ lesson.status }}">{{ lesson_status_label(lesson.status) }}</span>
+            </span>
+            <span class="student-lesson__meta">{{ row.subject }}</span>
+        </button>
+        {% endfor %}
+    </div>
+    {% elif status %}
+    <div class="tab-panel__empty">
+        <i data-lucide="book-open"></i>
+        <p>Нет уроков с таким статусом.</p>
+    </div>
+    {% else %}
+    <div class="tab-panel__empty">
+        <i data-lucide="book-open"></i>
+        <p>У ученика пока нет уроков.</p>
+    </div>
+    {% endif %}
+</div>

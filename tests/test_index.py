@@ -16,27 +16,6 @@ def test_index_redirects_to_tutor_home(client):
     assert follow.headers["location"] == "/tutor/login"
 
 
-def test_home_contains_hello_world(client):
-    """Заглушка дашборда с «Hello world» переехала на `/tutor/`."""
-    from tests.test_home import _login
-
-    _login(client, email="hello@example.com")
-    response = client.get("/tutor/")
-    assert response.status_code == 200
-    assert "Hello world" in response.text
-
-
-def test_home_has_htmx_clock(client):
-    """Часы hx-get=/time отдаются на `/tutor/`."""
-    from tests.test_home import _login
-
-    _login(client, email="clock@example.com")
-    response = client.get("/tutor/")
-    assert 'id="clock"' in response.text
-    assert 'hx-get="/time"' in response.text
-    assert 'hx-trigger="every 1s"' in response.text
-
-
 def test_clock_fragment_returns_time(client):
     """Без сессии фрагмент всё равно отдаёт время, а не редирект."""
     response = client.get("/time", follow_redirects=False)

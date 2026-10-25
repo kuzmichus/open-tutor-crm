@@ -1,0 +1,39 @@
+{# Модалка «Отчёт» ученика: итоги занятий и расчёт за месяц.
+
+   Карточки-итоги считает `report_context` (сервис не знает про HTTP);
+   здесь только показ. Стрелки месяцев перезапрашивают тот же маршрут
+   с `month=YYYY-MM`; по заголовку `HX-Target` вьюха отвечает только
+   партиалом `_report_content.html` без оболочки окна — иначе модалка
+   вкладывалась бы сама в себя при листании месяцев (ловушка
+   наследования hx-target).
+
+   «Отменено» из референса нет: статуса «отменён» в модели уроков нет,
+   вечный ноль был бы выдуманной метрикой (design D4 change'а).
+
+   Контекст: report_student, tutor, report_month (дата), report_month_key,
+   report_prev_key, report_next_key, report_completed, report_charged_total,
+   report_charged_count, report_earned_total, report_paid_total,
+   report_paid_count, report_balance, report_remaining. #}
+<div class="modal-root"
+     x-data="{ open: true }"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="open = false">
+    <div class="modal-overlay" @click="open = false"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="student-report-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="student-report-title">Отчёт: {{ student_full_name(report_student) }}</h2>
+                <p class="modal-subtitle">Итоги занятий и расчёт за месяц</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button" @click="open = false" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="modal-body">
+            {% include "student/_report_content.html" %}
+        </div>
+    </div>
+</div>

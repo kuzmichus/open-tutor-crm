@@ -13,11 +13,13 @@ from app.lesson.views import (
     create_student,
     delete,
     delete_series,
+    group_lessons,
     index,
     list_partial,
     lookup_group,
     lookup_student,
     move,
+    notices,
     update,
 )
 
@@ -38,3 +40,9 @@ router.include_router(delete_series.router)
 # Перенос перетаскиванием — свой путь `/{lesson_id}/move`, поэтому
 # статические маршруты выше он не перехватывает (design.md D8).
 router.include_router(move.router)
+# Панель «Занятия» группы: маршрут `/tutor/groups/{group_id}/lessons` —
+# чужое пространство имён, с маршрутами `/{lesson_id}` не пересекается.
+router.include_router(group_lessons.router)
+# Баннер-напоминание `/tutor/notices`: собственный префикс, с маршрутами
+# `/tutor/lessons/{lesson_id}` не пересекается.
+router.include_router(notices.router)

@@ -145,6 +145,19 @@ def test_new_lesson_form_renders(owner, client):
     assert ">Закрыть</button>" in page
     assert ">Сохранить</button>" in page
 
+    # Пресеты «До даты» — чипы из настроек календаря репетитора
+    # (окончания четвертей, ближайшая будущая дата): клик подставляет
+    # дату в поле окончания.
+    assert "until-presets" in page
+    for label in (
+        "До конца I четв.",
+        "До конца II четв.",
+        "До конца III четв.",
+        "До конца IV четв.",
+    ):
+        assert label in page, label
+    assert "setUntil(" in page
+
     # Тип «Групповой» прячет оплату и переключает цель (Alpine-выражения).
     assert "type !== 'group'" in page
     assert "type === 'group'" in page

@@ -1,4 +1,7 @@
-{# Карточка одного ученика. Контекст: card = {student, contacts, payer}. #}
+{# Карточка одного ученика в списке. Контекст: card = {student, contacts,
+   payer, balance, completed_count, next_lesson_at, first_payment_at,
+   last_price, remaining_lessons}, tutor — карточка репетитора (зона
+   дат и подпись предмета). #}
 {% set student = card.student %}
 <article class="student-card" id="student-card-{{ student.id }}">
     <div class="student-head">
@@ -8,13 +11,13 @@
                 {{ student_full_name(student) }}
             </a>
             <span class="student-meta">
-                {{ kind_label(student.kind) }}{% if student.grade %}, {{ student.grade }} класс{% endif %}
+                {{ kind_label(student.kind) }}{% if student.kind == 'child' and student.grade %}, {{ student.grade }} класс{% endif %}
             </span>
         </div>
         <span class="chip chip--{{ student.status }}">{{ status_label(student.status) }}</span>
     </div>
 
-    {% if student.phone or student.email or student.school %}
+    {% if student.phone or student.email or (student.kind == 'child' and student.school) %}
     <ul class="student-contacts">
         {% if student.phone %}
         <li class="student-contact">
@@ -37,56 +40,72 @@
     </ul>
     {% endif %}
 
-    {% if card.contacts %}
-    <ul class="student-contacts">
-        {% for item in card.contacts %}
-        <li class="student-contact">
-            <i data-lucide="user-round"></i>
-            <span class="truncate">
-                {{ item.contact.full_name }}{% if item.link.relation %} — {{ item.link.relation }}{% endif %}
+    <div class="student-stats">
+        <p class="student-stats__row">
+            <span class="student-stats__label">
+                <i data-lucide="circle-check" aria-hidden="true"></i>
+                Проведено: {{ card.completed_count }}
             </span>
-            {% if receives_reminders(item.link) %}
-            <span class="chip">напоминания</span>
-            {% endif %}
-        </li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-
-    <p class="student-payer">
-        <span class="label">Плательщик</span>
-        {% if card.payer %}
-            <span>{{ card.payer.full_name }}</span>
-        {% else %}
-            <span>платит сам ученик</span>
-        {% endif %}
-    </p>
-
-    {# Заглушка будущих модулей: без чисел и без ссылок на несуществующие
-       маршруты — иначе «0 ₽» читалось бы как утверждение об отсутствии долга.
-       Оплаты и задолженность здесь больше не упоминаются: они уже работают
-       и живут во вкладке «Платежи» (спека student-management, «Блоки будущих
-       модулей»). #}
-    <div class="student-metrics">
-        <p class="student-metrics__text">
-            Дата следующего урока и отчёты появятся в следующих обновлениях.
+            <span class="money-value{% if card.balance < 0 %} money-value--debt{% elif card.balance > 0 %} money-value--positive{% endif %}">
+                {{ balance_label(card.balance) }}
+            </span>
         </p>
+        {% if card.next_lesson_at %}
+        <p class="student-stats__row">
+            <span class="student-stats__label">
+                <i data-lucide="calendar" aria-hidden="true"></i>
+                {{ next_lesson_label(card.next_lesson_at, tutor) }}
+            </span>
+        </p>
+        {% else %}
+        <p class="student-stats__row">
+            <span class="student-stats__label student-stats__label--empty">
+                <i data-lucide="calendar" aria-hidden="true"></i>
+                Нет запланированных уроков
+            </span>
+        </p>
+        {% endif %}
+        {# Остаток занятий честный: показывается, только когда есть из чего
+           его посчитать (положительный баланс и известная цена) — иначе
+           «0 занятий» читалось бы как «бесплатно» (design D1). #}
+        {% if card.remaining_lessons is not none %}
+        <p class="student-stats__row">
+            <span class="student-stats__label">
+                <i data-lucide="book-open" aria-hidden="true"></i>
+                Осталось: {{ lessons_count_label(card.remaining_lessons) }}
+            </span>
+        </p>
+        {% endif %}
     </div>
 
     <div class="student-actions">
-        <button class="btn btn--ghost btn--sm" type="button"
-                hx-get="/tutor/students/{{ student.id }}/edit"
+        <button class="btn btn--outline btn--sm" type="button"
+                hx-get="/tutor/students/{{ student.id }}/lessons"
                 hx-target="#modal"
                 hx-swap="innerHTML">
-            <i data-lucide="pencil"></i>
-            Редактировать
+            <i data-lucide="book-open"></i>
+            Уроки
         </button>
-        <button class="btn btn--ghost btn--sm" type="button"
-                hx-post="/tutor/students/{{ student.id }}/archive"
-                hx-target="#student-card-{{ student.id }}"
-                hx-swap="outerHTML">
-            <i data-lucide="archive"></i>
-            {% if student.status == 'archived' %}Вернуть из архива{% else %}В архив{% endif %}
+        <button class="btn btn--outline btn--sm" type="button"
+                hx-get="/tutor/students/{{ student.id }}/report"
+                hx-target="#modal"
+                hx-swap="innerHTML">
+            <i data-lucide="bar-chart-3"></i>
+            Отчёт
+        </button>
+        <button class="btn btn--ghost btn--icon" type="button"
+                hx-get="/tutor/students/{{ student.id }}/access"
+                hx-target="#modal"
+                hx-swap="innerHTML"
+                aria-label="Доступ ученика" title="Доступ ученика">
+            <i data-lucide="key-round"></i>
+        </button>
+        <button class="btn btn--ghost btn--icon" type="button"
+                hx-get="/tutor/students/{{ student.id }}/edit"
+                hx-target="#modal"
+                hx-swap="innerHTML"
+                aria-label="Редактировать" title="Редактировать">
+            <i data-lucide="square-pen"></i>
         </button>
     </div>
 </article>

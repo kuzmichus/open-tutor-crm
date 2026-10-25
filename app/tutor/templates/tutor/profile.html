@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Настройки — Open Tutor CRM{% endblock %}
+{% block body %}
+    {% set user_name = tutor.name %}
+    {% set user_role = 'Владелец' %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <!-- Основной контент -->
+    <main class="main">
+        <div class="main__container">
+            {% include "_notice_banner.html" %}
+            <a class="settings-back" href="/tutor/">
+                <i data-lucide="arrow-left"></i>
+                Назад
+            </a>
+
+            <div class="page-header">
+                <h1>Настройки</h1>
+                <p>Профиль, безопасность, уведомления и календарь</p>
+            </div>
+
+            {# Вкладки — ссылки с состоянием в URL (?tab=…): страница работает
+               без JS, а на вкладку можно дать ссылку напрямую. #}
+            <nav class="tabs settings-tabs" aria-label="Разделы настроек">
+                {% for tab_key, tab_label in tabs %}
+                <a class="tab{% if tab == tab_key %} tab--active{% endif %}"
+                   {% if tab == tab_key %}aria-current="page"{% endif %}
+                   href="/tutor/profile?tab={{ tab_key }}">
+                    {{ tab_label }}
+                </a>
+                {% endfor %}
+            </nav>
+
+            {% if saved %}
+            <p class="notice" role="status">Изменения сохранены</p>
+            {% endif %}
+
+            {% if errors %}
+            <div class="error" role="alert">
+                <ul>
+                    {% for message in errors %}
+                    <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if tab == 'profile' %}
+                {% include "tutor/_tab_profile.html" %}
+            {% elif tab == 'security' %}
+                {% include "tutor/_tab_security.html" %}
+            {% elif tab == 'notifications' %}
+                {% include "tutor/_tab_notifications.html" %}
+            {% else %}
+                {% include "tutor/_tab_calendar.html" %}
+            {% endif %}
+        </div>
+    </main>
+
+    <!-- Нижний таб-бар (мобилка) -->
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/tutor/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/tutor/bookings" class="bottom-bar__item">
+            <i data-lucide="calendar-check"></i><span>Брони</span>
+        </a>
+        <a href="/tutor/tasks" class="bottom-bar__item">
+            <i data-lucide="square-check-big"></i><span>Задачи</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
+{% endblock %}

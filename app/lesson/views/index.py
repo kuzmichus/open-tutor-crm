@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.common.access import require_tutor_id
 from app.database import get_db
-from app.lesson.services.lessons import list_lessons, normalize_period
+from app.lesson.services.lessons import list_lessons, normalize_period, normalize_status
 from app.lesson.services.lookup import search_students
 from app.lesson.services.page_context import page_context
 from app.templating import templates
@@ -28,10 +28,17 @@ def lessons_index(
     """Страница со списком уроков вошедшего репетитора."""
     q = request.query_params.get("q", "")
     period = normalize_period(request.query_params.get("period", ""))
+    status = normalize_status(request.query_params.get("status", ""))
     student_id = request.query_params.get("student", "")
     tutor = db.get(Tutor, tutor_id)
     rows = list_lessons(
-        db, tutor_id, q=q, period=period, student_id=student_id, tutor=tutor
+        db,
+        tutor_id,
+        q=q,
+        period=period,
+        status=status,
+        student_id=student_id,
+        tutor=tutor,
     )
 
     return templates.TemplateResponse(
@@ -44,6 +51,7 @@ def lessons_index(
             total=len(rows),
             q=q,
             period=period,
+            status=status,
             student_id=student_id,
             student_options=search_students(db, tutor_id),
         ),

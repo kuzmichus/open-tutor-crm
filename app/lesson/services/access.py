@@ -12,10 +12,17 @@ from sqlalchemy.orm import Session
 
 from app.common.access import LOGIN_URL, LoginRequired, require_tutor_id
 from app.group.models.group import Group
+from app.group.services.access import get_owned_group
 from app.lesson.models.lesson import Lesson
 from app.student.models.student import Student
 
-__all__ = ["LOGIN_URL", "LoginRequired", "get_owned_lesson", "require_tutor_id"]
+__all__ = [
+    "LOGIN_URL",
+    "LoginRequired",
+    "get_owned_group",
+    "get_owned_lesson",
+    "require_tutor_id",
+]
 
 
 def get_owned_lesson(db: Session, lesson_id: str, tutor_id: str) -> Lesson:

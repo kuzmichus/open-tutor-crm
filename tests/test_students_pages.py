@@ -339,6 +339,7 @@ def test_update_rejects_unlinked_payer(client, owner, student_factory):
 
 
 def test_archive_hides_student_from_default_list(client, owner, student_factory):
+    """Архив отдаёт обновлённую карточку и просит список перезапроситься."""
     student_id = student_factory(tutor_id=owner, first_name="Маша")
 
     response = client.post(
@@ -346,8 +347,10 @@ def test_archive_hides_student_from_default_list(client, owner, student_factory)
         headers={"HX-Request": "true"},
     )
     assert response.status_code == 200
-    assert "Вернуть из архива" in response.text
+    assert "chip--archived" in response.text
+    assert "student-saved" in response.headers.get("HX-Trigger", "")
 
+    # Перезапрос списка (его делает htmx по событию) убирает карточку.
     assert "Маша" not in client.get("/tutor/students/list").text
     assert "Маша" in client.get("/tutor/students/list", params={"status": "archived"}).text
 

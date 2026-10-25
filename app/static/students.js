@@ -178,7 +178,12 @@
   }
 
   document.addEventListener("alpine:init", function () {
-    /* Вид списка: выбор хранится в localStorage и переживает перезагрузку. */
+    /* Вид списка: выбор хранится в localStorage и переживает перезагрузку.
+       `deleted` — состояние кнопки «Удалённые»: она не добавляет нового
+       параметра запроса, а двигает селект статуса на «В архиве» и триггерит
+       `change` формы — фильтр остаётся делом сервера (design D5 change'а
+       student-list-reference). Начальное значение читается из селекта,
+       который отрисовал сервер. */
     Alpine.data("studentsPage", function () {
       var saved = "grid";
       try {
@@ -189,6 +194,11 @@
       return {
         view: saved,
         filtersOpen: false,
+        deleted: false,
+        init: function () {
+          var select = document.getElementById("students-status");
+          this.deleted = !!select && select.value === "archived";
+        },
         setView: function (value) {
           this.view = value;
           try {
@@ -196,6 +206,54 @@
           } catch (e) {
             /* noop */
           }
+        },
+        toggleDeleted: function () {
+          var select = document.getElementById("students-status");
+          if (!select) return;
+          this.deleted = !this.deleted;
+          select.value = this.deleted ? "archived" : "";
+          var form = document.getElementById("students-filters");
+          if (form && window.htmx) window.htmx.trigger(form, "change");
+        },
+      };
+    });
+
+    /* Модалка «Доступ ученика»: генерация пароля. Валидация и сохранение —
+       на сервере (`credentials.py`); здесь только удобная кнопка
+       «Сгенерировать» из референса. Алфавит без похожих символов
+       (0/O, 1/l/I) — пароль можно надиктовать по телефону; тот же принцип,
+       что у серверного генератора в `credentials.py`. */
+    Alpine.data("studentAccess", function () {
+      var CHARS =
+        "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+      return {
+        open: true,
+        generate: function () {
+          var input = this.$refs.password;
+          if (!input) return;
+          var crypto = window.crypto || window.msCrypto;
+          var value = "";
+          if (crypto && crypto.getRandomValues) {
+            var bytes = new Uint8Array(12);
+            crypto.getRandomValues(bytes);
+            for (var i = 0; i < bytes.length; i++) {
+              /* Отбор с отсечением (rejection sampling): байты выше
+                 последнего кратного длины алфавита отбрасываются, иначе
+                 первые символы алфавита выпадали бы чуть чаще. */
+              while (bytes[i] >= 248) {
+                crypto.getRandomValues(bytes.subarray(i, i + 1));
+              }
+              value += CHARS[bytes[i] % CHARS.length];
+            }
+          } else {
+            for (var j = 0; j < 12; j++) {
+              value += CHARS[Math.floor(Math.random() * CHARS.length)];
+            }
+          }
+          input.value = value;
+        },
+        close: function () {
+          this.open = false;
         },
       };
     });

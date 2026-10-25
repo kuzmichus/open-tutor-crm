@@ -21,6 +21,7 @@
 
     <main class="main">
         <div class="main__container">
+            {% include "_notice_banner.html" %}
             <div class="page-header page-header--row">
                 <div>
                     <h1>Уроки</h1>
@@ -45,7 +46,7 @@
                           hx-get="/tutor/lessons/list"
                           hx-target="#lessons-table"
                           hx-swap="innerHTML"
-                          hx-trigger="input changed delay:300ms from:input[name='q'], change from:select[name='student'], change from:input[name='period'], submit">
+                          hx-trigger="input changed delay:300ms from:input[name='q'], change from:select[name='student'], change from:select[name='status'], change from:input[name='period'], submit">
                         <label class="sr-only" for="lessons-search">Поиск уроков</label>
                         <input class="input filters__search"
                                id="lessons-search"
@@ -62,6 +63,16 @@
                             {% for option in student_options %}
                             <option value="{{ option.id }}" {% if student_id == option.id %}selected{% endif %}>{{ option.name }}</option>
                             {% endfor %}
+                        </select>
+
+                        {# «Не отмеченные» — прошедшие уроки, оставшиеся в
+                           «Запланирован»; сюда ведёт «Открыть» из баннера. #}
+                        <label class="sr-only" for="lessons-status">Статус</label>
+                        <select class="input filters__status"
+                                id="lessons-status"
+                                name="status">
+                            <option value="" {% if not status %}selected{% endif %}>Все статусы</option>
+                            <option value="unmarked" {% if status == 'unmarked' %}selected{% endif %}>Не отмеченные</option>
                         </select>
 
                         <div class="period-chips" role="group" aria-label="Период">

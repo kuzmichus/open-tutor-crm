@@ -4,7 +4,8 @@
 включённый переключатель при сохранении применяет общие поля формы —
 тип, цель (ученик или группа), длительность, ссылку на встречу и оплату
 ученика — ко всем урокам серии, **включая прошедшие** (осознанное
-решение, design: Risks).
+решение, design: Risks). Исключение — цена: проведённым урокам она
+не применяется (спека «Цена проведённого урока только для чтения»).
 
 Пер-уточные поля (статус, оценка, комментарий для семьи, заметка)
 на серию НЕ распространяются: сервис принимает только whitelist
@@ -36,15 +37,21 @@ def apply_to_series(db: Session, series_id: str, data: dict) -> int:
     присланные в `data` (форма отправляет все поля, очистка — явный
     `None`); пер-уточные поля статуса, оценки, комментария и заметки
     не читаются вовсе.
+
+    Цена — исключение из «включая прошедшие» (спека «Цена проведённого
+    урока только для чтения»): проведённым урокам серии она не
+    применяется, их списания остаются прежними; остальные общие поля
+    меняются у всех.
     """
-    values = {
-        field: data[field] for field in MASS_UPDATE_FIELDS if field in data
-    }
     lessons = db.scalars(
         select(Lesson).where(Lesson.series_id == series_id)
     ).all()
     for lesson in lessons:
-        for field, value in values.items():
-            setattr(lesson, field, value)
+        fields = MASS_UPDATE_FIELDS
+        if lesson.status == "completed":
+            fields = tuple(f for f in MASS_UPDATE_FIELDS if f != "price")
+        for field in fields:
+            if field in data:
+                setattr(lesson, field, data[field])
     db.commit()
     return len(lessons)

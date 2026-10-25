@@ -294,7 +294,7 @@ def test_save_homework_error_keeps_existing_row(lesson_id):
 
 
 def test_save_homework_success_returns_filled_panel(owner, client, owner_lesson):
-    """Успех: 200, панель ДЗ с сохранёнными значениями, без HX-Trigger, ДЗ в БД."""
+    """Успех: 200, панель ДЗ с сохранёнными значениями, событие, ДЗ в БД."""
     response = client.post(
         f"/tutor/lessons/{owner_lesson}/homework",
         data=_hw_form(),
@@ -307,12 +307,15 @@ def test_save_homework_success_returns_filled_panel(owner, client, owner_lesson)
     assert "§ 12, упр. 4" in response.text
     assert 'value="2026-10-25T18:00"' in response.text
     assert "role=\"alert\"" not in response.text
-    assert "HX-Trigger" not in response.headers
-    # Кнопка в состоянии успеха (design D8): неактивна, зелёная, с новой
-    # надписью; lessons.js вернёт её в обычный вид через пару секунд.
-    assert "btn--success" in response.text
-    assert "disabled" in response.text
-    assert "Успешно сохранено" in response.text
+    # `homework-saved`: индикатор «ДЗ: есть/нет» во вкладке «Занятия»
+    # группы перезапрашивает панель, пока модалка урока открыта вторым
+    # слоем поверх модалки группы.
+    assert response.headers["HX-Trigger"] == "homework-saved"
+    # Успех (design D8) помечен на форме панели: кнопка «Сохранить ДЗ»
+    # живёт в футере модалки, вне свопаемого фрагмента, поэтому сервер
+    # ставит атрибут — lessons.js зажжёт на футерной кнопке зелёное
+    # состояние «Успешно сохранено» и через пару секунд вернёт обычный вид.
+    assert 'data-hw-saved="1"' in response.text
 
     with SessionLocal() as db:
         saved = get_homework(db, owner_lesson)
@@ -333,10 +336,9 @@ def test_save_homework_error_returns_panel_fragment(owner, client, owner_lesson)
     assert response.status_code == 200
     assert "Укажите задание." in response.text
     assert '<form id="homework-panel"' in response.text
-    # Ошибка — кнопка обычная и активная: повторно отправить можно сразу.
-    assert "btn--success" not in response.text
-    assert "Успешно сохранено" not in response.text
-    assert "Сохранить ДЗ" in response.text
+    # Ошибка — без маркера успеха: футерная кнопка «Сохранить ДЗ»
+    # останется обычной и активной, повторно отправить можно сразу.
+    assert "data-hw-saved" not in response.text
     # Присланные значения возвращены в панель (не потеряны).
     assert 'value="2026-10-25T18:00"' in response.text
 
@@ -436,8 +438,10 @@ def test_homework_panel_renders_all_fields(owner, client, owner_lesson):
     ):
         assert text in page, text
 
-    # Кнопка сохранения ДЗ (с учётом переносов в разметке).
+    # Кнопка «Сохранить ДЗ» — в футере модалки (вне скролла), связана
+    # с формой панели атрибутом `form=` (с учётом переносов в разметке).
     assert re.search(r">\s*Сохранить ДЗ\s*</button>", page)
+    assert 'form="homework-panel"' in page
 
     # Чекбокс дедлайна включён по умолчанию; статусы — пять лейблов.
     assert re.search(r'name="deadline_enabled"[^>]*checked', page)

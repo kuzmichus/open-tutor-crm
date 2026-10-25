@@ -25,6 +25,50 @@ from app.lesson.models.lesson import (
 
 _DASH = "—"  # прочерк: нет значения
 
+# Короткие названия месяцев в родительном падеже — для баннера напоминаний
+# («24 окт., 23:30»). Третья копия в проекте (finance, tutor): цена
+# разделения модулей, вынос в `app/common/` — отдельная задача.
+_MONTHS_SHORT = (
+    "янв.",
+    "февр.",
+    "мар.",
+    "апр.",
+    "мая",
+    "июн.",
+    "июл.",
+    "авг.",
+    "сент.",
+    "окт.",
+    "нояб.",
+    "дек.",
+)
+
+
+def unmarked_notice_label(count: int) -> str:
+    """«1 урок не отмечен» / «2 урока не отмечены» — подпись баннера.
+
+    Русская плюрализация по стандартным правилам: 11–14 всегда «уроков»,
+    иначе последняя цифра решает (1 — «урок», 2–4 — «урока», прочие —
+    «уроков»); глагол согласуется: единственное число только при одном.
+    """
+    if count % 100 in (11, 12, 13, 14):
+        plural, verb = "уроков", "не отмечены"
+    elif count % 10 == 1:
+        plural, verb = "урок", "не отмечен"
+    elif count % 10 in (2, 3, 4):
+        plural, verb = "урока", "не отмечены"
+    else:
+        plural, verb = "уроков", "не отмечены"
+    return f"{count} {plural} {verb}"
+
+
+def notice_when(value: datetime, tutor) -> str:
+    """«24 окт., 23:30» — момент урока в баннере, зона педагога."""
+    if value is None:
+        return ""
+    local = to_local(value, tutor)
+    return f"{local.day} {_MONTHS_SHORT[local.month - 1]}, {local.strftime('%H:%M')}"
+
 
 def _rubles(price: int) -> str:
     """«1 200 ₽»: разделитель разрядов — неразрывный пробел (как в group)."""
@@ -78,6 +122,28 @@ def format_lesson_datetime(value: datetime, tutor) -> str:
     return to_local(value, tutor).strftime("%d.%m.%Y, %H:%M")
 
 
+def format_lesson_date(value: datetime, tutor) -> str:
+    """«17.05.2027» — дата занятия во вкладке «Занятия» группы.
+
+    Время рядом показывает `lesson_time_span` (интервалом), поэтому дате
+    он не нужен.
+    """
+    if value is None:
+        return ""
+    return to_local(value, tutor).strftime("%d.%m.%Y")
+
+
+def homework_short_label(status: str | None) -> str:
+    """«ДЗ: есть/нет» — индикатор домашнего задания в списке занятий группы.
+
+    Записи ДЗ может не быть (создаётся лениво), а статус «Не задано» —
+    формально существующая запись без задания; для списка это одно и то
+    же «домашнего задания нет».
+    """
+    assigned = status is not None and status != "not_assigned"
+    return "ДЗ: есть" if assigned else "ДЗ: нет"
+
+
 def format_time_span(lesson, tutor) -> str:
     """Подзаголовок модалки редактирования: интервал «10:00–11:00».
 
@@ -102,5 +168,9 @@ def register_template_helpers() -> None:
         lesson_status_label=status_label,
         lesson_rating=format_rating,
         lesson_datetime=format_lesson_datetime,
+        lesson_date=format_lesson_date,
         lesson_time_span=format_time_span,
+        homework_short_label=homework_short_label,
+        unmarked_notice_label=unmarked_notice_label,
+        notice_when=notice_when,
     )

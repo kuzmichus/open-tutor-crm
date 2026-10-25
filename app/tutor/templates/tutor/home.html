@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Кабинет — Open Tutor CRM{% endblock %}
+{% block title %}Главная — Open Tutor CRM{% endblock %}
 {% block body %}
     {% set active_page = 'home' %}
     {% set user_name = tutor.name %}
@@ -17,85 +17,107 @@
     <!-- Основной контент -->
     <main class="main">
         <div class="main__container">
-            <div class="page-header">
-                <h1>Личный кабинет</h1>
-                <p>Профиль репетитора и данные аккаунта.</p>
+            {# На главной к напоминанию добавляется пояснение про
+               автозавершение через 24 часа (референс главной). #}
+            {% set notice_explain = true %}
+            {% include "_notice_banner.html" %}
+            <div class="page-header page-header--row">
+                <div>
+                    <h1>Главная</h1>
+                    <p>Добро пожаловать в TutorCRM</p>
+                </div>
+                <a class="btn btn--ghost" href="/tutor/">
+                    <i data-lucide="refresh-cw"></i>
+                    Обновить
+                </a>
             </div>
 
-            <section class="card">
-                <h2 class="card__title">Профиль</h2>
+            <!-- Стат-карточки: план дня, ученики, деньги, часы -->
+            <section class="stat-grid">
+                <article class="stat-card">
+                    <div class="stat-card__top">
+                        <span class="stat-card__label">Уроки сегодня</span>
+                        <span class="stat-card__icon stat-card__icon--blue" aria-hidden="true">
+                            <i data-lucide="calendar"></i>
+                        </span>
+                    </div>
+                    <div class="stat-card__value">{{ lessons_today_planned }}</div>
+                    <div class="stat-card__caption">Запланировано</div>
+                </article>
 
-                <div class="profile-grid mt-4">
-                    <div class="field">
-                        <span class="label">Имя</span>
-                        <span>{{ tutor.name }}</span>
+                <article class="stat-card">
+                    <div class="stat-card__top">
+                        <span class="stat-card__label">Активные ученики</span>
+                        <span class="stat-card__icon stat-card__icon--green" aria-hidden="true">
+                            <i data-lucide="users"></i>
+                        </span>
                     </div>
-                    <div class="field">
-                        <span class="label">Email</span>
-                        <span>{{ tutor.email }}</span>
-                    </div>
-                    {% if tutor.phone %}
-                    <div class="field">
-                        <span class="label">Телефон</span>
-                        <span>{{ tutor.phone }}</span>
-                    </div>
-                    {% endif %}
-                    {% if tutor.subject %}
-                    <div class="field">
-                        <span class="label">Предмет</span>
-                        <span>{{ tutor.subject }}</span>
-                    </div>
-                    {% endif %}
-                    {% if tutor.experience %}
-                    <div class="field">
-                        <span class="label">Опыт</span>
-                        <span>{{ tutor.experience }}</span>
-                    </div>
-                    {% endif %}
-                    {% if tutor.hourly_rate %}
-                    <div class="field">
-                        <span class="label">Стоимость часа</span>
-                        <span data-mono>{{ tutor.hourly_rate }}</span>
-                    </div>
-                    {% endif %}
-                    {% if tutor.timezone %}
-                    <div class="field">
-                        <span class="label">Часовой пояс</span>
-                        <span>{{ tutor.timezone }}</span>
-                    </div>
-                    {% endif %}
-                </div>
+                    <div class="stat-card__value">{{ active_students }}</div>
+                    <div class="stat-card__caption">Всего активных</div>
+                </article>
 
-                {% if tutor.about %}
-                <div class="field mt-4">
-                    <span class="label">О себе</span>
-                    <p class="card__desc">{{ tutor.about }}</p>
-                </div>
-                {% endif %}
+                <article class="stat-card">
+                    <div class="stat-card__top">
+                        <span class="stat-card__label">Доход за месяц</span>
+                        <span class="stat-card__icon stat-card__icon--orange" aria-hidden="true">
+                            <i data-lucide="wallet"></i>
+                        </span>
+                    </div>
+                    <div class="stat-card__value">{{ money(month_income) }}</div>
+                    <div class="stat-card__caption">{{ month_caption(tutor) }}</div>
+                </article>
 
-                <form method="post" action="/tutor/logout" class="mt-5">
-                    <button class="btn btn--ghost" type="submit">
-                        <i data-lucide="log-out"></i>
-                        Выйти
-                    </button>
-                </form>
+                <article class="stat-card">
+                    <div class="stat-card__top">
+                        <span class="stat-card__label">Проведено часов</span>
+                        <span class="stat-card__icon stat-card__icon--purple" aria-hidden="true">
+                            <i data-lucide="clock"></i>
+                        </span>
+                    </div>
+                    <div class="stat-card__value">{{ month_hours }}</div>
+                    <div class="stat-card__caption">За текущий месяц</div>
+                </article>
             </section>
 
-            <!-- Заглушка дашборда: приветствие и часы (hx-get /time) -->
-            <section class="card mt-5">
-                <h2 class="card__title">Hello world</h2>
-                <p class="card__desc">Дата и время (обновляется каждую секунду):</p>
-                <div id="clock"
-                     hx-get="/time"
-                     hx-trigger="every 1s"
-                     hx-swap="innerHTML">{{ now }}</div>
+            <!-- Два списка дня: план и деньги -->
+            <section class="home-grid">
+                <article class="home-panel">
+                    <h2 class="home-panel__title">Расписание на сегодня</h2>
+                    {% if today_lessons %}
+                    <ul class="home-panel__list">
+                        {% for lesson in today_lessons %}
+                        <li class="home-row">
+                            <div class="home-row__main">
+                                <span class="home-row__name">{{ lesson.name }}</span>
+                                <span class="home-row__meta">{{ lesson.subtitle }}</span>
+                            </div>
+                            <span class="home-row__time">{{ time_range(lesson.starts_at, lesson.ends_at, tutor) }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="home-empty">На сегодня уроков нет</p>
+                    {% endif %}
+                </article>
 
-                <div class="flex flex-wrap gap-2 mt-4">
-                    <span class="chip chip--regular">Обычный урок</span>
-                    <span class="chip chip--cancelled">Отменён</span>
-                    <span class="chip chip--unplanned">Незапланирован</span>
-                    <span class="chip chip--rescheduled">Перенесён</span>
-                </div>
+                <article class="home-panel">
+                    <h2 class="home-panel__title">Недавние платежи</h2>
+                    {% if recent_payments %}
+                    <ul class="home-panel__list">
+                        {% for payment in recent_payments %}
+                        <li class="home-row">
+                            <div class="home-row__main">
+                                <span class="home-row__name">{{ payment.student_name }}</span>
+                                <span class="home-row__meta">{{ payment_date(payment.occurred_at, tutor) }}</span>
+                            </div>
+                            <span class="home-row__amount">{{ signed_money(payment.operation) }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="home-empty">Платежей пока нет</p>
+                    {% endif %}
+                </article>
             </section>
         </div>
     </main>

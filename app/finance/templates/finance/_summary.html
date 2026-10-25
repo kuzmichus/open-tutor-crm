@@ -1,0 +1,135 @@
+{# Сводка финансов: карточки-показатели и арифметика «заработано/получено».
+
+   Корень — обновляемый контейнер: после сохранения платежа или расхода
+   диалоги шлют `payment-saved`/`expense-saved`, и блок перезапрашивает
+   себя целиком (design D6) — числа всегда с сервера, в браузере нет ни
+   одной денежной формулы.
+
+   Два рода чисел (design D3): поток за период (доход, возвраты, чистый
+   доход, расходы, заработано) и состояние на сейчас (долги, переплата) —
+   подписи карточек это различают.
+
+   Контекст: period (key), summary (income, refunds, net_income, expenses,
+   profit, left_for_tutor, earned, debts, overpayments, compare_note). #}
+<div class="fin-summary" id="finance-summary"
+     hx-get="/tutor/finance/summary?period={{ period.key }}"
+     hx-trigger="payment-saved from:body, expense-saved from:body"
+     hx-swap="outerHTML">
+
+    <div class="fin-kpis">
+        <section class="card fin-kpi" aria-label="Доход за период">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Доход</span>
+                <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">
+                    <i data-lucide="arrow-down-left"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--green">{{ money(summary.income) }}</p>
+            <p class="fin-kpi__sub">Оплаченные платежи за период</p>
+        </section>
+
+        <section class="card fin-kpi" aria-label="Возвраты за период">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Возвраты</span>
+                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
+                    <i data-lucide="undo-2"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--red">{{ money(summary.refunds) }}</p>
+            <p class="fin-kpi__sub">Возвращено ученикам</p>
+        </section>
+
+        <section class="card fin-kpi" aria-label="Чистый доход">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Чистый доход</span>
+                <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">
+                    <i data-lucide="wallet"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--green">{{ money(summary.net_income) }}</p>
+            <p class="fin-kpi__sub">Доход минус возвраты</p>
+        </section>
+
+        <section class="card fin-kpi" aria-label="Расходы за период">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Расходы</span>
+                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
+                    <i data-lucide="arrow-up-right"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--red">{{ money(summary.expenses) }}</p>
+            <p class="fin-kpi__sub">Траты репетитора за период</p>
+        </section>
+
+        <section class="card fin-kpi" aria-label="Чистая прибыль">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Чистая прибыль</span>
+                <span class="fin-kpi__icon fin-kpi__icon--violet" aria-hidden="true">
+                    <i data-lucide="piggy-bank"></i>
+                </span>
+            </div>
+            {# balance_label, а не money: прибыль может быть отрицательной
+               (расходы превысили доход), минус — типографский, как у долгов. #}
+            <p class="fin-kpi__value fin-kpi__value--violet">{{ balance_label(summary.profit) }}</p>
+            <p class="fin-kpi__sub">Чистый доход минус расходы</p>
+        </section>
+
+        <section class="card fin-kpi" aria-label="Заработано уроками">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Заработано (уроки)</span>
+                <span class="fin-kpi__icon fin-kpi__icon--violet" aria-hidden="true">
+                    <i data-lucide="graduation-cap"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--violet">{{ money(summary.earned) }}</p>
+            <p class="fin-kpi__sub">Списания за проведённые уроки</p>
+        </section>
+
+        <section class="card fin-kpi" aria-label="Долги учеников">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Долги учеников</span>
+                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
+                    <i data-lucide="user-x"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--red">{{ balance_label(summary.debts) }}</p>
+            <p class="fin-kpi__sub">Сумма отрицательных балансов на сейчас</p>
+        </section>
+
+        <section class="card fin-kpi" aria-label="Переплата учеников">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Переплата</span>
+                <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">
+                    <i data-lucide="hand-coins"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--green">{{ money(summary.overpayments) }}</p>
+            <p class="fin-kpi__sub">Сумма положительных балансов на сейчас</p>
+        </section>
+    </div>
+
+    <section class="card fin-compare" aria-label="Заработано и получено">
+        <h2 class="fin-compare__title">Заработано и получено</h2>
+        <div class="fin-compare__grid">
+            <div class="fin-compare__item">
+                <p class="fin-compare__label">Заработано уроками</p>
+                <p class="fin-compare__value">{{ money(summary.earned) }}</p>
+            </div>
+            <div class="fin-compare__item">
+                <p class="fin-compare__label">Получено от учеников</p>
+                <p class="fin-compare__value fin-compare__value--green">{{ money(summary.net_income) }}</p>
+            </div>
+            <div class="fin-compare__item">
+                <p class="fin-compare__label fin-compare__label--minus">− Расходы</p>
+                <p class="fin-compare__value fin-compare__value--red">{{ money(summary.expenses) }}</p>
+            </div>
+            <div class="fin-compare__item">
+                <p class="fin-compare__label">= Осталось репетитору</p>
+                {# Цвет по знаку решает сервер (`left_is_negative`):
+                   отрицательный итог — расход превышает полученное. #}
+                <p class="fin-compare__value{% if summary.left_is_negative %} fin-compare__value--red{% else %} fin-compare__value--green{% endif %}">{{ balance_label(summary.left_for_tutor) }}</p>
+            </div>
+        </div>
+        <p class="fin-compare__note">{{ summary.compare_note }}</p>
+    </section>
+</div>

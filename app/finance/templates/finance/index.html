@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Финансы — Open Tutor CRM{% endblock %}
+
+{% block head %}
+    {# Фабрики диалогов счёта (paymentDialog, incomeStudentPicker): диалог
+       «Доход» открывается на этой странице. Скрипт идёт до alpine.min.js
+       (base.html), подписка на alpine:init срабатывает раньше обхода DOM. #}
+    <script src="/static/payments.js" defer></script>
+{% endblock %}
+
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            {% include "_notice_banner.html" %}
+
+            <a class="back-link" href="/tutor/">
+                <i data-lucide="arrow-left"></i>
+                Назад
+            </a>
+
+            <div class="page-header page-header--row">
+                <div>
+                    <h1>Финансы</h1>
+                    <p>{{ period.caption }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button class="btn btn--primary" type="button"
+                            hx-get="/tutor/payments/new"
+                            hx-target="#modal-payment"
+                            hx-swap="innerHTML">
+                        <i data-lucide="plus"></i>
+                        Доход
+                    </button>
+                    <button class="btn btn--primary" type="button"
+                            hx-get="/tutor/expenses/new"
+                            hx-target="#modal-expense"
+                            hx-swap="innerHTML">
+                        <i data-lucide="minus"></i>
+                        Расход
+                    </button>
+                </div>
+            </div>
+
+            {# Период — обычная GET-форма: страница работает без JS,
+               состояние периода видно в адресе. Смена селекта отправляет
+               форму; без Alpine работает кнопка в noscript. Вкладка
+               сохраняется скрытым полем — смена периода не сбрасывает
+               открытый раздел операций. #}
+            <form class="fin-toolbar" method="get" action="/tutor/finance" x-data>
+                <label class="sr-only" for="fin-period">Период</label>
+                <input type="hidden" name="tab" value="{{ tab }}">
+                <select class="input fin-toolbar__period" id="fin-period" name="period"
+                        @change="$el.form.requestSubmit()">
+                    {% for key in period_options %}
+                    <option value="{{ key }}"{% if period.key == key %} selected{% endif %}>
+                        {{ period_labels[key] }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <noscript>
+                    <button class="btn btn--outline btn--sm" type="submit">Показать</button>
+                </noscript>
+            </form>
+
+            {% include "finance/_summary.html" %}
+
+            {% include "finance/_operations.html" %}
+
+            {# Контейнеры диалогов «Доход» и «Расход»: независимые слои,
+               форма приходит свопом и сама становится модалкой. #}
+            <div id="modal-payment"></div>
+            <div id="modal-expense"></div>
+        </div>
+    </main>
+
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/tutor/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/tutor/students" class="bottom-bar__item">
+            <i data-lucide="users"></i><span>Ученики</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
+{% endblock %}

@@ -14,8 +14,11 @@ from app.student.services.student_form import (
     validate_contacts,
 )
 from app.student.services.student_writer import update_student
+from app.student.services.list_metrics import attach_card_metrics
 from app.student.services.students import build_cards
 from app.templating import templates
+from app.tutor.models.tutor import Tutor
+from app.tutor.services.clock import as_utc, utcnow
 
 router = APIRouter()
 
@@ -66,9 +69,11 @@ async def update_student_view(
         response.headers["HX-Refresh"] = "true"
         return response
 
-    card = build_cards(db, [student])[0]
+    card = attach_card_metrics(
+        db, build_cards(db, [student])[0], now=as_utc(utcnow())
+    )
     response = templates.TemplateResponse(
-        request, "student/_card.html", {"card": card}
+        request, "student/_card.html", {"card": card, "tutor": db.get(Tutor, tutor_id)}
     )
     # Карточка заменяет себя в сетке, модалка закрывается по событию.
     response.headers["HX-Retarget"] = f"#student-card-{student.id}"

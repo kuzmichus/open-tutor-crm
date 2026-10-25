@@ -34,11 +34,16 @@ from app.lesson.services.presentation import (
     format_target,
     format_time_span,
 )
+from app.lesson.services.until_presets import until_presets
 from app.student.models.student import Student
 from app.student.services.presentation import student_full_name
 
 # Дни недели панели расписания: `weekday` 0 = понедельник … 6 = воскресенье.
 WEEKDAY_LABELS = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+# Обычный контейнер модалки урока (страница уроков, календарь); второй
+# слой `#modal-lesson` (design D10) — окно поверх модалки группы.
+DEFAULT_MODAL_TARGET = "#modal"
 
 
 def _text(form, name: str) -> str:
@@ -298,6 +303,7 @@ def lesson_form_context(
     errors: list[str] | None = None,
     unavailable_warning: dict | None = None,
     ack_unavailable: bool = False,
+    modal_target: str = DEFAULT_MODAL_TARGET,
 ) -> dict:
     """Контекст `lesson/_form.html`: `lesson=None` — создание, иначе правка.
 
@@ -314,6 +320,12 @@ def lesson_form_context(
     список ошибок — «не сохранено и не сохранится» (design.md D5, п. 3).
     `ack_unavailable` — скрытое поле подтверждения, чтобы повторная отправка
     не спрашивала снова (design.md D5, п. 4).
+
+    `modal_target` — контейнер модалки для `hx-target` сохранения и
+    удаления: обычный слой `#modal` либо второй слой (`#modal-lesson`,
+    design D10), когда окно открыто поверх модалки группы из вкладки
+    «Занятия» — повторная отрисовка с ошибкой и удаление должны
+    подменять окно там же, где оно открыто.
     """
     values = _form_values(lesson, data, tutor)
 
@@ -339,6 +351,7 @@ def lesson_form_context(
         "title": title,
         "subtitle": subtitle,
         "action": action,
+        "modal_target": modal_target,
         "errors": errors or [],
         "form": values,
         "student_id": student_id or "",
@@ -354,12 +367,14 @@ def lesson_form_context(
         "weekdays": WEEKDAY_LABELS,
         "rating_stars": (1, 2, 3, 4, 5),
         "show_repeat": lesson is None,  # серия настраивается только при создании
-        "show_price_warning": (
-            lesson is not None and lesson.status == "completed"
-        ),
+        # Пресеты «До даты» нужны только там, где есть панель расписания:
+        # в редактировании серия не управляется (design: Non-Goals).
+        "until_presets": until_presets(db, tutor) if lesson is None else [],
+        # Цена проведённого урока — только для чтения (и в форме, и на
+        # сервере, см. lesson_writer): предупреждение о пересчёте не нужно.
+        "price_locked": lesson is not None and lesson.status == "completed",
         "form_config": {
             "type": values["type"],
-            "priceInitial": values["price"],
         },
         # Баннер недоступности: отдельно от `errors` (design.md D5, п. 3).
         "unavailable_warning": unavailable_warning or {},

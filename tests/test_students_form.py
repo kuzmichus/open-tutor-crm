@@ -152,12 +152,29 @@ def test_students_js_formats_phone_on_input():
     assert 'result = "+7"' in STUDENTS_JS
 
 def test_grid_refreshes_after_save(client, owner):
-    """Смена статуса на «В архиве» должна убирать карточку из списка."""
+    """Смена статуса на «В архиве» должна убирать карточку из списка.
+
+    Перезапрашивается весь список (`#students-content`): вместе с карточками
+    обновляется панель долга, которая живёт в том же партиале (design D2
+    change'а student-list-reference).
+    """
     html = client.get("/tutor/students").text
-    grid = html[html.index('id="students-grid"') : html.index("</div>", html.index('id="students-grid"'))]
-    assert 'hx-get="/tutor/students/list"' in grid
-    assert 'hx-trigger="student-saved from:body"' in grid
-    assert 'hx-include="#students-filters"' in grid
+    content = html[
+        html.index('id="students-content"') : html.index(
+            "</div>", html.index('id="students-content"')
+        )
+    ]
+    assert 'hx-get="/tutor/students/list"' in content
+    assert 'hx-trigger="student-saved from:body"' in content
+    assert 'hx-include="#students-filters"' in content
+
+
+def test_lessons_js_loaded_for_lesson_modal(client, owner):
+    """Карточка урока открывается вторым слоем из окна «Уроки» ученика:
+    фабрика `lessonForm` должна быть подключена до Alpine (как у групп)."""
+    html = client.get("/tutor/students").text
+    assert "/static/lessons.js" in html
+    assert html.index("/static/lessons.js") < html.index("/static/alpine.min.js")
 
 def test_form_has_tabs_and_sections(client, owner):
     """Вкладки «Общее/Платежи/Настройки»: секции лежат в панелях вкладок."""
@@ -262,12 +279,14 @@ def test_modal_actions_are_outside_scrolled_body(client, owner):
     assert actions_start > body_start
     assert "Отмена" in html[actions_start:]
     assert 'type="submit"' in html[actions_start:]
-    # Тело скроллится, футер прижат к низу модалки.
+    # Тело скроллится, футер прижат к низу модалки. Якорь — с отступом
+    # секции (2 пробела): в styles.css бывают вложенные `& .modal-body`
+    # (окно «Уроки»), и «первое вхождение» без якоря находило бы их.
     assert ".modal-body {" in STYLES
     assert ".modal-actions {" in STYLES
-    modal_body = STYLES[STYLES.index(".modal-body {") :]
+    modal_body = STYLES[STYLES.index("\n  .modal-body {") :]
     assert "overflow-y: auto" in modal_body[: modal_body.index("}")]
-    modal_actions = STYLES[STYLES.index(".modal-actions {") :]
+    modal_actions = STYLES[STYLES.index("\n  .modal-actions {") :]
     assert "flex-shrink: 0" in modal_actions[: modal_actions.index("}")]
 
 

@@ -87,8 +87,14 @@ def test_sidebar_highlights_students(client, owner):
 # --------------------------------------------------------------------------
 
 
-def test_card_shows_both_contact_roles(client, owner, student_factory):
-    student_id = student_factory(tutor_id=owner, first_name="Маша")
+def test_card_shows_own_contacts(client, owner, student_factory):
+    """Карточка списка показывает телефон, почту и школу самого ученика.
+
+    Привязанные контакты (мама, бабушка) живут на странице карточки
+    ученика, в компактной карточке списка их нет — по референсу там
+    только свои контакты и метрики.
+    """
+    student_id = student_factory(tutor_id=owner, first_name="Маша", phone="+7 999 111-22-33")
     with SessionLocal() as db:
         mom = Contact(tutor_id=owner, full_name="Мама Ольга")
         granny = Contact(tutor_id=owner, full_name="Бабушка Нина")
@@ -110,17 +116,19 @@ def test_card_shows_both_contact_roles(client, owner, student_factory):
         db.commit()
 
     card = _card_article(client.get("/tutor/students").text)
-    assert "Мама Ольга" in card and "мама" in card
-    assert "Бабушка Нина" in card and "бабушка" in card
-    # Признак получателя напоминаний — только у мамы.
-    assert card.count("напоминания") == 1
+    assert "+7 999 111-22-33" in card
+    # Родственники — не метрики карточки списка.
+    assert "Мама Ольга" not in card
+    assert "Бабушка Нина" not in card
 
 
 def test_card_without_contacts_renders(client, owner, student_factory):
+    """Без контактов карточка рендерится с пустыми метриками и планом."""
     student_factory(tutor_id=owner, first_name="Одинокий")
     card = _card_article(client.get("/tutor/students").text)
     assert "Одинокий" in card
-    assert "платит сам ученик" in card
+    assert "Проведено: 0" in card
+    assert "Нет запланированных уроков" in card
 
 
 def test_card_shows_initials_and_status_chip(client, owner, student_factory):
@@ -149,13 +157,28 @@ def test_card_hides_grade_and_school_for_adult(client, owner, student_factory):
 # --------------------------------------------------------------------------
 
 
-def test_stub_block_has_no_invented_numbers_or_dead_links(client, owner, student_factory):
-    student_factory(tutor_id=owner, first_name="Маша")
+def test_card_shows_real_metrics_and_actions(client, owner, student_factory):
+    """Метрики карточки настоящие (пусть и нулевые), маршруты кнопок есть.
+
+    Кнопки «Уроки», «Отчёт» и «Доступ» ведут на существующие модальные
+    маршруты — прежнее требование «заглушки без ссылок» снято тем, что
+    маршруты заработали (change student-list-reference).
+    """
+    student_id = student_factory(tutor_id=owner, first_name="Маша")
     card = _card_article(client.get("/tutor/students").text)
 
-    assert "student-metrics" in card
-    for forbidden in ("0 ₽", "Проведено", "/lessons", "/report", 'href="#"'):
-        assert forbidden not in card, f"В карточке не должно быть {forbidden!r}"
+    # Честные нули: операций и уроков у ученика действительно нет.
+    assert "Проведено: 0" in card
+    assert "0\u00a0₽" in card
+    assert "Нет запланированных уроков" in card
+    # Действия открывают модалки по реальным маршрутам.
+    assert f'hx-get="/tutor/students/{student_id}/lessons"' in card
+    assert f'hx-get="/tutor/students/{student_id}/report"' in card
+    assert f'hx-get="/tutor/students/{student_id}/access"' in card
+    assert f'hx-get="/tutor/students/{student_id}/edit"' in card
+    # Маршруты реально отвечают (нет «мёртвых» ссылок).
+    for suffix in ("lessons", "report", "access", "edit"):
+        assert client.get(f"/tutor/students/{student_id}/{suffix}").status_code == 200
 
 
 def test_card_page_shows_balance_summary(client, owner, student_factory):
@@ -238,7 +261,7 @@ def test_card_page_has_payments_action(client, owner, student_factory):
         ".avatar",
         ".student-name",
         ".student-contacts",
-        ".student-metrics",
+        ".student-stats",
         ".student-actions",
         ".students-card",
         ".card-header",
@@ -310,24 +333,40 @@ def _list_table(html: str) -> str:
 
 
 def test_list_view_table_has_required_columns(client, owner, student_factory):
-    """Таблица списка: имя, контакты (телефон + почта) и статус."""
+    """Таблица списка по референсу: имя, контакты, класс/школа, уроки,
+    баланс, появился, первая оплата, статус."""
     student_factory(
         tutor_id=owner,
         first_name="Маша",
         last_name="Петрова",
         phone="+7 999 111-22-33",
         email="masha@example.com",
+        grade=5,
+        school="Гимназия",
         status="active",
     )
     table = _list_table(client.get("/tutor/students").text)
 
-    assert table.count("<th ") == 3
-    for heading in ("Имя", "Контакты", "Статус"):
+    assert table.count("<th ") == 8
+    for heading in (
+        "Фамилия и имя",
+        "Контакты",
+        "Класс/Школа",
+        "Уроки",
+        "Баланс",
+        "Появился",
+        "Первая оплата",
+        "Статус",
+    ):
         assert f">{heading}</th>" in table
     assert "Маша Петрова" in table
     assert "+7 999 111-22-33" in table
     assert "masha@example.com" in table
+    assert "5 класс" in table and "Гимназия" in table
     assert "chip--active" in table
+    # Деньги — знаком рубля, никакого «$» из исходного референса.
+    assert "0\u00a0₽" in table
+    assert "$" not in table
 
 
 def test_list_view_table_shows_placeholder_without_contacts(
