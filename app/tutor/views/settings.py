@@ -33,6 +33,8 @@ def settings_page(
         raise LoginRequired()
 
     context = settings_page_context(
-        db, tutor, tab=tab, saved=bool(saved),
+        # «1» — единственное значение, которое шлют редиректы сохранения;
+        # bool("0") тоже True: плачку показывал бы любой непустой параметр.
+        db, tutor, tab=tab, saved=saved == "1",
     )
     return templates.TemplateResponse(request, "tutor/settings.html", context)

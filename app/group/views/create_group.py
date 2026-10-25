@@ -6,10 +6,11 @@
 """
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.common.access import require_tutor_id
+from app.common.responses import saved_response
 from app.database import get_db
 from app.group.services.form_context import (
     NEW_GROUP_SUBTITLE,
@@ -23,11 +24,6 @@ from app.group.services.group_writer import create_group
 from app.templating import templates
 
 router = APIRouter()
-
-
-def _is_htmx(request: Request) -> bool:
-    """True, если запрос пришёл от htmx (не полная навигация браузера)."""
-    return request.headers.get("HX-Request") == "true"
 
 
 def _form_response(
@@ -71,10 +67,5 @@ async def create_group_view(
     if save_errors:
         return _form_response(request, db, tutor_id, data, save_errors)
 
-    if not _is_htmx(request):
-        return RedirectResponse(url="/tutor/groups", status_code=303)
-
     # Пустой ответ очищает `#modal`, событие перезапрашивает сетку.
-    response = HTMLResponse("")
-    response.headers["HX-Trigger"] = "group-saved"
-    return response
+    return saved_response(request, "group-saved", "/tutor/groups")

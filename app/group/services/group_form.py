@@ -14,17 +14,12 @@
 from collections.abc import Mapping
 from datetime import date
 
+from app.common.services.forms import text_value
 from app.group.services.members import MAX_MEMBERS
 
 _NAME_MAX = 100
 # Длина постоянной ссылки на встречу (модель: String(500)).
 _MEETING_URL_MAX = 500
-
-
-def _get(form: Mapping, key: str) -> str:
-    """Строковое значение поля формы (отсутствие = пустая строка)."""
-    value = form.get(key, "")
-    return value.strip() if isinstance(value, str) else ""
 
 
 def _getlist(form: Mapping, key: str) -> list[str]:
@@ -75,9 +70,9 @@ def is_membership_submitted(form: Mapping) -> bool:
     с названием.
     """
     return (
-        _get(form, "members_form") == "1"
+        text_value(form, "members_form") == "1"
         or bool(_getlist(form, "members"))
-        or bool(_get(form, "removed_members"))
+        or bool(text_value(form, "removed_members"))
     )
 
 
@@ -140,21 +135,21 @@ def parse_group_form(form: Mapping) -> tuple[dict, list[str]]:
     errors: list[str] = []
 
     data: dict = {
-        "name": _get(form, "name"),
-        "description": _get(form, "description") or None,
-        "price": _parse_int(_get(form, "price"), field="Цена за урок", errors=errors),
+        "name": text_value(form, "name"),
+        "description": text_value(form, "description") or None,
+        "price": _parse_int(text_value(form, "price"), field="Цена за урок", errors=errors),
         # Поля вкладки «Общее»: постоянная ссылка на встречу и заметки.
         # Заметки видят только репетиторы, ученикам они не показываются.
         # Флаг «поле пришло» отделяет «очистить» от «этот POST его не трогает»:
         # сохранение только настроек не должно стирать заметки.
-        "meeting_url": _get(form, "meeting_url") or None,
+        "meeting_url": text_value(form, "meeting_url") or None,
         "meeting_url_submitted": "meeting_url" in form,
-        "notes": _get(form, "notes") or None,
+        "notes": text_value(form, "notes") or None,
         "notes_submitted": "notes" in form,
         "membership_submitted": is_membership_submitted(form),
         "member_ids": [value.strip() for value in _getlist(form, "members") if value.strip()],
         "removed_ids": [
-            value.strip() for value in _get(form, "removed_members").split(",") if value.strip()
+            value.strip() for value in text_value(form, "removed_members").split(",") if value.strip()
         ],
         "joined": {},
         "prices": {},
@@ -164,11 +159,11 @@ def parse_group_form(form: Mapping) -> tuple[dict, list[str]]:
     errors += validate_member_pool(data)
 
     for member_id in data["member_ids"]:
-        joined = _parse_date(_get(form, f"member_joined_{member_id}"), errors)
+        joined = _parse_date(text_value(form, f"member_joined_{member_id}"), errors)
         if joined is not None:
             data["joined"][member_id] = joined
         price = _parse_int(
-            _get(form, f"member_price_{member_id}"),
+            text_value(form, f"member_price_{member_id}"),
             field="Индивидуальная цена",
             errors=errors,
         )

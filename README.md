@@ -432,7 +432,7 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 | Команда | Назначение |
 |---|---|
-| `uv run pytest` | все тесты |
+| `uv run pytest -n auto` | все тесты |
 | `uv run pytest -q tests/test_lesson_create.py` | конкретный файл |
 | `uv run alembic upgrade head` | применить миграции |
 | `uv run alembic revision --autogenerate -m "..."` | новая миграция |
@@ -472,7 +472,7 @@ Issues и pull request'ы приветствуются. Перед PR:
 
 1. Прочитайте [AGENTS.md](AGENTS.md) — там архитектурные правила проекта.
 2. Добавьте тесты на новое поведение.
-3. Убедитесь, что `uv run pytest` зелёный, а миграции созданы через autogenerate.
+3. Убедитесь, что `uv run pytest -n auto` зелёный, а миграции созданы через autogenerate.
 
 Вопросы и предложения — в Telegram: [@opentutorcrm](https://t.me/opentutorcrm).
 

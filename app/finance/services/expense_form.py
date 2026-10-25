@@ -20,35 +20,9 @@
 from collections.abc import Mapping
 from datetime import date
 
+from app.common.services.forms import parse_rubles, text_value
 from app.finance.models.expense import EXPENSE_CATEGORIES
 from app.finance.services.payment_form import COMMENT_MAX
-
-
-def _get(form: Mapping, key: str) -> str:
-    """Строковое значение поля формы (отсутствие = пустая строка)."""
-    value = form.get(key, "")
-    return value.strip() if isinstance(value, str) else ""
-
-
-def _parse_amount(raw: str, errors: list[str]) -> int | None:
-    """Сумма расхода: целое число рублей больше нуля.
-
-    Пробелы внутри числа допускаются («1 200» = 1200): отказ на пробеле был
-    бы придиркой к форматированию, а не проверкой данных.
-    """
-    if not raw:
-        errors.append("Укажите сумму расхода.")
-        return None
-    cleaned = "".join(raw.split())
-    try:
-        value = int(cleaned)
-    except ValueError:
-        errors.append("Сумма расхода — целое число рублей.")
-        return None
-    if value <= 0:
-        errors.append("Сумма расхода должна быть больше нуля.")
-        return None
-    return value
 
 
 def _parse_date(raw: str, errors: list[str]) -> date | None:
@@ -89,12 +63,12 @@ def parse_expense_form(form: Mapping) -> tuple[dict, list[str]]:
     Возвращает `(данные, ошибки)`. Пустой комментарий — это `None`.
     """
     errors: list[str] = []
-    raw_category = _get(form, "category")
+    raw_category = text_value(form, "category")
     data: dict = {
-        "amount": _parse_amount(_get(form, "amount"), errors),
+        "amount": parse_rubles(text_value(form, "amount"), "расхода", errors),
         "category": raw_category if raw_category in EXPENSE_CATEGORIES else None,
-        "date": _parse_date(_get(form, "date"), errors),
-        "comment": _get(form, "comment") or None,
+        "date": _parse_date(text_value(form, "date"), errors),
+        "comment": text_value(form, "comment") or None,
     }
     if raw_category and raw_category not in EXPENSE_CATEGORIES:
         errors.append("Выберите категорию расхода из списка.")

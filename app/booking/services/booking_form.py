@@ -13,6 +13,8 @@
 
 from dataclasses import dataclass
 
+from app.common.services.forms import text_value
+
 # Пределы длины: те же, что у колонок `bookings.name` (200) и
 # `bookings.contact` (64). Слишком длинное значение отсекается на входе,
 # иначе БД отклонила бы вставку и пользователь увидел бы 500.
@@ -33,13 +35,6 @@ class BookingParams:
     name: str
     contact: str
 
-def _text(form, name: str) -> str:
-    """Значение поля формы как строка (нет значения — пустая строка)."""
-    value = form.get(name)
-    if not isinstance(value, str):
-        return ""
-    return value.strip()
-
 def booking_form_values(form) -> dict:
     """Присланные значения заявки — для повторного показа в форме.
 
@@ -47,7 +42,7 @@ def booking_form_values(form) -> dict:
     введённое, чтобы человек не набирал заново (паттерн
     `slot_form_values`).
     """
-    return {"name": _text(form, "name"), "contact": _text(form, "contact")}
+    return {"name": text_value(form, "name"), "contact": text_value(form, "contact")}
 
 def parse_booking_form(form) -> tuple[BookingParams | None, list[str]]:
     """Разбор формы заявки: значения или список ошибок.
@@ -56,8 +51,8 @@ def parse_booking_form(form) -> tuple[BookingParams | None, list[str]]:
     имя и контакт»). Значение из одних пробелов пустым и считается —
     `strip` выполняется до проверки.
     """
-    name = _text(form, "name")
-    contact = _text(form, "contact")
+    name = text_value(form, "name")
+    contact = text_value(form, "contact")
 
     errors: list[str] = []
     if not name:

@@ -22,7 +22,6 @@ from app.group.services.group_form import (
     validate_group_data,
     validate_member_pool,
 )
-from app.group.services.members import member_ids as current_member_ids
 from app.student.models.student import Student
 
 

@@ -82,9 +82,3 @@ def request_booking(
         db.rollback()
         return None, [SLOT_BUSY_MESSAGE]
     return booking, []
-
-def active_booking_for_slot(db: Session, slot: Slot) -> Booking | None:
-    """Активная бронь окна (ожидающая или подтверждённая) либо None."""
-    from app.slot.services.busy import active_bookings
-
-    return active_bookings(db, [slot.id]).get(slot.id)

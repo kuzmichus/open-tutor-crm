@@ -23,39 +23,13 @@
 from collections.abc import Mapping
 from datetime import date
 
+from app.common.services.forms import parse_rubles, text_value
+from app.common.services.tutor_time import to_local
 from app.finance.models.account_operation import PAYMENT_METHODS, PAYMENT_STATUSES
 
 # Длина комментария не ограничена моделью (`Text`), но разумный предел
 # защищает от случайной вставки мегабайта текста в поле ввода.
 COMMENT_MAX = 500
-
-
-def _get(form: Mapping, key: str) -> str:
-    """Строковое значение поля формы (отсутствие = пустая строка)."""
-    value = form.get(key, "")
-    return value.strip() if isinstance(value, str) else ""
-
-
-def _parse_amount(raw: str, errors: list[str]) -> int | None:
-    """Сумма платежа: целое число рублей больше нуля.
-
-    Пробелы (в том числе неразрывные) внутри числа допускаются: «1 200» —
-    это та же тысяча двести, что и «1200», и отказ на пробеле был бы
-    придиркой к форматированию, а не проверкой данных.
-    """
-    if not raw:
-        errors.append("Укажите сумму платежа.")
-        return None
-    cleaned = "".join(raw.split())
-    try:
-        value = int(cleaned)
-    except ValueError:
-        errors.append("Сумма платежа — целое число рублей.")
-        return None
-    if value <= 0:
-        errors.append("Сумма платежа должна быть больше нуля.")
-        return None
-    return value
 
 
 def _parse_date(raw: str, errors: list[str]) -> date | None:
@@ -115,21 +89,21 @@ def parse_payment_form(form: Mapping) -> tuple[dict, list[str]]:
     errors: list[str] = []
 
     data: dict = {
-        "amount": _parse_amount(_get(form, "amount"), errors),
+        "amount": parse_rubles(text_value(form, "amount"), "платежа", errors),
         "method": _parse_choice(
-            _get(form, "method"),
+            text_value(form, "method"),
             PAYMENT_METHODS,
             message="Выберите способ оплаты из списка.",
             errors=errors,
         ),
         "status": _parse_choice(
-            _get(form, "status"),
+            text_value(form, "status"),
             PAYMENT_STATUSES,
             message="Выберите статус платежа из списка.",
             errors=errors,
         ),
-        "date": _parse_date(_get(form, "date"), errors),
-        "comment": _get(form, "comment") or None,
+        "date": _parse_date(text_value(form, "date"), errors),
+        "comment": text_value(form, "comment") or None,
     }
 
     # Проверки, которых не сделал разбор полей (длина комментария):
@@ -148,8 +122,6 @@ def payment_to_form(payment, tutor) -> dict:
     ввода (design D15), поэтому поле показывает тот день, в который платёж
     был внесён. `tutor` нужен для зоны — как в `lesson_form._form_values`.
     """
-    from app.common.services.tutor_time import to_local
-
     return {
         "amount": str(payment.amount),
         "method": payment.method or "",

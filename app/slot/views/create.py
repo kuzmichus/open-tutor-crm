@@ -22,6 +22,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.common.responses import dialog_closed
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.slot.services.access import require_tutor_id
 from app.slot.services.dialog_context import dialog_context
@@ -95,7 +96,7 @@ async def create_slot_view(
             dialog_context(db, tutor, data=_form_data(form), errors=errors),
         )
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url=CALENDAR_URL, status_code=303)
     # Диалог закрывает подписка на `slot-saved`, а неделю она же и
     # перерисовывает (спека calendar, «Сохранение окна обновляет неделю»).

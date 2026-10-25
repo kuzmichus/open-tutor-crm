@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.common.responses import dialog_closed
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.slot.services.access import get_owned_slot, require_tutor_id
 from app.slot.services.dialog_context import dialog_context
@@ -48,6 +49,6 @@ def delete_slot_view(
             dialog_context(db, tutor, slot=slot, errors=errors),
         )
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url=CALENDAR_URL, status_code=303)
     return dialog_closed()

@@ -18,6 +18,7 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 
+from app.common.services.forms import checked, text_value
 from app.lesson.models.lesson import LESSON_DURATIONS
 
 # Дни недели для чекбоксов пачки: 0 — понедельник … 6 — воскресенье
@@ -60,22 +61,6 @@ class BatchParams:
     # Ошибки уровня «форма» (лимит окон) заполняет `batch.plan()`:
     # число окон известно только после генерации.
     extra_errors: tuple[str, ...] = field(default=())
-
-
-def _text(form, name: str) -> str:
-    """Значение поля формы как строка (нет значения — пустая строка)."""
-    value = form.get(name)
-    if not isinstance(value, str):
-        return ""
-    return value.strip()
-
-
-def _checked(form, name: str) -> bool:
-    """Флаг переключателя: `on`/`1`/`true`/`yes` — включён."""
-    value = form.get(name, "")
-    if not isinstance(value, str):
-        return False
-    return value.strip().lower() in {"1", "on", "true", "yes"}
 
 
 def _parse_date(raw: str) -> tuple[date | None, bool]:
@@ -158,8 +143,8 @@ def slot_form_values(form) -> dict:
     напрямую из полей и не зависят от результата разбора.
     """
     values: dict = {}
-    raw_date = _text(form, "date")
-    raw_time = _text(form, "time")
+    raw_date = text_value(form, "date")
+    raw_time = text_value(form, "time")
     try:
         if raw_date and raw_time:
             values["starts_at"] = datetime.combine(
@@ -167,10 +152,10 @@ def slot_form_values(form) -> dict:
             )
     except ValueError:
         pass  # кривую дату не показываем как валидную — поля останутся пустыми
-    duration, duration_error = _parse_duration(_text(form, "duration_min"))
+    duration, duration_error = _parse_duration(text_value(form, "duration_min"))
     if not duration_error and duration is not None:
         values["duration_min"] = duration
-    values["is_public"] = _checked(form, "is_public")
+    values["is_public"] = checked(form, "is_public")
     return values
 
 
@@ -179,11 +164,11 @@ def parse_slot_form(form) -> tuple[SlotParams | None, list[str]]:
 
     `starts_at` собирается из `date` + `time` как настенное время педагога.
     """
-    raw_date = _text(form, "date")
-    raw_time = _text(form, "time")
+    raw_date = text_value(form, "date")
+    raw_time = text_value(form, "time")
     value_date, date_error = _parse_date(raw_date)
     value_time, time_error = _parse_time(raw_time)
-    duration, duration_error = _parse_duration(_text(form, "duration_min"))
+    duration, duration_error = _parse_duration(text_value(form, "duration_min"))
 
     errors: list[str] = []
     if date_error:
@@ -204,7 +189,7 @@ def parse_slot_form(form) -> tuple[SlotParams | None, list[str]]:
         SlotParams(
             starts_at=datetime.combine(value_date, value_time),
             duration_min=duration,
-            is_public=_checked(form, "is_public"),
+            is_public=checked(form, "is_public"),
         ),
         [],
     )
@@ -217,16 +202,16 @@ def batch_form_values(form) -> dict:
     перерыв), а форма обязана показать введённое пользователем. Ключи
     совпадают с `BatchParams`, чтобы `dialog_context` принял словарь.
     """
-    date_from, _ = _parse_date(_text(form, "date_from"))
-    date_to, _ = _parse_date(_text(form, "date_to"))
-    day_start, _ = _parse_time(_text(form, "day_start"))
-    day_end, _ = _parse_time(_text(form, "day_end"))
-    duration, duration_error = _parse_duration(_text(form, "duration_min"))
-    gap, _ = _parse_signed_int(_text(form, "gap_min"))
+    date_from, _ = _parse_date(text_value(form, "date_from"))
+    date_to, _ = _parse_date(text_value(form, "date_to"))
+    day_start, _ = _parse_time(text_value(form, "day_start"))
+    day_end, _ = _parse_time(text_value(form, "day_end"))
+    duration, duration_error = _parse_duration(text_value(form, "duration_min"))
+    gap, _ = _parse_signed_int(text_value(form, "gap_min"))
 
     values: dict = {
         "weekdays": _weekdays_from_form(form),
-        "is_public": _checked(form, "is_public"),
+        "is_public": checked(form, "is_public"),
     }
     if date_from is not None:
         values["date_from"] = date_from
@@ -250,12 +235,12 @@ def parse_batch_form(form) -> tuple[BatchParams | None, list[str]]:
     «До» позже «С», длительность из списка, перерыв не отрицательный.
     Каждое правило даёт своё сообщение.
     """
-    date_from, from_error = _parse_date(_text(form, "date_from"))
-    date_to, to_error = _parse_date(_text(form, "date_to"))
-    day_start, start_error = _parse_time(_text(form, "day_start"))
-    day_end, end_error = _parse_time(_text(form, "day_end"))
-    duration, duration_error = _parse_duration(_text(form, "duration_min"))
-    gap, gap_error = _parse_signed_int(_text(form, "gap_min"))
+    date_from, from_error = _parse_date(text_value(form, "date_from"))
+    date_to, to_error = _parse_date(text_value(form, "date_to"))
+    day_start, start_error = _parse_time(text_value(form, "day_start"))
+    day_end, end_error = _parse_time(text_value(form, "day_end"))
+    duration, duration_error = _parse_duration(text_value(form, "duration_min"))
+    gap, gap_error = _parse_signed_int(text_value(form, "gap_min"))
     weekdays = _weekdays_from_form(form)
 
     errors: list[str] = []
@@ -304,7 +289,7 @@ def parse_batch_form(form) -> tuple[BatchParams | None, list[str]]:
             duration_min=duration,
             # Пустой перерыв — 0: окна встык, это допустимо.
             gap_min=gap or 0,
-            is_public=_checked(form, "is_public"),
+            is_public=checked(form, "is_public"),
         ),
         [],
     )

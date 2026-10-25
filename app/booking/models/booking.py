@@ -22,6 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.constraints import sql_string_in
 from app.database import Base
 
 # Статусы брони: активные (pending, confirmed) и завершающие
@@ -37,12 +38,6 @@ BOOKING_STATUS_LABELS = {
 ACTIVE_BOOKING_STATUSES = ("pending", "confirmed")
 
 
-def _sql_string_in(column: str, values: tuple[str, ...]) -> str:
-    """`column IN ('a', 'b')` — строковый список для CHECK-ограничения."""
-    quoted = ", ".join(f"'{value}'" for value in values)
-    return f"{column} IN ({quoted})"
-
-
 class Booking(Base):
     """Заявка ученика на окно для записи.
 
@@ -55,7 +50,7 @@ class Booking(Base):
     __tablename__ = "bookings"
     __table_args__ = (
         CheckConstraint(
-            _sql_string_in("status", BOOKING_STATUSES),
+            sql_string_in("status", BOOKING_STATUSES),
             name="ck_bookings_status",
         ),
         # Одна активная бронь на окно — частичный уникальный индекс
@@ -67,10 +62,10 @@ class Booking(Base):
             "slot_id",
             unique=True,
             sqlite_where=text(
-                _sql_string_in("status", ACTIVE_BOOKING_STATUSES)
+                sql_string_in("status", ACTIVE_BOOKING_STATUSES)
             ),
             postgresql_where=text(
-                _sql_string_in("status", ACTIVE_BOOKING_STATUSES)
+                sql_string_in("status", ACTIVE_BOOKING_STATUSES)
             ),
         ),
     )

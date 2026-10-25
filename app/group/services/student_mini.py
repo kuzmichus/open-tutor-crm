@@ -12,18 +12,13 @@ from collections.abc import Mapping
 from sqlalchemy.orm import Session
 
 from app.common.colors import assign_color
+from app.common.services.forms import text_value
 from app.student.models.student import Student
 from app.student.services.phone import format_phone, is_phone_like
 
 _FIRST_NAME_MAX = 100
 _LAST_NAME_MAX = 100
 _PHONE_MAX = 32
-
-
-def _get(form: Mapping, key: str) -> str:
-    """Строковое значение поля формы (отсутствие = пустая строка)."""
-    value = form.get(key, "")
-    return value.strip() if isinstance(value, str) else ""
 
 
 def parse_mini_form(form: Mapping) -> tuple[dict, list[str]]:
@@ -34,9 +29,9 @@ def parse_mini_form(form: Mapping) -> tuple[dict, list[str]]:
     """
     errors: list[str] = []
     data = {
-        "first_name": _get(form, "first_name"),
-        "last_name": _get(form, "last_name"),
-        "phone": _get(form, "phone"),
+        "first_name": text_value(form, "first_name"),
+        "last_name": text_value(form, "last_name"),
+        "phone": text_value(form, "phone"),
     }
 
     if not data["first_name"]:

@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.common.access import require_tutor_id
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.group.services.access import get_owned_group
 from app.group.services.group_writer import delete_group
@@ -30,7 +31,7 @@ def delete_group_view(
     group = get_owned_group(db, group_id, tutor_id)
     delete_group(db, group)
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url="/tutor/groups", status_code=303)
 
     options = group_options(db, tutor_id)

@@ -25,8 +25,11 @@ app/
 │                           # sidebar.html, _logo.html, _person_picker.html
 ├── static/                 # ОБЩИЕ статические ассеты (см. «Статика и CSS»)
 ├── common/                 # общие фичи, не привязанные к домену
-│   ├── access.py           # require_tutor_id, LoginRequired, LOGIN_URL
+│   ├── access.py           # require_tutor_id, LoginRequired, LOGIN_URL, get_owned_entity
 │   ├── colors.py           # PALETTE, DEFAULT_TARGET_COLOR, assign_color
+│   ├── constraints.py      # sql_string_in / sql_int_in для CHECK-ограничений моделей
+│   ├── responses.py        # is_htmx, saved_response, dialog_closed (HTMX-ответы)
+│   ├── services/forms.py   # text_value, checked, int_or_none, parse_rubles
 │   ├── services/timezones.py
 │   └── views/              # health, index (/ → /tutor/), clock (/time), not_found
 ├── tutor/                  # аккаунт репетитора: регистрация, вход, сессии, сброс пароля
@@ -91,7 +94,10 @@ app/<module>/
 - Нет сессии → `LoginRequired` (303 на `/tutor/login`), запрос прерывается до рендера.
 - Одна запись проверяется доменным хелпером `get_owned_<entity>(db, id, tutor_id)`:
   `id` и `tutor_id` в одном `SELECT`. **Чужая запись и несуществующая неразличимы — 404**,
-  не 403: существование чужой записи не раскрывается.
+  не 403: существование чужой записи не раскрывается. Простые случаи (своя колонка
+  `tutor_id`) делегируют общему `get_owned_entity` из `app/common/access.py`;
+  владелец через JOIN (урок, бронь, операция счёта) — своя выборка в доменном
+  `services/access.py`.
 - Владелец урока выводится из цели (ученик или группа), отдельной колонки `tutor_id`
   у `lessons` нет — выборка идёт через JOIN (`app/lesson/services/access.py`).
 - Модули **ри-экспортируют** общий доступ из своего `services/access.py`
@@ -185,7 +191,7 @@ app/<module>/
 
 ```bash
 uv sync                                   # установить зависимости
-uv run pytest                             # прогнать тесты
+uv run pytest -n auto                     # прогнать тесты
 uv run pytest -q tests/test_lesson_create.py   # один файл
 uv run alembic upgrade head               # применить миграции
 uv run alembic revision --autogenerate -m "..."   # новая миграция
@@ -195,7 +201,7 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000  # запуск сервер�
 
 ## Требования к изменениям
 
-- Тесты в `tests/` должны оставаться зелёными (`uv run pytest`).
+- Тесты в `tests/` должны оставаться зелёными (`uv run pytest -n auto`).
 - Новый домен/поведение — с тестами, включая изоляцию по репетитору.
 - Миграции создаются через autogenerate и применяются штатно (`alembic upgrade head`).
 - Новый BEM-класс в шаблоне — с правилом в `app/static/styles.css`.

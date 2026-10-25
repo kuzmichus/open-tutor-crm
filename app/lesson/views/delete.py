@@ -6,9 +6,10 @@
 """
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
+from app.common.responses import saved_response
 from app.database import get_db
 from app.lesson.services.access import get_owned_lesson, require_tutor_id
 from app.lesson.services.lesson_remover import delete_lesson
@@ -29,6 +30,4 @@ def delete_lesson_view(
     lesson = get_owned_lesson(db, lesson_id, tutor_id)
     delete_lesson(db, lesson)
 
-    if request.headers.get("HX-Request") != "true":
-        return RedirectResponse(url=LESSONS_URL, status_code=303)
-    return HTMLResponse(content="", headers={"HX-Trigger": "lesson-saved"})
+    return saved_response(request, "lesson-saved", LESSONS_URL)

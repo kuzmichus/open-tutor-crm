@@ -19,6 +19,7 @@ from uuid import uuid4
 from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.constraints import sql_string_in
 from app.database import Base
 
 # Режимы отметки: «Период» (даты) и «Постоянный выходной» (день недели).
@@ -40,12 +41,6 @@ REASON_LABELS = {
 
 # Дни недели: 0 — понедельник … 6 — воскресенье (как `date.weekday()`).
 WEEKDAY_LABELS = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
-
-
-def _sql_string_in(column: str, values: tuple[str, ...]) -> str:
-    """`column IN ('a', 'b')` — строковый список для CHECK-ограничения."""
-    quoted = ", ".join(f"'{value}'" for value in values)
-    return f"{column} IN ({quoted})"
 
 
 class TutorUnavailability(Base):
@@ -71,7 +66,7 @@ class TutorUnavailability(Base):
             "mode <> 'period' OR ("
             "start_date IS NOT NULL AND weekday IS NULL "
             "AND until_date IS NULL "
-            f"AND {_sql_string_in('reason', PERIOD_REASONS)} "
+            f"AND {sql_string_in('reason', PERIOD_REASONS)} "
             "AND (end_date IS NULL OR end_date >= start_date)))",
             name="ck_unavailability_period",
         ),

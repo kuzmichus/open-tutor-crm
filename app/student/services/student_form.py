@@ -8,6 +8,7 @@
 import re
 from collections.abc import Mapping
 
+from app.common.services.forms import checked, text_value
 from app.student.models.student import (
     MAX_GRADE,
     MIN_GRADE,
@@ -42,20 +43,6 @@ _TEXT_FIELDS = (
 _REMIND_FIELDS = ("remind_lesson", "remind_homework", "remind_cancel")
 
 
-def _get(form: Mapping, key: str) -> str:
-    """Строковое значение поля формы (отсутствие = пустая строка)."""
-    value = form.get(key, "")
-    return value.strip() if isinstance(value, str) else ""
-
-
-def _checked(form: Mapping, key: str) -> bool:
-    """Флаг чекбокса: `on`/`1`/`true` — включён, всё остальное — выключен."""
-    value = form.get(key, "")
-    if not isinstance(value, str):
-        return False
-    return value.strip().lower() in {"1", "on", "true", "yes"}
-
-
 def parse_student_form(form: Mapping) -> tuple[dict, list[str]]:
     """Разбирает и проверяет поля карточки ученика.
 
@@ -63,15 +50,15 @@ def parse_student_form(form: Mapping) -> tuple[dict, list[str]]:
     которые разрешено сохранять: для взрослого класс и школа принудительно
     очищаются, даже если пришли в форме.
     """
-    data: dict = {field: _get(form, field) for field in _TEXT_FIELDS}
-    data["kind"] = _get(form, "kind") or "child"
+    data: dict = {field: text_value(form, field) for field in _TEXT_FIELDS}
+    data["kind"] = text_value(form, "kind") or "child"
     # Пустой статус означает «не передан»: при создании модель подставит
     # `new`, при редактировании текущий статус сохраняется. Менять статус
     # автоматически нельзя — только по явному выбору репетитора.
-    data["status"] = _get(form, "status")
+    data["status"] = text_value(form, "status")
     for field in _REMIND_FIELDS:
-        data[field] = _checked(form, field)
-    data["payer_contact_id"] = _get(form, "payer_contact_id")
+        data[field] = checked(form, field)
+    data["payer_contact_id"] = text_value(form, "payer_contact_id")
 
     errors: list[str] = []
 
@@ -141,22 +128,22 @@ def parse_contact_rows(form: Mapping) -> list[dict]:
     пропускается — так «пустая» строка нового контакта не создаёт запись.
     """
     try:
-        rows_count = int(_get(form, "contact_rows") or "0")
+        rows_count = int(text_value(form, "contact_rows") or "0")
     except ValueError:
         rows_count = 0
 
     rows: list[dict] = []
     for index in range(max(rows_count, 0)):
         row = {
-            "contact_id": _get(form, f"contact_id_{index}"),
-            "full_name": _get(form, f"contact_full_name_{index}"),
+            "contact_id": text_value(form, f"contact_id_{index}"),
+            "full_name": text_value(form, f"contact_full_name_{index}"),
             # Телефон контакта хранится в том же виде, что и телефон ученика.
-            "phone": format_phone(_get(form, f"contact_phone_{index}")),
-            "email": _get(form, f"contact_email_{index}"),
-            "relation": _get(form, f"contact_relation_{index}"),
+            "phone": format_phone(text_value(form, f"contact_phone_{index}")),
+            "email": text_value(form, f"contact_email_{index}"),
+            "relation": text_value(form, f"contact_relation_{index}"),
         }
         for field in _REMIND_FIELDS:
-            row[field] = _checked(form, f"contact_{field}_{index}")
+            row[field] = checked(form, f"contact_{field}_{index}")
 
         if not (row["full_name"] or row["phone"] or row["email"]):
             continue

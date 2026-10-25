@@ -18,7 +18,12 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.common.access import LOGIN_URL, LoginRequired, require_tutor_id
+from app.common.access import (
+    LOGIN_URL,
+    LoginRequired,
+    get_owned_entity,
+    require_tutor_id,
+)
 from app.finance.models.account_operation import AccountOperation
 from app.finance.models.expense import Expense
 from app.group.services.access import get_owned_group
@@ -64,12 +69,4 @@ def get_owned_expense(db: Session, expense_id: str, tutor_id: str) -> Expense:
     поэтому проверка — один `SELECT` без JOIN. Чужая и несуществующая
     запись неразличимы: 404, а не 403.
     """
-    expense = db.scalars(
-        select(Expense).where(
-            Expense.id == expense_id,
-            Expense.tutor_id == tutor_id,
-        )
-    ).one_or_none()
-    if expense is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return expense
+    return get_owned_entity(db, Expense, expense_id, tutor_id)

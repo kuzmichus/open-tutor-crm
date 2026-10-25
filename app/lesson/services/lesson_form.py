@@ -18,6 +18,7 @@ from datetime import date, datetime, time
 
 from sqlalchemy.orm import Session
 
+from app.common.services.forms import checked, int_or_none, text_value
 from app.common.services.tutor_time import to_local, to_utc
 from app.group.models.group import Group
 from app.homework.services.homework_context import homework_panel_context
@@ -46,30 +47,6 @@ WEEKDAY_LABELS = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 DEFAULT_MODAL_TARGET = "#modal"
 
 
-def _text(form, name: str) -> str:
-    """Значение поля формы как строка (нет значения — пустая строка)."""
-    return (form.get(name) or "").strip()
-
-
-def _int_or_none(raw: str) -> int | None:
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
-
-
-def _checked(form, name: str) -> bool:
-    """Флаг подтверждения: `on`/`1`/`true` — включён, всё остальное — нет.
-
-    Одна и та же проверка обслуживает скрытое поле формы и query-параметр
-    календаря (`?ack_unavailable=1`), поэтому значение нормализуется здесь.
-    """
-    value = form.get(name, "")
-    if not isinstance(value, str):
-        return False
-    return value.strip().lower() in {"1", "on", "true", "yes"}
-
-
 def _parse_datetime(raw: str) -> datetime | None:
     try:
         return datetime.fromisoformat(raw)
@@ -88,7 +65,7 @@ def _parse_price(raw: str) -> tuple[int | None, bool]:
     """Оплата ученика: (значение, ошибка разбора). Пусто — None без ошибки."""
     if raw == "":
         return None, False
-    value = _int_or_none(raw)
+    value = int_or_none(raw)
     if value is None or value < 0:
         return None, True
     return value, False
@@ -167,7 +144,7 @@ def parse_duration_min(raw: str | None) -> int | None:
     селектом, а урок сохранился бы с чужим значением. Всё, что вне
     списка, игнорируется: префилл — удобство, а не источник истины.
     """
-    value = _int_or_none((raw or "").strip())
+    value = int_or_none((raw or "").strip())
     if value is None or value not in LESSON_DURATIONS:
         return None
     return value
@@ -186,30 +163,30 @@ def parse_lesson_form(form, tutor) -> tuple[dict, list[str]]:
     игнорирует вовсе.
     """
     errors: list[str] = []
-    price, price_error = _parse_price(_text(form, "price"))
+    price, price_error = _parse_price(text_value(form, "price"))
     if price_error:
         errors.append("Оплата ученика — целое число не меньше нуля.")
 
-    starts_at = _parse_datetime(_text(form, "starts_at"))
+    starts_at = _parse_datetime(text_value(form, "starts_at"))
     data = {
-        "student_id": _text(form, "student_id") or None,
-        "group_id": _text(form, "group_id") or None,
-        "type": _text(form, "type"),
+        "student_id": text_value(form, "student_id") or None,
+        "group_id": text_value(form, "group_id") or None,
+        "type": text_value(form, "type"),
         "starts_at": to_utc(starts_at, tutor) if starts_at is not None else None,
-        "duration_min": _int_or_none(_text(form, "duration_min")),
-        "note": _text(form, "note") or None,
-        "meeting_url": _text(form, "meeting_url") or None,
+        "duration_min": int_or_none(text_value(form, "duration_min")),
+        "note": text_value(form, "note") or None,
+        "meeting_url": text_value(form, "meeting_url") or None,
         "price": price,
-        "repeat": bool(_text(form, "repeat")),
-        "interval_weeks": _int_or_none(_text(form, "interval_weeks")),
-        "until_date": _parse_date(_text(form, "until_date")),
-        "slots": _parse_slots(_text(form, "slots")),
-        "status": _text(form, "status") or None,
-        "rating": _rating_value(_text(form, "rating")),
-        "family_comment": _text(form, "family_comment") or None,
+        "repeat": bool(text_value(form, "repeat")),
+        "interval_weeks": int_or_none(text_value(form, "interval_weeks")),
+        "until_date": _parse_date(text_value(form, "until_date")),
+        "slots": _parse_slots(text_value(form, "slots")),
+        "status": text_value(form, "status") or None,
+        "rating": _rating_value(text_value(form, "rating")),
+        "family_comment": text_value(form, "family_comment") or None,
         # Признак подтверждения, а не поле урока (design.md D5, п. 2):
         # относится только к этой отправке и в запись урока не попадает.
-        "ack_unavailable": _checked(form, "ack_unavailable"),
+        "ack_unavailable": checked(form, "ack_unavailable"),
     }
     return data, errors
 

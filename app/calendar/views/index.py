@@ -14,16 +14,12 @@ from app.common.services.tutor_time import (
     today_local,
     tutor_zone_name,
 )
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
 
 router = APIRouter()
-
-
-def _is_htmx(request: Request) -> bool:
-    """Запрос от htmx (листание недели) — отдаётся только область календаря."""
-    return request.headers.get("HX-Request") == "true"
 
 
 @router.get("/tutor/calendar", response_class=HTMLResponse)
@@ -62,6 +58,6 @@ def calendar(
     # Локальный момент для клиента: `calendar.js` берёт «сегодня» и
     # предзаполнение отсюда, а не от часов устройства (design D7).
     context["now_iso"] = now_local(tutor).isoformat()
-    if _is_htmx(request):
+    if is_htmx(request):
         return templates.TemplateResponse(request, "calendar/_area.html", context)
     return templates.TemplateResponse(request, "calendar/index.html", context)

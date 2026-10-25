@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.common.responses import dialog_closed
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.finance.services.access import (
     LoginRequired,
@@ -67,6 +68,6 @@ async def create_income_payment(
                                   selected_student=student),
         )
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url="/tutor/finance", status_code=303)
     return dialog_closed("payment-saved")

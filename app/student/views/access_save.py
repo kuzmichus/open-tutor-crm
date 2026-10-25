@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.student.services.access import get_owned_student, require_tutor_id
 from app.student.services.credentials import get_access, save_access
@@ -34,7 +35,7 @@ async def student_access_save(
 
     errors = save_access(db, student.id, login, password)
     if errors:
-        if request.headers.get("HX-Request") != "true":
+        if not is_htmx(request):
             return RedirectResponse(
                 url=f"/tutor/students/{student_id}", status_code=303
             )
@@ -52,7 +53,7 @@ async def student_access_save(
 
     db.commit()
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         # Без JS — на страницу списка: показать пароль один раз там нечем.
         return RedirectResponse(url="/tutor/students", status_code=303)
 

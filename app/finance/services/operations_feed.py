@@ -88,7 +88,6 @@ def _payment_rows(db: Session, tutor_id: str, tutor, *, start, end) -> list[dict
     feed = []
     for operation, student in rows:
         is_payment = operation.kind == "payment"
-        is_paid = operation.status == "paid"
         feed.append(
             {
                 "title": student_full_name(student),

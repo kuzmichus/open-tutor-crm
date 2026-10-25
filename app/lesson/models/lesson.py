@@ -13,6 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.constraints import sql_int_in, sql_string_in
 from app.database import Base
 
 # Закрытый список типов урока (спека: «Индивидуальный», «Групповой»,
@@ -58,18 +59,6 @@ MIN_LESSON_RATING = 1
 MAX_LESSON_RATING = 5
 
 
-def _sql_string_in(column: str, values: tuple[str, ...]) -> str:
-    """`column IN ('a', 'b')` — строковый список для CHECK-ограничения."""
-    quoted = ", ".join(f"'{value}'" for value in values)
-    return f"{column} IN ({quoted})"
-
-
-def _sql_int_in(column: str, values: tuple[int, ...]) -> str:
-    """`column IN (1, 2)` — числовой список для CHECK-ограничения."""
-    joined = ", ".join(str(value) for value in values)
-    return f"{column} IN ({joined})"
-
-
 class Lesson(Base):
     """Урок репетитора: индивидуальный, групповой, пробный или отработка.
 
@@ -89,7 +78,7 @@ class Lesson(Base):
     __tablename__ = "lessons"
     __table_args__ = (
         CheckConstraint(
-            _sql_string_in("type", LESSON_TYPES),
+            sql_string_in("type", LESSON_TYPES),
             name="ck_lessons_type",
         ),
         # XOR: ровно одна из двух FK заполнена. В SQLite нет оператора
@@ -99,11 +88,11 @@ class Lesson(Base):
             name="ck_lessons_target_xor",
         ),
         CheckConstraint(
-            _sql_int_in("duration_min", LESSON_DURATIONS),
+            sql_int_in("duration_min", LESSON_DURATIONS),
             name="ck_lessons_duration",
         ),
         CheckConstraint(
-            _sql_string_in("status", LESSON_STATUSES),
+            sql_string_in("status", LESSON_STATUSES),
             name="ck_lessons_status",
         ),
         CheckConstraint(

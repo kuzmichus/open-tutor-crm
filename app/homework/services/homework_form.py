@@ -16,24 +16,9 @@
 
 from datetime import datetime
 
+from app.common.services.forms import checked, text_value
 from app.common.services.tutor_time import to_utc
 from app.homework.models.homework import HOMEWORK_STATUSES
-
-
-def _text(form, name: str) -> str:
-    """Значение поля формы как строка (нет значения — пустая строка)."""
-    value = form.get(name)
-    if not isinstance(value, str):
-        return ""
-    return value.strip()
-
-
-def _checked(form, name: str) -> bool:
-    """Флаг чекбокса: `on`/`1`/`true` — включён, всё остальное — выключен."""
-    value = form.get(name, "")
-    if not isinstance(value, str):
-        return False
-    return value.strip().lower() in {"1", "on", "true", "yes"}
 
 
 def _parse_due_at(raw: str, tutor) -> tuple[datetime | None, bool]:
@@ -78,16 +63,16 @@ def parse_homework_form(form, tutor) -> tuple[dict, list[str]]:
     ДЗ отдельно от урока»). `due_at` переводится из зоны педагога в UTC
     (спека tutor-timezone).
     """
-    due_at, due_at_error = _parse_due_at(_text(form, "due_at"), tutor)
+    due_at, due_at_error = _parse_due_at(text_value(form, "due_at"), tutor)
 
     data = {
-        "assignment": _text(form, "assignment"),
+        "assignment": text_value(form, "assignment"),
         "due_at": due_at,
-        "deadline_enabled": _checked(form, "deadline_enabled"),
-        "status": _text(form, "status"),
-        "recording_url": _text(form, "recording_url") or None,
-        "teacher_note": _text(form, "teacher_note") or None,
-        "teacher_comment": _text(form, "teacher_comment") or None,
+        "deadline_enabled": checked(form, "deadline_enabled"),
+        "status": text_value(form, "status"),
+        "recording_url": text_value(form, "recording_url") or None,
+        "teacher_note": text_value(form, "teacher_note") or None,
+        "teacher_comment": text_value(form, "teacher_comment") or None,
     }
 
     errors: list[str] = []

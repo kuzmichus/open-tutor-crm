@@ -52,9 +52,12 @@ def profile_notifications(
         "notify_birthday": notify_birthday,
         "digest_time": digest_time,
         "low_balance_threshold": low_balance_threshold,
-        # Чекбоксы шлют строки-минуты: для ре-рендера приводим к int,
-        # чтобы проверка «отмечен ли» совпадала с дефолтами настроек.
-        "reminder_offsets": [raw for raw in reminder_offsets if raw.isdigit()],
+        # Чекбоксы шлют строки-минуты: для ре-рендера приводим к int —
+        # шаблон сравнивает их со значениями REMINDER_OFFSETS из настроек
+        # (int in [str] всегда False, галочки «сбрасывались» визуально).
+        "reminder_offsets": [
+            int(raw) for raw in reminder_offsets if raw.isdigit()
+        ],
     }
     values, errors = parse_notifications_form(form)
     if errors:

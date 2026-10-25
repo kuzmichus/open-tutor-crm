@@ -6,7 +6,6 @@ import urllib.request
 
 from app.messenger.services.errors import SendError
 from app.messenger.services.registry import register_sender
-from app.messenger.services.sender import Sender
 
 # Таймаут ограничен: отправка синхронная и не должна подвешивать запрос.
 _TIMEOUT_SECONDS = 10

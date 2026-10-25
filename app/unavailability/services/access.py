@@ -9,31 +9,21 @@
 не зависели от `app.common.access` напрямую (правило AGENTS.md).
 """
 
-from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.common.access import LOGIN_URL, LoginRequired, require_tutor_id
+from app.common.access import (
+    LOGIN_URL,
+    LoginRequired,
+    get_owned_entity,
+    require_tutor_id,
+)
 from app.unavailability.models.unavailability import TutorUnavailability
 
-__all__ = [
-    "LOGIN_URL",
-    "LoginRequired",
-    "get_owned_unavailability",
-    "require_tutor_id",
-]
+__all__ = ["LOGIN_URL", "LoginRequired", "get_owned_unavailability", "require_tutor_id"]
 
 
 def get_owned_unavailability(
     db: Session, mark_id: str, tutor_id: str
 ) -> TutorUnavailability:
     """Отметка этого репетитора либо 404."""
-    mark = db.scalars(
-        select(TutorUnavailability).where(
-            TutorUnavailability.id == mark_id,
-            TutorUnavailability.tutor_id == tutor_id,
-        )
-    ).one_or_none()
-    if mark is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return mark
+    return get_owned_entity(db, TutorUnavailability, mark_id, tutor_id)

@@ -9,6 +9,7 @@
 import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from app.common.services.forms import int_or_none
 from app.lesson.models.lesson import LESSON_DURATIONS
 
 # «ММ-ДД»: месяц 01–12, день — по календарю месяца.
@@ -22,13 +23,6 @@ QUARTER_LABELS = {
     "quarter3_end": "III четверть",
     "quarter4_end": "IV четверть",
 }
-
-
-def _int_or_none(raw: str) -> int | None:
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
 
 
 def _is_valid_timezone(name: str) -> bool:
@@ -59,7 +53,7 @@ def parse_calendar_form(form: dict) -> tuple[dict | None, list[str]]:
         else:
             values[field] = raw
 
-    duration = _int_or_none((form.get("default_lesson_duration") or "").strip())
+    duration = int_or_none((form.get("default_lesson_duration") or "").strip())
     if duration not in LESSON_DURATIONS:
         errors.append("Длительность урока по умолчанию — из списка длительностей.")
     else:
@@ -69,7 +63,7 @@ def parse_calendar_form(form: dict) -> tuple[dict | None, list[str]]:
     if price_raw == "":
         values["default_lesson_price"] = None
     else:
-        price = _int_or_none(price_raw)
+        price = int_or_none(price_raw)
         if price is None or price < 0:
             errors.append("Стоимость урока по умолчанию — целое число не меньше нуля.")
         else:

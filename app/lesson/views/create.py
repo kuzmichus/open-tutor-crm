@@ -16,10 +16,11 @@ GET `/tutor/lessons/new` — фрагмент `lesson/_form.html` в конте�
 """
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.common.access import require_tutor_id
+from app.common.responses import saved_response
 from app.database import get_db
 from app.lesson.services.lesson_form import (
     lesson_form_context,
@@ -39,13 +40,6 @@ from app.tutor.models.tutor import Tutor
 router = APIRouter()
 
 LESSONS_URL = "/tutor/lessons"
-
-
-def _saved_response(request: Request):
-    """Успех: пустое тело закрывает модалку, событие обновляет список."""
-    if request.headers.get("HX-Request") != "true":
-        return RedirectResponse(url=LESSONS_URL, status_code=303)
-    return HTMLResponse(content="", headers={"HX-Trigger": "lesson-saved"})
 
 
 @router.get(f"{LESSONS_URL}/new", response_class=HTMLResponse)
@@ -136,4 +130,4 @@ async def create_lesson_view(
             ),
         )
 
-    return _saved_response(request)
+    return saved_response(request, "lesson-saved", LESSONS_URL)
