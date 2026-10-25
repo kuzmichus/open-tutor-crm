@@ -1,0 +1,121 @@
+{# Вкладка «Уведомления»: переключатели с параметрами (дизайн по
+   референсу, без карточки каналов и школьных уведомлений — каналов
+   доставки в проекте ещё нет). Каждый параметр внутри своей строки. #}
+
+{# Переключатель: чекбокс со стилизованным треком. Имя — aria-label,
+   потому что заголовок строки с чекбоксом не связан. #}
+{% macro switch(name, title) %}
+<label class="switch">
+    <input class="sr-only" type="checkbox" name="{{ name }}"
+           {% if form[name] %}checked{% endif %}
+           aria-label="{{ title }}">
+    <span class="switch__track" aria-hidden="true"></span>
+</label>
+{% endmacro %}
+
+<form method="post" action="{{ action }}">
+    <section class="card settings-card">
+        <h2 class="card__title">Настройки уведомлений</h2>
+
+        <div class="settings-list">
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Напоминание об уроке</span>
+                    <span class="switch-row__desc">Уведомление перед началом урока</span>
+                    <div class="switch-row__params">
+                        <span class="switch-row__param-label">Напоминать за:</span>
+                        {% for offset in reminder_offsets %}
+                        <label class="checkbox">
+                            <input type="checkbox" name="reminder_offsets" value="{{ offset }}"
+                                   {% if offset in form.reminder_offsets %}checked{% endif %}>
+                            <span>{{ reminder_offset_labels[offset] }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {{ switch('notify_lesson_reminder', 'Напоминание об уроке') }}
+            </div>
+
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Подтверждение урока</span>
+                    <span class="switch-row__desc">Запрос подтверждения от ученика</span>
+                </div>
+                {{ switch('notify_lesson_confirmation', 'Подтверждение урока') }}
+            </div>
+
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Дневная сводка</span>
+                    <span class="switch-row__desc">Список уроков на день</span>
+                    <div class="switch-row__params">
+                        <label class="switch-row__param-label" for="tutor-digest-time">Время отправки:</label>
+                        <input class="input input--sm" id="tutor-digest-time" type="time"
+                               name="digest_time" value="{{ form.digest_time }}">
+                    </div>
+                </div>
+                {{ switch('notify_daily_digest', 'Дневная сводка') }}
+            </div>
+
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Отмена урока</span>
+                    <span class="switch-row__desc">Уведомление при отмене или переносе урока</span>
+                </div>
+                {{ switch('notify_cancellation', 'Отмена урока') }}
+            </div>
+
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Домашнее задание</span>
+                    <span class="switch-row__desc">Уведомление о новом ДЗ</span>
+                </div>
+                {{ switch('notify_homework', 'Домашнее задание') }}
+            </div>
+
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Список должников мне</span>
+                    <span class="switch-row__desc">Раз в неделю присылаем вам список учеников с долгом</span>
+                </div>
+                {{ switch('notify_debtors_weekly', 'Список должников мне') }}
+            </div>
+
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Низкий баланс</span>
+                    <span class="switch-row__desc">Уведомление при уходе баланса в минус</span>
+                    <div class="switch-row__params">
+                        <label class="switch-row__param-label" for="tutor-low-balance">Порог:</label>
+                        <input class="input input--sm" id="tutor-low-balance" type="number" min="0"
+                               name="low_balance_threshold" value="{{ form.low_balance_threshold }}">
+                        <span class="switch-row__param-label">₽</span>
+                    </div>
+                </div>
+                {{ switch('notify_low_balance', 'Низкий баланс') }}
+            </div>
+
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Не хватает средств на сегодняшнее занятие</span>
+                    <span class="switch-row__desc">
+                        Утром — у кого сегодня занятие, а на счёте меньше его стоимости
+                    </span>
+                </div>
+                {{ switch('notify_insufficient_funds', 'Не хватает средств на сегодняшнее занятие') }}
+            </div>
+
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">День рождения</span>
+                    <span class="switch-row__desc">Напоминание о дне рождения ученика</span>
+                </div>
+                {{ switch('notify_birthday', 'День рождения') }}
+            </div>
+        </div>
+
+        <div class="settings-actions">
+            <button class="btn btn--primary" type="submit">Сохранить</button>
+        </div>
+    </section>
+</form>

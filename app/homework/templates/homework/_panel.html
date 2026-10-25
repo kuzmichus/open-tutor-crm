@@ -7,6 +7,13 @@
   сохранёнными значениями. Поля вкладки «Урок» в своей форме при этом
    не трогаются (design D3).
 
+   Кнопки сохранения в панели нет: акцентная «Сохранить ДЗ» живёт в
+   зафиксированном футере модалки и связана с формой атрибутом
+   `form="homework-panel"` (см. lesson/_form.html). Успех (design D8)
+   форма помечает атрибутом `data-hw-saved="1"` — lessons.js по
+   `htmx:afterSwap` зажигает на футерной кнопке зелёное состояние
+   «Успешно сохранено» и через пару секунд возвращает обычный вид.
+
    Ключи контекста — с префиксом `hw_`: при вставке в модалку урока
    (`{% include %}`) панель не должна подменять контекст полей урока
    (`form`, `statuses`, `errors`).
@@ -18,12 +25,13 @@
 
    Контекст: lesson, hw_form (assignment, due_at_value, deadline_enabled,
    status, recording_url, teacher_note, teacher_comment), hw_errors,
-   hw_saved (кнопка в состоянии успеха, design D8), hw_statuses,
+   hw_saved (маркер успеха на форме, design D8), hw_statuses,
    hw_status_labels. #}
 <form id="homework-panel"
       hx-post="/tutor/lessons/{{ lesson.id }}/homework"
       hx-target="#homework-panel"
-      hx-swap="outerHTML">
+      hx-swap="outerHTML"
+      {% if hw_saved %}data-hw-saved="1"{% endif %}>
     {% if hw_errors %}
     <div class="error" role="alert">
         <ul>
@@ -104,16 +112,4 @@
                       rows="2">{{ hw_form.teacher_comment or "" }}</textarea>
         </div>
     </fieldset>
-
-    <div class="field field--full">
-        {# Успех (design D8): кнопка на пару секунд становится зелёной и
-           неактивной с надписью «Успешно сохранено»; lessons.js по
-           `htmx:afterSwap` возвращает ей обычный вид и надпись. #}
-        <button class="btn {% if hw_saved %}btn--success{% else %}btn--primary{% endif %}"
-                type="submit"
-                data-hw-save
-                {% if hw_saved %}disabled{% endif %}>
-            {% if hw_saved %}Успешно сохранено{% else %}Сохранить ДЗ{% endif %}
-        </button>
-    </div>
 </form>

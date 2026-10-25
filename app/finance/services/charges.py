@@ -40,6 +40,7 @@ from app.finance.models.account_operation import AccountOperation
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import Lesson
+from app.student.services.activation import activate_on_first_charge
 from app.tutor.services.clock import as_utc
 
 # Статус урока, при котором занятие считается состоявшимся.
@@ -121,6 +122,9 @@ def sync_lesson_charge(db: Session, lesson: Lesson) -> int:
                     lesson_id=lesson.id,
                 )
             )
+            # Первое списание — первый состоявшийся платный урок ученика:
+            # «нового» переводим в «активные» одной транзакцией с уроком.
+            activate_on_first_charge(db, student_id)
             continue
         # Сумма следует за ценой урока (спека «Изменение оплаты проведённого
         # урока пересчитывает списание»); `occurred_at` — за началом урока,

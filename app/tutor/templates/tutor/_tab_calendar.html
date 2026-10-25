@@ -1,0 +1,101 @@
+{# Вкладка «Календарь»: часовой пояс, учебный год и уроки по умолчанию.
+   Одна форма на все три карточки: значения независимы, а один POST
+   проще трёх отдельных с одинаковым набором скрытых полей. #}
+{% set tz_id = 'tutor-timezone' %}
+<form method="post" action="{{ action }}">
+    <section class="card settings-card">
+        <h2 class="card__title">Часовой пояс</h2>
+        <div class="field">
+            <label class="label" for="{{ tz_id }}">Часовой пояс</label>
+            {# Селект с поиском — тот же combobox, что в форме ученика:
+               варианты лежат в `data-options` и фильтруются вводом. #}
+            <div class="combobox" x-data="combobox()" data-options="{{ timezone_options_json }}">
+                <div class="combobox__control">
+                    <input class="input" id="{{ tz_id }}" type="text" name="timezone"
+                           value="{{ form.timezone }}" placeholder="Europe/Moscow"
+                           autocomplete="off" spellcheck="false"
+                           x-ref="input"
+                           role="combobox" aria-autocomplete="list"
+                           aria-controls="{{ tz_id }}-listbox"
+                           :aria-expanded="open ? 'true' : 'false'"
+                           @input="onInput($event.target.value)"
+                           @focus="openList()"
+                           @blur="closeList()"
+                           @keydown="onKeydown($event)">
+                    <button class="combobox__clear" type="button"
+                            x-show="query !== ''" x-cloak
+                            @mousedown.prevent @click="clear()"
+                            aria-label="Очистить часовой пояс">&times;</button>
+                </div>
+                <ul class="combobox__list" id="{{ tz_id }}-listbox"
+                    role="listbox" x-ref="list" x-show="open" x-cloak>
+                    <template x-for="(item, index) in shown" :key="item.value">
+                        <li class="combobox__option" role="option"
+                            :class="index === active ? 'combobox__option--active' : ''"
+                            :aria-selected="index === active ? 'true' : 'false'"
+                            @mousedown.prevent @click="choose(item)">
+                            <span class="combobox__name" x-text="item.value"></span>
+                            <span class="combobox__offset" x-text="item.label"></span>
+                        </li>
+                    </template>
+                    <li class="combobox__note" x-show="matches.length === 0" x-cloak>
+                        Ничего не найдено
+                    </li>
+                    <li class="combobox__note" x-show="hiddenCount > 0" x-cloak
+                        x-text="'… и ещё ' + hiddenCount + ': уточните поиск'"></li>
+                </ul>
+            </div>
+            <p class="card__desc">Влияет на отображение времени уроков в календаре.</p>
+        </div>
+    </section>
+
+    <section class="card settings-card">
+        <h2 class="card__title">Учебный год</h2>
+        <p class="card__desc">
+            Даты окончания четвертей используются в пресетах при создании серии
+            уроков. Формат: ММ-ДД.
+        </p>
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-quarter1">I четверть (до)</label>
+                <input class="input" id="tutor-quarter1" type="text" name="quarter1_end"
+                       value="{{ form.quarter1_end }}" placeholder="10-25">
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-quarter2">II четверть (до)</label>
+                <input class="input" id="tutor-quarter2" type="text" name="quarter2_end"
+                       value="{{ form.quarter2_end }}" placeholder="12-25">
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-quarter3">III четверть (до)</label>
+                <input class="input" id="tutor-quarter3" type="text" name="quarter3_end"
+                       value="{{ form.quarter3_end }}" placeholder="03-20">
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-quarter4">IV четверть / конец уч. года</label>
+                <input class="input" id="tutor-quarter4" type="text" name="quarter4_end"
+                       value="{{ form.quarter4_end }}" placeholder="05-25">
+            </div>
+        </div>
+    </section>
+
+    <section class="card settings-card">
+        <h2 class="card__title">Основные настройки</h2>
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-default-duration">Длительность урока по умолчанию (мин)</label>
+                <input class="input" id="tutor-default-duration" type="number" name="default_lesson_duration"
+                       value="{{ form.default_lesson_duration }}" min="15">
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-default-price">Стоимость урока по умолчанию (₽)</label>
+                <input class="input" id="tutor-default-price" type="number" name="default_lesson_price"
+                       value="{{ form.default_lesson_price }}" min="0" placeholder="Например, 1500">
+            </div>
+        </div>
+    </section>
+
+    <div class="settings-actions">
+        <button class="btn btn--primary" type="submit">Сохранить</button>
+    </div>
+</form>

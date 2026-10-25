@@ -23,6 +23,7 @@ from app.database import get_db
 from app.finance.services.charges import sync_lesson_charges
 from app.lesson.services.access import get_owned_lesson, require_tutor_id
 from app.lesson.services.lesson_form import (
+    DEFAULT_MODAL_TARGET,
     lesson_form_context,
     parse_lesson_form,
     validate_edit_fields,
@@ -40,6 +41,23 @@ from app.tutor.models.tutor import Tutor
 router = APIRouter()
 
 LESSONS_URL = "/tutor/lessons"
+
+# Второй слой модалок (design D10): окно урока поверх модалки группы.
+STACKED_MODAL_TARGET = "#modal-lesson"
+
+
+def _modal_target(request: Request) -> str:
+    """Контейнер модалки урока из заголовка `HX-Target`.
+
+    htmx шлёт id цели с каждым запросом: из вкладки «Занятия» окно
+    открывается в `#modal-lesson`, и POST сохранения наследует ту же
+    цель — повторная отрисовка с ошибкой вернётся во второй слой, а не
+    вытеснит модалку группы из `#modal`. Без заголовка (не htmx) —
+    обычный слой.
+    """
+    if request.headers.get("HX-Target") == STACKED_MODAL_TARGET.lstrip("#"):
+        return STACKED_MODAL_TARGET
+    return DEFAULT_MODAL_TARGET
 
 
 def _saved_response(request: Request):
@@ -81,7 +99,12 @@ def edit_lesson_form(
     return templates.TemplateResponse(
         request,
         "lesson/_form.html",
-        lesson_form_context(db, tutor=tutor, lesson=lesson),
+        lesson_form_context(
+            db,
+            tutor=tutor,
+            lesson=lesson,
+            modal_target=_modal_target(request),
+        ),
     )
 
 
@@ -130,6 +153,7 @@ async def update_lesson_view(
                 data=data,
                 errors=errors,
                 unavailable_warning=warning_context(warning),
+                modal_target=_modal_target(request),
             ),
         )
 

@@ -1,0 +1,44 @@
+{# Вкладка «Мессенджеры»: по секции на мессенджер закрытого списка.
+   Доступные мессенджеры получают поле токена и статус подключения,
+   остальные — заготовку «Скоро» без поля ввода. #}
+
+<form method="post" action="{{ action }}">
+    <section class="card settings-card">
+        <h2 class="card__title">Мессенджеры</h2>
+
+        <div class="settings-list">
+            {% for item in messengers %}
+            <div class="messenger">
+                <div class="messenger__head">
+                    <span class="messenger__name">{{ item.label }}</span>
+                    {% if item.available %}
+                    <span class="messenger__status {{ 'messenger__status--on' if item.connected else 'messenger__status--off' }}">
+                        {{ 'Подключён' if item.connected else 'Не подключён' }}
+                    </span>
+                    {% else %}
+                    <span class="messenger__status messenger__status--soon">Скоро</span>
+                    {% endif %}
+                </div>
+
+                {% if item.available %}
+                <div class="field">
+                    <label class="label" for="{{ item.key }}-token">Токен бота</label>
+                    <input class="input" id="{{ item.key }}-token" type="text"
+                           name="{{ item.key }}_token"
+                           value="{{ form[item.key ~ '_token'] }}"
+                           placeholder="{{ item.placeholder }}"
+                           autocomplete="off">
+                </div>
+                <p class="messenger__hint">{{ item.hint }}</p>
+                {% else %}
+                <p class="messenger__hint">Интеграция ещё не добавлена.</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="settings-actions">
+            <button class="btn btn--primary" type="submit">Сохранить</button>
+        </div>
+    </section>
+</form>

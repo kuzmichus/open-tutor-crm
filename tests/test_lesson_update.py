@@ -177,7 +177,15 @@ def test_edit_form_renders(owner, client, student_factory):
     assert "Мария Иванова · 19.10.2026, 10:00" in page
     assert "10:00–11:00" in page  # подзаголовок-интервал
     assert ">Закрыть</button>" in page
+    # Кнопки сохранения — в футере модалки (вне скролла) и меняются вместе
+    # с вкладкой: `form=` связывает каждую со своей формой, видимость
+    # переключает Alpine по activeTab.
     assert ">Сохранить</button>" in page
+    assert 'type="submit" form="lesson-form"' in page
+    assert "x-show=\"activeTab === 'lesson'\"" in page
+    assert 'type="submit" form="homework-panel"' in page
+    assert "data-hw-save" in page
+    assert "x-show=\"activeTab === 'hw'\"" in page
 
     # Поля создания + статус + блок «Для семьи».
     for marker in (
@@ -201,7 +209,9 @@ def test_edit_form_renders(owner, client, student_factory):
     assert 'name="repeat"' not in page
     assert 'name="series_all"' not in page
     assert "Серию" not in page
-    assert "Удалить" in page
+    # Удаление урока — иконка-кнопка с aria-label; confirm-шаг — словами.
+    assert 'aria-label="Удалить урок"' in page
+    assert "Точно удалить?" in page
     # Вкладка «ДЗ» в редактировании активна: без disabled, переключение
     # Alpine по activeTab, панель ДЗ присутствует (спека lesson-management).
     hw_tab = re.search(r'<button class="tab"[^>]*id="lesson-tab-hw"[^>]*>', page)
@@ -215,7 +225,8 @@ def test_edit_form_renders(owner, client, student_factory):
     assert 'name="assignment"' in page
     assert re.search(r">\s*Сохранить ДЗ\s*</button>", page)
     assert 'hx-post="/tutor/lessons/%s/homework"' % lesson_id in page
-    # Общий футер («Удалить», «Серию», «Закрыть») — после закрытия обеих форм.
+    # Футер (группа удаления, «Закрыть», кнопки сохранения) — после
+    # закрытия обеих форм: он общий и не скролится с телом модалки.
     assert re.search(
         r"</form>\s*</div>\s*</div>\s*<div class=\"modal-actions\">", page
     )
@@ -303,8 +314,8 @@ def test_edit_rating_must_be_1_to_5(owner, client, student_factory):
     assert _lesson(lesson_id)["rating"] == 3
 
 
-def test_edit_price_warning_shows_for_completed(owner, client, student_factory):
-    """Предупреждение о пересчёте списания — только у проведённого урока."""
+def test_edit_price_readonly_for_completed(owner, client, student_factory):
+    """Оплата проведённого урока видна, но не редактируется; у запланированного — редактируется."""
     student = student_factory(tutor_id=owner)
     done = _insert_lesson(
         owner, student_id=student, status="completed", price=1200
@@ -317,10 +328,35 @@ def test_edit_price_warning_shows_for_completed(owner, client, student_factory):
     )
 
     page = client.get(f"/tutor/lessons/{done}/edit").text
-    assert "система проверит и пересчитает списание" in page
+    assert re.search(r'id="lesson-price"[^>]*readonly', page)
+    assert "Урок проведён: оплата не изменяется." in page
+    assert "пересчитает списание" not in page
 
     page = client.get(f"/tutor/lessons/{planned}/edit").text
-    assert "пересчитает списание" not in page
+    assert not re.search(r'id="lesson-price"[^>]*readonly', page)
+    assert "оплата не изменяется" not in page
+
+
+def test_edit_completed_lesson_ignores_submitted_price(
+    owner, client, student_factory
+):
+    """Сервер игнорирует оплату проведённого урока: цена в БД не меняется.
+
+    Поле readonly в форме не защита — прямым POST цену тоже не изменить
+    (спека «Цена проведённого урока только для чтения»).
+    """
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(
+        owner, student_id=student, status="completed", price=1200
+    )
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id}",
+        data=_update_form(student, status="completed", price="9999"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+    assert _lesson(lesson_id)["price"] == 1200
 
 
 def test_edit_foreign_lesson_is_missing(

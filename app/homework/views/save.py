@@ -15,6 +15,10 @@
   себя удалил бы панель из DOM. Панель — только своя фрагмент, поэтому
   несохранённые поля вкладки «Урок» остаются в своей форме. Триггера
   `lesson-saved` нет — список уроков ДЗ не отображает.
+
+- успех дополнительно шлёт `HX-Trigger: homework-saved`: индикатор
+  «ДЗ: есть/нет» во вкладке «Занятия» группы устарел бы, пока модалка
+  урока открыта вторым слоем поверх модалки группы.
 """
 
 from fastapi import APIRouter, Depends, Request
@@ -65,9 +69,11 @@ async def save_homework_view(
         return RedirectResponse(url=LESSONS_URL, status_code=303)
     # Успех: переотрендеренная панель с сохранёнными значениями (design
     # D3) и кнопкой в состоянии успеха (D8); outerHTML подменяет панель
-    # на свежую, поля остаются видимыми.
+    # на свежую, поля остаются видимыми. `homework-saved` — для списка
+    # занятий группы: индикатор ДЗ там мог устареть (см. докстринг).
     return templates.TemplateResponse(
         request,
         "homework/_panel.html",
         homework_panel_context(db, lesson, tutor=tutor, saved=True),
+        headers={"HX-Trigger": "homework-saved"},
     )

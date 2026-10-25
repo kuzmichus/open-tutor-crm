@@ -1,0 +1,100 @@
+{# Модалка «Доступ ученика (логин/пароль)».
+
+   Входа ещё нет — поясняющая плашка и поля логина/пароля (по референсу);
+   вход уже создан — логин предзаполнен, поле пароля пустое означает
+   «оставить старый» (смена пароля — осознанное действие). Пароль хранится
+   только хешем и вторично не показывается: правило «данные показываются
+   один раз» держит устройство хранения, а не дисциплина шаблона.
+
+   Сохранение — POST в тот же слой `#modal`: успех приходит
+   `_access_saved.html` (логин и пароль один раз), ошибки — эта же форма
+   с сообщениями. Кнопка «Сгенерировать» — Alpine-фабрика `studentAccess`
+   (students.js), криптогенератор браузера.
+
+   Контекст: student, access (или None), errors, login_value. #}
+<div class="modal-root"
+     x-data="studentAccess()"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="open = false">
+    <div class="modal-overlay" @click="open = false"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="student-access-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="student-access-title">Доступ ученика (логин/пароль)</h2>
+                <p class="modal-subtitle">{{ student_full_name(student) }}</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button" @click="open = false" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="modal-body">
+            {% if not access %}
+            <div class="access-note">
+                <i data-lucide="key-round" aria-hidden="true"></i>
+                <p>
+                    У ученика {{ student_full_name(student) }} ещё нет входа.
+                    Задайте логин и пароль — вход будет создан, а данные
+                    показаны один раз для передачи.
+                </p>
+            </div>
+            {% else %}
+            <div class="access-note">
+                <i data-lucide="key-round" aria-hidden="true"></i>
+                <p>
+                    Вход уже создан: логин <strong>{{ access.login }}</strong>.
+                    Пароль показывается только при создании — здесь можно
+                    задать новый.
+                </p>
+            </div>
+            {% endif %}
+
+            {% if errors %}
+            <div class="error" role="alert">
+                {% for message in errors %}
+                <p>{{ message }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <form class="modal-form"
+                  hx-post="/tutor/students/{{ student.id }}/access"
+                  hx-target="#modal"
+                  hx-swap="innerHTML">
+                <div class="field">
+                    <label class="label" for="student-access-login">Логин <span aria-hidden="true">*</span></label>
+                    <input class="input" id="student-access-login" type="text" name="login"
+                           value="{{ login_value or (access.login if access else '') }}"
+                           placeholder="латиница, цифры, _ (мин. 3)"
+                           required minlength="3" autocomplete="off" spellcheck="false">
+                </div>
+
+                <div class="field">
+                    <label class="label" for="student-access-password">
+                        Пароль <span aria-hidden="true">*</span>{% if access %} (пусто — не менять){% endif %}
+                    </label>
+                    <div class="access-password">
+                        <input class="input" id="student-access-password" type="text" name="password"
+                               x-ref="password"
+                               placeholder="{{ 'Оставьте пустым, чтобы не менять' if access else 'мин. 8 символов' }}"
+                               {% if not access %}required minlength="8"{% endif %}
+                               autocomplete="new-password" spellcheck="false">
+                        <button class="btn btn--outline access-password__generate" type="button"
+                                @click="generate()"
+                                title="Сгенерировать пароль">
+                            <i data-lucide="refresh-cw"></i>
+                            Сгенерировать
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn btn--primary" type="submit">Сохранить</button>
+                    <button class="btn btn--ghost" type="button" @click="open = false">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

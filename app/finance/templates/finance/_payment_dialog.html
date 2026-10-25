@@ -17,7 +17,15 @@
    Контекст: payment_student, payment, payment_form (amount, method,
    status, date_value, comment), payment_errors, payment_action,
    payment_title, payment_methods, payment_method_labels, payment_statuses,
-   payment_status_labels. #}
+   payment_status_labels.
+
+   Режим страницы финансов (design D5 finance-page): `payment_student`
+   отсутствует — поле «Ученик» становится списком выбора (варианты в
+   `payment_students_json`), в POST уходит скрытый `student_id`, который
+   заполняет Alpine (`incomeStudentPicker` в payments.js). При повторной
+   отрисовке с ошибкой выбранный ученик приходит в `income_student_id` /
+   `income_student_name`. #}
+{% from "_person_picker.html" import person_picker with context %}
 <div class="modal-root modal-root--stack"
      id="modal-payment"
      x-data="paymentDialog()"
@@ -33,7 +41,11 @@
             <div>
                 <h2 id="payment-dialog-title">{{ payment_title }}</h2>
                 <p class="modal-subtitle">
+                    {% if payment_student %}
                     {{ student_full_name(payment_student) }}
+                    {% else %}
+                    Ученик выбирается из списка
+                    {% endif %}
                 </p>
             </div>
             <button class="btn btn--ghost btn--icon" type="button"
@@ -60,12 +72,42 @@
                 <fieldset class="form-section">
                     <legend class="form-section__title">Платёж</legend>
 
+                    {% if payment_student %}
                     {# Ученик — только подпись: у поля нет `name`, и в
                        запрос оно не попадает (design D11). #}
                     <div class="field field--full">
                         <span class="label">Ученик</span>
                         <span>{{ student_full_name(payment_student) }}</span>
                     </div>
+                    {% else %}
+                    {# Режим страницы финансов: ученик выбирается из списка.
+                       Поле ввода без `name` — в POST уходит только скрытый
+                       `student_id`. #}
+                    <div class="field field--full"
+                         x-data="incomeStudentPicker"
+                         data-initial-id="{{ income_student_id }}"
+                         data-initial-name="{{ income_student_name }}">
+                        {{ person_picker(
+                            "payment-student-search", "payment-student-listbox",
+                            placeholder="Выберите ученика...",
+                            name_expr="item.name",
+                            meta_expr="item.meta",
+                            options_json=payment_students_json,
+                            label="Ученик *",
+                            empty_note="Ученик не найден"
+                        ) }}
+                        <input type="hidden" name="student_id" :value="studentId">
+                        <div class="fin-student-chip" x-show="studentName" x-cloak>
+                            <i data-lucide="user-round" aria-hidden="true"></i>
+                            <span x-text="studentName"></span>
+                            <button class="btn btn--ghost btn--icon" type="button"
+                                    @click="clearStudent()"
+                                    aria-label="Сбросить ученика">
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
 
                     <div class="field">
                         <label class="label" for="payment-amount">Сумма (₽) *</label>

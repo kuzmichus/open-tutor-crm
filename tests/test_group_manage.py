@@ -160,7 +160,6 @@ def test_general_tab_shows_empty_roster(owner, client, group_factory):
     ("panel", "text"),
     [
         ("schedule", "Расписание группы появится позже."),
-        ("lessons", "Занятия группы появятся позже."),
     ],
 )
 def test_stub_tabs_explain_and_have_no_dead_actions(
@@ -194,6 +193,22 @@ def test_payments_tab_is_not_a_stub(owner, client, student_factory):
     assert 'hx-trigger="load"' in html
     assert 'hx-target="this"' in html
     assert 'hx-swap="outerHTML"' in html
+
+
+def test_lessons_tab_is_not_a_stub(owner, client, student_factory):
+    """Вкладка «Занятия» грузит панель своим маршрутом вместо заглушки.
+
+    Панель приходит лениво (паттерн вкладки «Оплаты»); список и фильтры
+    статуса проверяют тесты `test_group_lessons.py` по маршруту панели.
+    """
+    group_id, _ = _group_with_member(owner, student_factory)
+    html = client.get(f"/tutor/groups/{group_id}/edit").text
+
+    assert "Занятия группы появятся позже." not in html
+    assert f'hx-get="/tutor/groups/{group_id}/lessons"' in html
+    # Урок, сохранённый или удалённый во втором слое, обновляет список.
+    assert 'lesson-saved from:body' in html
+    assert 'homework-saved from:body' in html
 
 
 # --------------------------------------------------------------------------

@@ -1,0 +1,30 @@
+{# Плашка напоминания «N уроков не отмечены» — ответ партиала /tutor/notices.
+
+   Контекст: rows ({lesson, name, starts_at}), notice_key, latest, explain, tutor.
+   Подписи — `unmarked_notice_label` и `notice_when` из presentation-модуля
+   уроков. Закрытие — на клиенте (Alpine `noticeBanner` из notices.js):
+   ключ-состояние — состав уроков, новый не отмеченный урок меняет ключ и
+   закрытая плашка возвращается. #}
+<div class="notice-banner" role="status"
+     x-data="noticeBanner('{{ notice_key }}')" x-show="open" x-cloak>
+    <span class="notice-banner__icon" aria-hidden="true">
+        <i data-lucide="triangle-alert"></i>
+    </span>
+    <div class="notice-banner__body">
+        <p class="notice-banner__text">
+            {{ unmarked_notice_label(rows | length) }}
+            <span class="notice-banner__dot" aria-hidden="true">·</span>
+            {{ latest.name }}, {{ notice_when(latest.starts_at, tutor) }}
+            <a class="notice-banner__link" href="/tutor/lessons?status=unmarked">Открыть</a>
+        </p>
+        {% if explain %}
+        <p class="notice-banner__hint">
+            Отметьте его как проведённый — иначе через 24 часа он будет завершён автоматически и баланс ученика будет списан.
+        </p>
+        {% endif %}
+    </div>
+    <button class="notice-banner__close" type="button"
+            @click="close()" aria-label="Скрыть напоминание">
+        <i data-lucide="x"></i>
+    </button>
+</div>

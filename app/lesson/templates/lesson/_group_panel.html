@@ -1,0 +1,72 @@
+{# Список занятий группы — вкладка «Занятия» модалки управления
+   (паттерн панели оплат `_group_panel.html`).
+
+   Панель — не форма: модалка группы обёрнута в единственную `<form>`,
+   поэтому панель не содержит полей отправки. Приходит своим
+   GET-маршрутом: слот вкладки грузит её с `hx-trigger="load"`, чипы
+   статуса перезапрашивают тот же маршрут (hx-target — корень панели).
+   События `lesson-saved`/`homework-saved` (успех модалки урока и ДЗ)
+   слот в `_manage.html` пересылает сюда повторным запросом — список
+   всегда рисует сервер.
+
+   Клик по занятию открывает стандартную модалку урока во втором слое
+   (`#modal-lesson`, design D10 — как диалоги счёта поверх карточки
+   ученика): модалка группы со своими несохранёнными полями остаётся
+   в `#modal` и этим окном не затрагивается.
+
+   Контекст: group, tutor, status, rows ({lesson, homework_status}). #}
+<div class="group-lessons" id="group-lessons-content">
+    <div class="period-chips" role="group" aria-label="Фильтр занятий группы">
+        {% for key, label in [('', 'Все'), ('completed', 'Проведённые'), ('planned', 'Запланированные')] %}
+        <label class="period-chip">
+            <input class="period-chip__input" type="radio"
+                   name="status" value="{{ key }}"
+                   {% if key == status %}checked{% endif %}
+                   hx-get="/tutor/groups/{{ group.id }}/lessons"
+                   hx-trigger="change"
+                   hx-target="#group-lessons-content"
+                   hx-swap="outerHTML">
+            <span class="period-chip__view">{{ label }}</span>
+        </label>
+        {% endfor %}
+    </div>
+
+    {% if rows %}
+    <div class="group-lessons__list">
+        {% for row in rows %}
+        {% set lesson = row.lesson %}
+        <button class="group-lesson" type="button"
+                hx-get="/tutor/lessons/{{ lesson.id }}/edit"
+                hx-target="#modal-lesson"
+                hx-swap="innerHTML">
+            <span class="group-lesson__head">
+                <span class="group-lesson__time">{{ lesson_date(lesson.starts_at, tutor) }} {{ lesson_time_span(lesson, tutor) }}</span>
+                <span class="chip chip--{{ lesson.status }}">{{ lesson_status_label(lesson.status) }}</span>
+            </span>
+            <span class="group-lesson__meta">
+                {% if group.description %}
+                <span class="group-lesson__subject">
+                    <i data-lucide="book-open"></i>
+                    {{ group.description }}
+                </span>
+                {% endif %}
+                <span class="group-lesson__hw">
+                    <i data-lucide="clipboard-list"></i>
+                    {{ homework_short_label(row.homework_status) }}
+                </span>
+            </span>
+        </button>
+        {% endfor %}
+    </div>
+    {% elif status %}
+    <div class="tab-panel__empty">
+        <i data-lucide="book-open"></i>
+        <p>Нет занятий с таким статусом.</p>
+    </div>
+    {% else %}
+    <div class="tab-panel__empty">
+        <i data-lucide="book-open"></i>
+        <p>У группы пока нет занятий.</p>
+    </div>
+    {% endif %}
+</div>

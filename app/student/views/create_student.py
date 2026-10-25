@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.student.services.access import require_tutor_id
 from app.student.services.form_context import form_context
+from app.student.services.list_metrics import attach_card_metrics
 from app.student.services.presentation import form_from_data
 from app.student.services.student_form import (
     parse_contact_rows,
@@ -16,6 +17,8 @@ from app.student.services.student_form import (
 from app.student.services.student_writer import create_student
 from app.student.services.students import build_cards
 from app.templating import templates
+from app.tutor.models.tutor import Tutor
+from app.tutor.services.clock import as_utc, utcnow
 
 router = APIRouter()
 
@@ -66,9 +69,11 @@ async def create_student_view(
     if not _is_htmx(request):
         return RedirectResponse(url="/tutor/students", status_code=303)
 
-    card = build_cards(db, [student])[0]
+    card = attach_card_metrics(
+        db, build_cards(db, [student])[0], now=as_utc(utcnow())
+    )
     response = templates.TemplateResponse(
-        request, "student/_card.html", {"card": card}
+        request, "student/_card.html", {"card": card, "tutor": db.get(Tutor, tutor_id)}
     )
     # Карточка встаёт в начало сетки, модалка закрывается по событию.
     response.headers["HX-Retarget"] = "#students-grid"

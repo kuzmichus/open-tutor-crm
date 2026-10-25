@@ -1,0 +1,32 @@
+{# Вкладка «Безопасность»: email для входа и смена пароля.
+   Поля пароля не ре-рендерят присланное: type=password и так пустой,
+   а возвращать секрет в разметку нельзя. #}
+<form method="post" action="{{ action }}">
+    <section class="card settings-card">
+        <h2 class="card__title">Безопасность</h2>
+        <p class="card__desc">Email для входа и смена пароля.</p>
+
+        <div class="field">
+            <label class="label" for="tutor-email">Email</label>
+            <input class="input" id="tutor-email" type="email" name="email"
+                   value="{{ form.email }}" required>
+        </div>
+
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-new-password">Новый пароль</label>
+                <input class="input" id="tutor-new-password" type="password" name="new_password"
+                       autocomplete="new-password">
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-new-password-confirm">Повторите пароль</label>
+                <input class="input" id="tutor-new-password-confirm" type="password" name="new_password_confirm"
+                       autocomplete="new-password" placeholder="Повторите пароль">
+            </div>
+        </div>
+
+        <div class="settings-actions settings-actions--start">
+            <button class="btn btn--primary" type="submit">Сохранить настройки безопасности</button>
+        </div>
+    </section>
+</form>

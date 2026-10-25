@@ -1,0 +1,125 @@
+{# Вкладка «Новые и пробные»: период, «Заведено»/«Стали активными», конверсия. #}
+<div class="stats-period">
+    <span class="stats-period__caption">Период</span>
+    <nav class="tabs" aria-label="Период статистики">
+        <a class="tab{% if period.key == 'all' %} tab--active{% endif %}"
+           href="/tutor/stats?tab=new&period=all">Всё время</a>
+        <a class="tab{% if period.key == 'today' %} tab--active{% endif %}"
+           href="/tutor/stats?tab=new&period=today">Сегодня</a>
+        <a class="tab{% if period.key == '7d' %} tab--active{% endif %}"
+           href="/tutor/stats?tab=new&period=7d">7 дней</a>
+        <a class="tab{% if period.key == '30d' %} tab--active{% endif %}"
+           href="/tutor/stats?tab=new&period=30d">30 дней</a>
+    </nav>
+    <form class="stats-period__custom" method="get" action="/tutor/stats">
+        <input type="hidden" name="tab" value="new">
+        <input type="hidden" name="period" value="custom">
+        <label class="sr-only" for="stats-date-from">С даты</label>
+        <input class="input" id="stats-date-from" type="date" name="date_from"
+               value="{{ period.date_from_input }}">
+        <label class="sr-only" for="stats-date-to">По дату</label>
+        <input class="input" id="stats-date-to" type="date" name="date_to"
+               value="{{ period.date_to_input }}">
+        <button class="btn btn--outline btn--sm" type="submit">
+            <i data-lucide="calendar" aria-hidden="true"></i>
+            Период
+        </button>
+    </form>
+</div>
+
+<section class="card stats-panel">
+    <h2 class="stats-panel__title">
+        <i data-lucide="user-plus" aria-hidden="true"></i>
+        Новые ученики
+    </h2>
+    <p class="stats-hint">«Заведено» — карточки учеников, созданные за период.
+        «Стали активными» — ученики, у которых за период прошёл первый платёж
+        (в том числе заведённые раньше). Разбивка — по педагогу карточки.</p>
+    <div class="stats-duo">
+        <div class="stats-duo__item">
+            <p class="stats-duo__label">Заведено</p>
+            <p class="stats-duo__value">{{ new_stats.created }}</p>
+            <p class="stats-duo__sub">карточек учеников за период</p>
+        </div>
+        <div class="stats-duo__item">
+            <p class="stats-duo__label">Стали активными</p>
+            <p class="stats-duo__value">{{ new_stats.activated }}</p>
+            <p class="stats-duo__sub">первый платёж за период</p>
+        </div>
+    </div>
+    <div class="stats-table-wrap">
+        <table class="stats-table">
+            <caption class="sr-only">Новые ученики по педагогам</caption>
+            <thead>
+                <tr>
+                    <th class="stats-table__th" scope="col">Педагог</th>
+                    <th class="stats-table__th stats-table__th--num" scope="col">Заведено</th>
+                    <th class="stats-table__th stats-table__th--num" scope="col">Стали активными</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in new_stats.rows %}
+                <tr class="stats-table__row">
+                    <td class="stats-table__cell">{{ row.name }}</td>
+                    <td class="stats-table__cell stats-table__cell--num">{{ row.created }}</td>
+                    <td class="stats-table__cell stats-table__cell--num">{{ row.activated }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="card stats-panel">
+    <h2 class="stats-panel__title">
+        <i data-lucide="award" aria-hidden="true"></i>
+        Рейтинг: конверсия из пробного занятия в ученика
+    </h2>
+    <p class="stats-hint">Доля учеников, которые после проведённого пробного остались
+        заниматься: у них есть проведённое или запланированное обычное занятие после
+        пробного (если занятий нет — засчитывается оплата, внесённая после пробного).
+        Нажмите на число в «Остались», чтобы увидеть учеников поимённо и причину по
+        каждому. Процент показывается, когда пробных не меньше пяти, — иначе
+        «мало данных».</p>
+    <div class="stats-table-wrap">
+        <table class="stats-table">
+            <caption class="sr-only">Конверсия из пробного занятия по педагогам</caption>
+            <thead>
+                <tr>
+                    <th class="stats-table__th" scope="col">Педагог</th>
+                    <th class="stats-table__th stats-table__th--num" scope="col">Пробных</th>
+                    <th class="stats-table__th stats-table__th--num" scope="col">Остались</th>
+                    <th class="stats-table__th stats-table__th--num" scope="col">Конверсия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in trials.rows %}
+                <tr class="stats-table__row">
+                    <td class="stats-table__cell">{{ row.name }}</td>
+                    <td class="stats-table__cell stats-table__cell--num">{{ row.trials }}</td>
+                    <td class="stats-table__cell stats-table__cell--num">
+                        <details class="stats-num">
+                            <summary>{{ row.kept }}</summary>
+                            <ul class="stats-num__list">
+                                {% for item in trials.students %}
+                                <li>
+                                    {{ item.name }} — {{ kept_reason_label(item.reason) }}
+                                    {% if item.detail %}({{ lesson_datetime_label(item.detail, tutor) }}){% endif %} ·
+                                    пробное {{ day_label(item.trial_at, tutor) }}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                    </td>
+                    <td class="stats-table__cell stats-table__cell--num">{{ conversion_label(row.trials, row.kept) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="stats-reconcile">
+        Сверка: пробных всего {{ trials.rows[0].trials }} =
+        засчитано {{ trials.rows[0].kept }} +
+        не засчитано {{ trials.rows[0].trials - trials.rows[0].kept }}
+    </p>
+</section>

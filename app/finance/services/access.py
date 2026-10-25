@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.common.access import LOGIN_URL, LoginRequired, require_tutor_id
 from app.finance.models.account_operation import AccountOperation
+from app.finance.models.expense import Expense
 from app.group.services.access import get_owned_group
 from app.student.models.student import Student
 from app.student.services.access import get_owned_student
@@ -27,6 +28,7 @@ from app.student.services.access import get_owned_student
 __all__ = [
     "LOGIN_URL",
     "LoginRequired",
+    "get_owned_expense",
     "get_owned_group",
     "get_owned_operation",
     "get_owned_student",
@@ -53,3 +55,21 @@ def get_owned_operation(
     if operation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return operation
+
+
+def get_owned_expense(db: Session, expense_id: str, tutor_id: str) -> Expense:
+    """Расход этого репетитора либо 404.
+
+    У расхода есть своя колонка `tutor_id` (владельца выводить не из кого),
+    поэтому проверка — один `SELECT` без JOIN. Чужая и несуществующая
+    запись неразличимы: 404, а не 403.
+    """
+    expense = db.scalars(
+        select(Expense).where(
+            Expense.id == expense_id,
+            Expense.tutor_id == tutor_id,
+        )
+    ).one_or_none()
+    if expense is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return expense

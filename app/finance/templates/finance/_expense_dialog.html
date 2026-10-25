@@ -1,0 +1,93 @@
+{# Диалог расхода — трата репетитора (аренда, реклама, подписки).
+
+   Живёт в собственном контейнере `#modal-expense`, а не в `#modal-payment`
+   с диалогом «Доход»: репетитор может открыть «Доход», закрыть, открыть
+   «Расход» — контейнеры не перетирают друг друга, и слушатели событий
+   каждого диалога живут в своём слое (паттерн второго слоя модалок D10).
+
+   Контекст: expense_form (amount, category, date_value, comment),
+   expense_errors, expense_categories, expense_category_labels. #}
+<div class="modal-root modal-root--stack"
+     id="modal-expense"
+     x-data="expenseDialog()"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     @expense-saved.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true"
+         aria-labelledby="expense-dialog-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="expense-dialog-title">Добавить расход</h2>
+                <p class="modal-subtitle">Трата репетитора, не связанная со счётом ученика</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              hx-post="/tutor/expenses"
+              hx-target="#modal-expense"
+              hx-swap="outerHTML">
+            <div class="modal-body">
+                {% if expense_errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in expense_errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <fieldset class="form-section">
+                    <legend class="form-section__title">Расход</legend>
+
+                    <div class="field">
+                        <label class="label" for="expense-amount">Сумма (₽) *</label>
+                        <input class="input" id="expense-amount" type="number"
+                               name="amount" min="1" step="1" required
+                               inputmode="numeric"
+                               value="{{ expense_form.amount }}">
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="expense-date">Дата *</label>
+                        <input class="input" id="expense-date" type="date"
+                               name="date" required
+                               value="{{ expense_form.date_value }}">
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="expense-category">Категория *</label>
+                        <select class="input" id="expense-category" name="category">
+                            {% for value in expense_categories %}
+                            <option value="{{ value }}"
+                                    {% if expense_form.category == value %}selected{% endif %}>
+                                {{ expense_category_labels[value] }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field field--full">
+                        <label class="label" for="expense-comment">Комментарий</label>
+                        <textarea class="input" id="expense-comment"
+                                  name="comment" rows="2">{{ expense_form.comment }}</textarea>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn--ghost" type="button" @click="close()">
+                    Отмена
+                </button>
+                <button class="btn btn--primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>

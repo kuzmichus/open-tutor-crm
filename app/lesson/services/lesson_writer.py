@@ -197,7 +197,13 @@ def update_lesson(db: Session, lesson: Lesson, data: dict, tutor) -> list[str]:
     lesson.duration_min = data["duration_min"]
     lesson.note = data.get("note") or None
     lesson.meeting_url = data.get("meeting_url") or None
-    lesson.price = data.get("price")
+    # Цена проведённого урока заморожена (спека «Цена проведённого урока
+    # только для чтения»): поле в форме показывается, но присланные значения
+    # игнорируются — история счёта не переписывается постфактум. Перевод
+    # «Запланирован» → «Проведён» цену применяет: списание создаётся по ней.
+    lesson.price = (
+        lesson.price if lesson.status == "completed" else data.get("price")
+    )
     if data.get("status"):
         lesson.status = data["status"]
     lesson.rating = data.get("rating")

@@ -76,6 +76,7 @@ TEMPLATE_SETS = [
     ),
     ("group", ROOT / "app" / "group" / "templates" / "group", None, None),
     ("finance", ROOT / "app" / "finance" / "templates" / "finance", None, None),
+    ("tutor", ROOT / "app" / "tutor" / "templates" / "tutor", None, None),
     ("slot", ROOT / "app" / "slot" / "templates" / "slot", None, None),
     ("booking", ROOT / "app" / "booking" / "templates" / "booking", None, None),
     (
@@ -84,6 +85,7 @@ TEMPLATE_SETS = [
         None,
         None,
     ),
+    ("stats", ROOT / "app" / "stats" / "templates" / "stats", None, None),
 ]
 
 _TEMPLATE_CASES = [
@@ -164,3 +166,17 @@ def test_group_menu_is_styled():
         ".group-card__menu-item--danger",
     ):
         assert selector in STYLES, f"нет правила {selector}"
+
+
+def test_rating_stars_fill_up_to_selected():
+    """Звёзды оценки заливаются «от начала»: выбранная и все до неё.
+
+    `+` красит только соседа справа, поэтому правило обязано ловить
+    предыдущие звёзды через `:has(~ …)`; кнопка сброса (`value=""`)
+    в заливку никого включать не должна.
+    """
+    assert ".rating-star:has(> input:checked) .rating-star__view" in STYLES
+    assert (
+        '.rating-star:has(~ .rating-star > input:checked:not([value=""])) '
+        ".rating-star__view"
+    ) in STYLES

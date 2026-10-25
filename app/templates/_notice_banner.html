@@ -1,0 +1,14 @@
+{# Контейнер баннера-напоминания о не отмеченных уроках.
+
+   Включается в шаблоны страниц кабинета сразу после открытия
+   `main__container` (AGENTS.md: партиалы htmx начинаются с `_` —
+   этот файл является включаемым, не роутом). Данные подгружает
+   партиал `/tutor/notices` (design D1 change'а unmarked-lessons):
+   вьюхам страниц контекст баннера не нужен. Перезагрузка по
+   `lesson-saved` — урок отметили, плашка должна исчезнуть сразу.
+   Пояснение про автозавершение — только у главной: перед включением
+   поставьте `{% set notice_explain = true %}`. #}
+<div id="tutor-notices"
+     hx-get="/tutor/notices{% if notice_explain | default(false) %}?explain=1{% endif %}"
+     hx-trigger="load, lesson-saved from:body"
+     hx-swap="innerHTML"></div>

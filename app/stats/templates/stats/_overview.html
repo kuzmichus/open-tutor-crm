@@ -1,0 +1,98 @@
+{# Вкладка «Обзор»: KPI-карточки, панель риска, прогноз по запросу. #}
+<div class="stats-toolbar">
+    <a class="btn btn--outline btn--sm"
+       href="/tutor/stats?tab=overview{% if not overview.forecast %}&forecast=1{% endif %}">
+        Прогноз на месяц
+    </a>
+</div>
+
+{% if overview.forecast %}
+<section class="card stats-forecast" aria-label="Прогноз на месяц">
+    <h2 class="stats-forecast__title">Прогноз на месяц</h2>
+    <p class="stats-hint">Ожидаемая выручка — сумма цен запланированных занятий на
+        ближайшие {{ overview.forecast.days }} дней: у индивидуального урока — его цена,
+        у группового — цена каждого участника. Уроки без цены считаются нулём.</p>
+    <div class="stats-duo">
+        <div class="stats-duo__item">
+            <p class="stats-duo__label">Ожидаемая выручка</p>
+            <p class="stats-duo__value">{{ money(overview.forecast.amount) }}</p>
+        </div>
+        <div class="stats-duo__item">
+            <p class="stats-duo__label">Запланировано занятий</p>
+            <p class="stats-duo__value">{{ overview.forecast.lessons }}</p>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<div class="stats-kpis">
+    <section class="card stats-kpi">
+        <div class="stats-kpi__head">
+            <span class="stats-kpi__title">LTV (Сред. чек)</span>
+            <span class="stats-kpi__icon stats-kpi__icon--up" aria-hidden="true">
+                <i data-lucide="trending-up"></i>
+            </span>
+        </div>
+        <p class="stats-kpi__value">
+            {%- if overview.ltv is not none %}{{ money(overview.ltv) }}{% else %}—{% endif -%}
+        </p>
+        <p class="stats-kpi__sub">Выручка на одного ученика</p>
+    </section>
+
+    <section class="card stats-kpi">
+        <div class="stats-kpi__head">
+            <span class="stats-kpi__title">Retention Rate</span>
+            <span class="stats-kpi__icon stats-kpi__icon--info" aria-hidden="true">
+                <i data-lucide="activity"></i>
+            </span>
+        </div>
+        <p class="stats-kpi__value">{{ percent_label(overview.retention_active, overview.retention_total) }}</p>
+        <p class="stats-kpi__sub">Активные из всех, кто хоть раз занимался</p>
+    </section>
+
+    <section class="card stats-kpi">
+        <div class="stats-kpi__head">
+            <span class="stats-kpi__title">Активных</span>
+            <span class="stats-kpi__icon" aria-hidden="true">
+                <i data-lucide="users"></i>
+            </span>
+        </div>
+        <p class="stats-kpi__value">{{ overview.active_count }}</p>
+        <p class="stats-kpi__sub">Занятие за последние 14 дней (не пробное)</p>
+        <a class="stats-kpi__link" href="/tutor/stats?tab=students&activity=active">Показать список</a>
+    </section>
+
+    <section class="card stats-kpi">
+        <div class="stats-kpi__head">
+            <span class="stats-kpi__title">Потерянных</span>
+            <span class="stats-kpi__icon stats-kpi__icon--danger" aria-hidden="true">
+                <i data-lucide="user-x"></i>
+            </span>
+        </div>
+        <p class="stats-kpi__value">{{ overview.lost_count }}</p>
+        <p class="stats-kpi__sub">Занимались, уход отмечен статусом «В архиве»</p>
+        <a class="stats-kpi__link" href="/tutor/stats?tab=students&activity=lost">Показать список</a>
+    </section>
+</div>
+
+<section class="card stats-risk" aria-label="Риск потери">
+    <h2 class="stats-risk__head">
+        <i data-lucide="alert-triangle" aria-hidden="true"></i>
+        Риск потери: {{ overview.risk_rows | length }}
+    </h2>
+    <p class="stats-risk__text">Занимались, но больше 14 дней нет занятий и ничего не
+        запланировано, а статус карточки не менялся — тихо перестали ходить. Отмеченные
+        статусом «В архиве» — в «Потерянных».</p>
+    {% if overview.risk_rows %}
+    <ul class="stats-risk__list">
+        {% for row in overview.risk_rows %}
+        <li>
+            {{ student_full_name(row.student) }} —
+            последнее занятие {{ short_date_label(row.last_lesson_at, tutor) }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="stats-risk__ok">Все активные ученики посещают занятия регулярно!</p>
+    {% endif %}
+</section>

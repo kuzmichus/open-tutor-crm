@@ -6,8 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.student.services.access import get_owned_student, require_tutor_id
+from app.student.services.list_metrics import attach_card_metrics
 from app.student.services.students import build_cards
 from app.templating import templates
+from app.tutor.models.tutor import Tutor
+from app.tutor.services.clock import as_utc, utcnow
 
 router = APIRouter()
 
@@ -35,9 +38,11 @@ def archive_student(
     if not _is_htmx(request):
         return RedirectResponse(url="/tutor/students", status_code=303)
 
-    card = build_cards(db, [student])[0]
+    card = attach_card_metrics(
+        db, build_cards(db, [student])[0], now=as_utc(utcnow())
+    )
     response = templates.TemplateResponse(
-        request, "student/_card.html", {"card": card}
+        request, "student/_card.html", {"card": card, "tutor": db.get(Tutor, tutor_id)}
     )
     response.headers["HX-Retarget"] = f"#student-card-{student.id}"
     response.headers["HX-Reswap"] = "outerHTML"

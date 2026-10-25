@@ -1,0 +1,85 @@
+{# Содержимое окна «Отчёт» — отдельный партиал.
+
+   Стрелки месяцев перезапрашивают маршрут модалки с `month=YYYY-MM`;
+   вьюха по заголовку `HX-Target: report-content` отвечает этим блоком
+   без оболочки окна (hx-target указан явно: наследовался бы от слоя
+   модалки). Контейнер с id приходит в обоих ответах — htmx заменяет
+   его через outerHTML вместе с навигацией и подписью месяца.
+
+   Контекст: report_student, tutor, report_month (дата), report_month_key,
+   report_prev_key, report_next_key, report_completed, report_charged_total,
+   report_charged_count, report_earned_total, report_paid_total,
+   report_paid_count, report_balance, report_remaining. #}
+<div class="report" id="report-content">
+    <div class="report-month">
+        <a class="btn btn--ghost btn--icon report-month__nav"
+           href="/tutor/students/{{ report_student.id }}/report?month={{ report_prev_key }}"
+           hx-get="/tutor/students/{{ report_student.id }}/report?month={{ report_prev_key }}"
+           hx-target="#report-content"
+           hx-swap="outerHTML"
+           aria-label="Предыдущий месяц">
+            <i data-lucide="chevron-left"></i>
+        </a>
+        <span class="report-month__label">{{ month_label(report_month) }}</span>
+        <a class="btn btn--ghost btn--icon report-month__nav"
+           href="/tutor/students/{{ report_student.id }}/report?month={{ report_next_key }}"
+           hx-get="/tutor/students/{{ report_student.id }}/report?month={{ report_next_key }}"
+           hx-target="#report-content"
+           hx-swap="outerHTML"
+           aria-label="Следующий месяц">
+            <i data-lucide="chevron-right"></i>
+        </a>
+    </div>
+
+    <div class="report-cards">
+        <div class="report-card">
+            <p class="report-card__title">
+                <i data-lucide="circle-check" aria-hidden="true"></i>
+                Проведено
+            </p>
+            <p class="report-card__value">{{ report_completed }}</p>
+        </div>
+
+        <div class="report-card">
+            <p class="report-card__title">
+                <i data-lucide="trending-down" aria-hidden="true"></i>
+                Списано за месяц
+            </p>
+            <p class="report-card__value">{{ money(report_charged_total) }}</p>
+            <p class="report-card__note">списаний: {{ report_charged_count }}</p>
+        </div>
+
+        <div class="report-card">
+            <p class="report-card__title">
+                <i data-lucide="trending-up" aria-hidden="true"></i>
+                Оплачено за месяц
+            </p>
+            <p class="report-card__value">{{ money(report_paid_total) }}</p>
+            <p class="report-card__note">платежей: {{ report_paid_count }}</p>
+        </div>
+
+        <div class="report-card">
+            <p class="report-card__title">
+                <i data-lucide="wallet" aria-hidden="true"></i>
+                Баланс сейчас
+            </p>
+            <p class="report-card__value{% if report_balance < 0 %} money-value--debt{% endif %}">
+                {{ balance_label(report_balance) }}
+            </p>
+            {% if report_remaining is not none %}
+            <p class="report-card__note">Осталось {{ lessons_count_label(report_remaining) }}</p>
+            {% else %}
+            <p class="report-card__note">Остаток занятий не рассчитан</p>
+            {% endif %}
+        </div>
+
+        <div class="report-card">
+            <p class="report-card__title">
+                <i data-lucide="graduation-cap" aria-hidden="true"></i>
+                Заработок педагога
+            </p>
+            <p class="report-card__value">{{ money(report_earned_total) }}</p>
+            <p class="report-card__note">по индивидуальным занятиям</p>
+        </div>
+    </div>
+</div>

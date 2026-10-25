@@ -229,8 +229,12 @@ def test_create_series_with_completed_lessons_charges_each(owner, student_factor
 # --------------------------------------------------------------------------
 
 
-def test_edit_completed_lesson_price_recalculates_charge(owner, client, student_factory):
-    """Правка оплаты проведённого урока пересчитывает его списание."""
+def test_edit_completed_lesson_keeps_price_and_charge(owner, client, student_factory):
+    """Оплата проведённого урока не изменяется: цена и списание остаются.
+
+    Спека «Цена проведённого урока только для чтения»: сервер игнорирует
+    присланную цену — история счёта не переписывается постфактум.
+    """
     student_id = student_factory(tutor_id=owner)
     lesson = _create_completed_lesson(owner, student_id, price=1200)
 
@@ -243,7 +247,9 @@ def test_edit_completed_lesson_price_recalculates_charge(owner, client, student_
 
     charges = _charges(student_id)
     assert len(charges) == 1
-    assert charges[0].amount == 1500
+    assert charges[0].amount == 1200
+    with SessionLocal() as session:
+        assert session.get(Lesson, lesson.id).price == 1200
 
 
 def test_edit_planned_lesson_to_completed_creates_charge(owner, client, student_factory):
@@ -283,14 +289,13 @@ def test_edit_completed_lesson_back_to_planned_removes_charge(
         assert balance(session, student_id) == 0
 
 
-def test_edit_apply_to_series_keeps_charge_of_completed_lesson(
+def test_edit_apply_to_series_skips_price_of_completed_lesson(
     owner, client, student_factory
 ):
-    """Массовая правка цены меняет списание проведённого урока серии.
+    """Массовая правка цены не трогает проведённые уроки серии.
 
-    Статус — пер-уточное поле (спека lesson-management), поэтому остальные
-    уроки остаются «Запланированными» и списаний не получают: проверяется,
-    что пересчёт не создаёт строк там, где занятие не состоялось.
+    Цена меняется только у «Запланированных» (списаний у них нет — статус
+    пер-уточное поле), у проведённого остаются цена и списание 1200.
     """
     student_id = student_factory(tutor_id=owner)
     _, lesson_ids = _insert_series(owner, student_id, count=3, price=1200)
@@ -305,14 +310,22 @@ def test_edit_apply_to_series_keeps_charge_of_completed_lesson(
     assert response.status_code == 200
 
     charges = _charges(student_id)
-    assert [charge.amount for charge in charges] == [1500]
+    assert [charge.amount for charge in charges] == [1200]
     assert [charge.lesson_id for charge in charges] == [lesson_ids[0]]
+    with SessionLocal() as session:
+        prices = {
+            lesson.id: lesson.price
+            for lesson in session.scalars(select(Lesson)).all()
+        }
+    assert prices[lesson_ids[0]] == 1200
+    assert prices[lesson_ids[1]] == 1500
+    assert prices[lesson_ids[2]] == 1500
 
 
-def test_edit_apply_to_series_recalculates_every_completed_lesson(
+def test_edit_apply_to_series_keeps_charges_of_all_completed_lessons(
     owner, client, student_factory
 ):
-    """Если проведены все уроки серии, массовая правка меняет все списания."""
+    """Если проведены все уроки серии, массовая правка цены ничего не меняет."""
     student_id = student_factory(tutor_id=owner)
     _, lesson_ids = _insert_series(
         owner, student_id, count=3, price=1200, status="completed"
@@ -330,9 +343,9 @@ def test_edit_apply_to_series_recalculates_every_completed_lesson(
 
     charges = _charges(student_id)
     assert len(charges) == 3
-    assert {charge.amount for charge in charges} == {1500}
+    assert {charge.amount for charge in charges} == {1200}
     with SessionLocal() as session:
-        assert balance(session, student_id) == -4500
+        assert balance(session, student_id) == -3600
 
 
 # --------------------------------------------------------------------------

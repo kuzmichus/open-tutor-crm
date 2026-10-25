@@ -6,6 +6,9 @@
        модалок. Идёт до alpine.min.js: подписка на `alpine:init` должна
        сработать раньше обхода DOM (тот же порядок, что у calendar.js). #}
     <script src="/static/payments.js" defer></script>
+    {# Модалка урока (`lessonForm`) открывается вторым слоем из окна «Уроки»
+       ученика — фабрики уроков нужны здесь так же, как на странице групп. #}
+    <script src="/static/lessons.js" defer></script>
 {% endblock %}
 
 {% block body %}
@@ -21,10 +24,17 @@
 
     <main class="main">
         <div class="main__container" x-data="studentsPage()">
+            {% include "_notice_banner.html" %}
+
+            <a class="back-link" href="/tutor/">
+                <i data-lucide="arrow-left"></i>
+                Назад
+            </a>
+
             <div class="page-header page-header--row">
                 <div>
                     <h1>Ученики</h1>
-                    <p>Карточки учеников: контакты, плательщик и напоминания.</p>
+                    <p>Управление списком учеников</p>
                 </div>
                 <div class="flex items-center gap-2">
                     <button class="btn btn--ghost btn--sm show-sm" type="button"
@@ -33,6 +43,14 @@
                             aria-controls="students-filters">
                         <i data-lucide="sliders-horizontal"></i>
                         Фильтры
+                    </button>
+                    {# Импорта из файла ещё нет: неактивная кнопка вместо
+                       ссылки на несуществующий маршрут (спека «Блоки будущих
+                       модулей» — заглушка помечена, запросов не отправляет). #}
+                    <button class="btn btn--ghost hide-sm" type="button" disabled
+                            title="Импорт из файла появится позже">
+                        <i data-lucide="upload"></i>
+                        Импорт
                     </button>
                     <button class="btn btn--primary" type="button"
                             hx-get="/tutor/students/new"
@@ -45,72 +63,93 @@
             </div>
 
             <section class="card students-card">
-                <div class="card-header">
+                <div class="students-toolbar">
+                    <div class="students-toolbar__main">
+                        <h2 class="students-toolbar__title">Список учеников</h2>
+                        <div class="view-toggle" role="group" aria-label="Вид списка">
+                            <button class="btn btn--outline btn--icon view-toggle__btn"
+                                    type="button"
+                                    data-view="grid"
+                                    :class="view === 'grid' ? 'is-active' : ''"
+                                    @click="setView('grid')"
+                                    aria-label="Сетка карточек">
+                                <i data-lucide="layout-grid"></i>
+                            </button>
+                            <button class="btn btn--outline btn--icon view-toggle__btn"
+                                    type="button"
+                                    data-view="list"
+                                    :class="view === 'list' ? 'is-active' : ''"
+                                    @click="setView('list')"
+                                    aria-label="Компактный список">
+                                <i data-lucide="list"></i>
+                            </button>
+                        </div>
+                    </div>
+
                     <form id="students-filters"
                           class="filters"
                           :class="filtersOpen ? 'is-open' : ''"
                           role="search"
                           hx-get="/tutor/students/list"
-                          hx-target="#students-grid"
+                          hx-target="#students-content"
                           hx-swap="innerHTML"
                           hx-trigger="input changed delay:300ms from:input, change from:select, search">
+                        <label class="sr-only" for="students-sort">Сортировка</label>
+                        <select class="input filters__sort" id="students-sort" name="sort">
+                            <option value="lastname" {% if sort != 'firstname' %}selected{% endif %}>По фамилии</option>
+                            <option value="firstname" {% if sort == 'firstname' %}selected{% endif %}>По имени</option>
+                        </select>
+
+                        <label class="sr-only" for="students-status">Статус</label>
+                        <select class="input filters__status" id="students-status" name="status">
+                            <option value="" {% if not status %}selected{% endif %}>Все статусы</option>
+                            <option value="new" {% if status == 'new' %}selected{% endif %}>Новые</option>
+                            <option value="active" {% if status == 'active' %}selected{% endif %}>Активные</option>
+                            <option value="archived" {% if status == 'archived' %}selected{% endif %}>В архиве</option>
+                        </select>
+
                         <label class="sr-only" for="students-search">Поиск учеников</label>
                         <input class="input filters__search"
                                id="students-search"
                                type="search"
                                name="q"
                                value="{{ q }}"
-                               placeholder="Имя, фамилия, телефон или email">
-
-                        <label class="sr-only" for="students-status">Статус</label>
-                        <select class="input filters__status" id="students-status" name="status">
-                            <option value="" {% if not status %}selected{% endif %}>Все, кроме архива</option>
-                            <option value="new" {% if status == 'new' %}selected{% endif %}>Новые</option>
-                            <option value="active" {% if status == 'active' %}selected{% endif %}>Активные</option>
-                            <option value="archived" {% if status == 'archived' %}selected{% endif %}>В архиве</option>
-                        </select>
+                               placeholder="Поиск...">
                     </form>
 
-                    <div class="view-toggle" role="group" aria-label="Вид списка">
-                        <button class="btn btn--sm btn--outline"
-                                type="button"
-                                data-view="grid"
-                                :class="view === 'grid' ? 'is-active' : ''"
-                                @click="setView('grid')">
-                            <i data-lucide="layout-grid"></i>
-                            Сетка
-                        </button>
-                        <button class="btn btn--sm btn--outline"
-                                type="button"
-                                data-view="list"
-                                :class="view === 'list' ? 'is-active' : ''"
-                                @click="setView('list')">
-                            <i data-lucide="list"></i>
-                            Список
-                        </button>
-                    </div>
+                    {# Кнопка-переключатель архива: Alpine двигает селект статуса
+                       и триггерит `change` формы — фильтр остаётся делом сервера,
+                       новых параметров запроса нет (design D5). #}
+                    <button class="btn btn--outline btn--sm students-toolbar__deleted"
+                            type="button"
+                            :class="deleted ? 'is-active' : ''"
+                            @click="toggleDeleted()"
+                            aria-pressed="false">
+                        <i data-lucide="trash-2"></i>
+                        Удалённые
+                    </button>
                 </div>
 
-                {# После сохранения перезапрашиваем сетку: статус мог смениться
-                   (например, на «В архиве»), и карточка должна исчезнуть из
-                   списка по умолчанию. Поиск и фильтр сохраняются через
-                   #students-filters. #}
-                <div id="students-grid"
-                     class="students-grid"
-                     :class="view === 'list' ? 'students-grid--list' : ''"
+                {# После сохранения перезапрашиваем весь список: статус мог
+                   смениться (например, на «В архиве»), панель долга и карточки
+                   должны перерисоваться вместе (design D2). Поиск и фильтры
+                   сохраняются через #students-filters. #}
+                <div id="students-content"
                      hx-get="/tutor/students/list"
                      hx-trigger="student-saved from:body"
                      hx-include="#students-filters"
                      hx-swap="innerHTML">
-                    {% include "student/_grid.html" %}
+                    {% include "student/_list.html" %}
                 </div>
             </section>
 
-            <!-- Сюда htmx вставляет форму создания/редактирования -->
+            <!-- Сюда htmx вставляет форму создания/редактирования и модалки
+                 «Уроки», «Отчёт», «Доступ» -->
             <div id="modal"></div>
-            <!-- Второй слой модалок (design D10): платёж, возврат, счёт.
-                 Сосед `#modal`, а не его потомок: карточка ученика со своими
-                 несохранёнными полями остаётся открытой под ним. -->
+            <!-- Второй слой модалок (design D10): модалка урока из списка
+                 «Уроки» и диалоги счёта. Сосед `#modal`: карточка ученика со
+                 своими несохранёнными полями остаётся открытой под ним. -->
+            <div id="modal-lesson"></div>
             <div id="modal-payment"></div>
         </div>
     </main>

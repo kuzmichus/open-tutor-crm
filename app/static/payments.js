@@ -55,8 +55,48 @@
       return dialogState("modal-payment");
     });
 
+    /* Поле выбора ученика в диалоге «Доход» страницы финансов: список —
+       общий `createPersonPicker` (picker.js), домен — только запомнить
+       выбранного ученика для скрытого `student_id`. Исходные значения
+       приходят в data-атрибутах: повторная отрисовка с ошибкой не
+       сбрасывает выбор. */
+    Alpine.data("incomeStudentPicker", function () {
+      return window.mergePersonPicker(
+        window.createPersonPicker({
+          searchFields: ["name", "meta"],
+          choose: function (item) {
+            this.studentId = item.id;
+            this.studentName = item.name;
+          },
+        }),
+        {
+          studentId: "",
+          studentName: "",
+
+          init: function () {
+            this.studentId = this.$root.dataset.initialId || "";
+            this.studentName = this.$root.dataset.initialName || "";
+            this.initPicker();
+          },
+
+          clearStudent: function () {
+            this.studentId = "";
+            this.studentName = "";
+          },
+        }
+      );
+    });
+
     Alpine.data("refundDialog", function () {
       return dialogState("modal-payment");
+    });
+
+    /* Диалог «Расход» страницы финансов: отдельный контейнер
+       `#modal-expense` — он независим от `#modal-payment`, поэтому
+       открытие «Расхода» не затирает незакрытый диалог «Дохода».
+       Закрытие по `expense-saved` подписано в шаблоне диалога. */
+    Alpine.data("expenseDialog", function () {
+      return dialogState("modal-expense");
     });
 
     Alpine.data("invoiceDialog", function () {

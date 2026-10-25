@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Группы — Open Tutor CRM{% endblock %}
 
-{# Клиентское состояние форм групп (Alpine.data `groupForm`). Подключается
-   только на странице групп и до alpine.min.js — см. `{% block head %}`
-   в base.html (решение D5). #}
+{# Клиентское состояние форм групп (Alpine.data `groupForm`) и модалки
+   урока (`lessonForm`) — она открывается вторым слоем из вкладки
+   «Занятия». Скрипты подключаются только на странице групп и до
+   alpine.min.js — см. `{% block head %}` в base.html (решение D5). #}
 {% block head %}
     <script src="/static/groups.js" defer></script>
+    <script src="/static/lessons.js" defer></script>
 {% endblock %}
 
 {% block body %}
@@ -21,6 +23,7 @@
 
     <main class="main">
         <div class="main__container">
+            {% include "_notice_banner.html" %}
             <div class="page-header page-header--row">
                 <div>
                     <h1>Группы</h1>
@@ -49,6 +52,10 @@
 
             <!-- Сюда htmx вставляет модалки создания и управления -->
             <div id="modal"></div>
+            {# Второй слой модалок (design D10): модалка урока из вкладки
+               «Занятия» открывается поверх модалки управления группы —
+               та остаётся в `#modal` со своими несохранёнными полями. #}
+            <div id="modal-lesson"></div>
         </div>
     </main>
 {% endblock %}

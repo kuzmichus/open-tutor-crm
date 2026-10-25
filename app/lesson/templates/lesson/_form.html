@@ -3,17 +3,19 @@
    урока»).
 
    Общий шаблон на оба режима (`lesson_form_context`):
-   - создание — панель расписания («Повторять урок»);
-   - редактирование — статус, блок «Для семьи», переключатель серии
-     и двухшаговые кнопки удаления (паттерн `group/_manage.html`).
+   - создание — панель расписания («Повторять урок») с пресетами
+     «До даты» из настроек календаря репетитора;
+   - редактирование — статус, блок «Для семьи» и переключатель серии.
 
-   Две вкладки — две независимые формы (вложенные <form> в HTML
-   запрещены): панель «Урок» — форма с `hx-post` на урок и кнопкой
-   «Сохранить» внутри; панель «ДЗ» — отдельная форма `homework/_panel.html`
-   со своей кнопкой «Сохранить ДЗ» (спека homework-management). Заголовок
-   и футер («Удалить», «Серию», «Закрыть») — вне обеих форм, поэтому
-   футер остаётся видимым на любой вкладке. Переключение вкладок —
-   Alpine-состояние `activeTab` модалки (`lessonForm`, lessons.js).
+   Две вкладки полностью меняют содержимое диалога, включая кнопки:
+   панели «Урок» и «ДЗ» — две независимые формы (вложенные <form> в HTML
+   запрещены) с id `lesson-form` и `homework-panel`; кнопки сохранения
+   живут в футере модалки и связаны со «своей» формой атрибутом `form=`,
+   видимость переключает Alpine-состояние `activeTab` (`lessonForm`,
+   lessons.js). Футер — вне `.modal-body`, поэтому зафиксирован и не
+   скролится; на любой вкладке в нём одни и те же «Закрыть» и удаление
+   (двухшаговое, паттерн `group/_manage.html`), а акцентная кнопка меняет
+   подпись и форму: «Сохранить» ↔ «Сохранить ДЗ».
 
    В создании вкладка «ДЗ» видна, но `disabled`: клик не активирует её,
    панели ДЗ нет, запросы по ДЗ не отправляются (спека).
@@ -21,7 +23,7 @@
    форма не содержит осознанно (спека «Форма урока без игнорируемых полей»).
 
    Смена «Типа урока» переключает цель (ученик ↔ группа) и скрывает
-   оплату урока для группового: у каждого селекта свой Alpine-компонент
+   оплату у группового: у каждого селекта свой Alpine-компонент
    (`lessonTarget`), у модалки — `lessonForm` (см. app/static/lessons.js).
 
    Поле «Начало» управляет формой: под ним показывается подсказка
@@ -29,11 +31,12 @@
    пустое значение блокирует «Повторять урок» и «Добавить время», а при
    открытии нативного пикера минуты по умолчанию равны 00.
 
-   Контекст: title, subtitle, action, errors, form (type, duration_min,
+   Контекст: title, subtitle, action, modal_target, errors, form (type, duration_min,
    note, meeting_url, starts_at_value, price, until_date, status, rating,
    family_comment), student_id, student_name, group_id, group_name,
    lesson, series_id, type_labels, durations, statuses, status_labels,
-   weekdays, rating_stars, form_config, show_repeat, show_price_warning. #}
+   weekdays, rating_stars, form_config, show_repeat, price_locked,
+   until_presets. #}
 {% from "lesson/_target_select.html" import target_select %}
 <div class="modal-root"
      x-data="lessonForm()"
@@ -101,10 +104,12 @@
                 {% endif %}
             </div>
 
-            {# Форма урока: панель «Урок» со своей кнопкой «Сохранить»;
+            {# Форма урока: панель «Урок» (id нужен кнопке «Сохранить»
+               в футере — атрибут `form=`, вложенные формы запрещены);
                общие поля серии (series_all) уходят именно сюда. #}
-            <form hx-post="{{ action }}"
-                  hx-target="#modal"
+            <form id="lesson-form"
+                  hx-post="{{ action }}"
+                  hx-target="{{ modal_target }}"
                   hx-swap="innerHTML">
                 {# Подтверждение из календаря (`?ack_unavailable=1` вместе с
                    `starts_at`): форма несёт его скрытым полем, иначе сервер
@@ -248,6 +253,23 @@
                                            name="until_date" value="{{ form.until_date }}">
                                 </div>
                             </div>
+
+                            {# Быстрый выбор «До даты»: пресеты из настроек
+                               календаря репетитора (окончания четвертей,
+                               ближайшая будущая дата). Клик подставляет
+                               дату в поле — её можно поправить вручную. #}
+                            {% if until_presets %}
+                            <div class="until-presets" role="group"
+                                 aria-label="Быстрый выбор даты окончания">
+                                {% for preset in until_presets %}
+                                <button class="until-presets__chip" type="button"
+                                        title="{{ preset.title }}"
+                                        @click="setUntil('{{ preset.value }}')">
+                                    {{ preset.label }}
+                                </button>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </div>
                         {% endif %}
 
@@ -266,17 +288,15 @@
                             <input class="input" id="lesson-price" type="number" name="price"
                                    min="0" step="1"
                                    :disabled="type === 'group'"
+                                   {% if price_locked %}readonly{% endif %}
                                    value="{{ form.price }}"
-                                   placeholder="1200"
-                                   {% if show_price_warning %}@input="markPriceDirty($event.target.value)"{% endif %}>
-                            {% if show_price_warning %}
-                            {# Предупреждение видно до сохранения, как только
-                               оплата проведённого урока изменена (спека
-                               «Цены проведённого урока»). #}
-                            <p class="form-hint form-hint--warning"
-                               x-show="priceDirty" x-cloak>
-                                Оплата урока изменена: система проверит и пересчитает списание.
-                            </p>
+                                   placeholder="1200">
+                            {% if price_locked %}
+                            {# Проведённый урок уже в истории счёта: поле только
+                               для чтения, сервер цену из формы игнорирует
+                               (спека «Цена проведённого урока только для
+                               чтения») — списание не переписывается. #}
+                            <p class="form-hint">Урок проведён: оплата не изменяется.</p>
                             {% endif %}
                         </div>
                     </fieldset>
@@ -343,12 +363,6 @@
                     </div>
                     {% endif %}
                     {% endif %}
-
-                    <div class="field field--full">
-                        {# Кнопка submit — внутри формы урока: футер модалки
-                           («Удалить», «Серию», «Закрыть») — вне обеих форм. #}
-                        <button class="btn btn--primary" type="submit">Сохранить</button>
-                    </div>
                 </div>
             </form>
 
@@ -367,35 +381,52 @@
 
         <div class="modal-actions">
             {% if lesson %}
-            {# Двухшаговое подтверждение удаления (паттерн _manage.html):
-               первый клик переводит кнопку в состояние «Точно …» и ничего
-               не отправляет, второй — POST. #}
-            <button class="btn btn--destructive" type="button"
-                    x-show="!confirmingDelete"
-                    @click="confirmingDelete = true">
-                Удалить
-            </button>
-            <button class="btn btn--destructive" type="button"
-                    hx-post="/tutor/lessons/{{ lesson.id }}/delete"
-                    hx-target="#modal" hx-swap="innerHTML"
-                    x-show="confirmingDelete" x-cloak>
-                Точно удалить?
-            </button>
-            {% if series_id %}
-            <button class="btn btn--destructive" type="button"
-                    x-show="!confirmingSeriesDelete"
-                    @click="confirmingSeriesDelete = true">
-                Серию
-            </button>
-            <button class="btn btn--destructive" type="button"
-                    hx-post="/tutor/lessons/{{ lesson.id }}/delete-series"
-                    hx-target="#modal" hx-swap="innerHTML"
-                    x-show="confirmingSeriesDelete" x-cloak>
-                Точно серию?
-            </button>
-            {% endif %}
+            <div class="modal-actions__group">
+                {# Двухшаговое подтверждение удаления (паттерн _manage.html):
+                   первый клик переводит кнопку в состояние «Точно …» и ничего
+                   не отправляет, второй — POST. Иконка без подписи обязана
+                   называть действие в aria-label: состояние «Точно удалить?»
+                   читается словами. #}
+                <button class="btn btn--destructive btn--icon" type="button"
+                        aria-label="Удалить урок" title="Удалить урок"
+                        x-show="!confirmingDelete"
+                        @click="confirmingDelete = true">
+                    <i data-lucide="trash-2"></i>
+                </button>
+                <button class="btn btn--destructive" type="button"
+                        hx-post="/tutor/lessons/{{ lesson.id }}/delete"
+                        hx-target="{{ modal_target }}" hx-swap="innerHTML"
+                        x-show="confirmingDelete" x-cloak>
+                    Точно удалить?
+                </button>
+                {% if series_id %}
+                <button class="btn btn--destructive" type="button"
+                        x-show="!confirmingSeriesDelete"
+                        @click="confirmingSeriesDelete = true">
+                    <i data-lucide="trash-2"></i>
+                    Серию
+                </button>
+                <button class="btn btn--destructive" type="button"
+                        hx-post="/tutor/lessons/{{ lesson.id }}/delete-series"
+                        hx-target="{{ modal_target }}" hx-swap="innerHTML"
+                        x-show="confirmingSeriesDelete" x-cloak>
+                    Точно серию?
+                </button>
+                {% endif %}
+            </div>
             {% endif %}
             <button class="btn btn--ghost" type="button" @click="close()">Закрыть</button>
+            {# Кнопки сохранения — в зафиксированном футере и меняются вместе
+               с вкладкой: `form=` связывает каждую со своей формой панели,
+               видимость переключает `activeTab`. Без этого атрибута кнопка
+               вне <form> ничего бы не отправляла, а вложенные формы HTML
+               запрещены. #}
+            <button class="btn btn--primary" type="submit" form="lesson-form" x-show="activeTab === 'lesson'">Сохранить</button>
+            {% if lesson %}
+            {# `data-hw-save`: lessons.js по `htmx:afterSwap` панели ДЗ
+               показывает на ней состояние успеха (design D8). #}
+            <button class="btn btn--primary" type="submit" form="homework-panel" data-hw-save x-show="activeTab === 'hw'" x-cloak>Сохранить ДЗ</button>
+            {% endif %}
         </div>
     </div>
 </div>

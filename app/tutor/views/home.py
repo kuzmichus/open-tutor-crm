@@ -1,35 +1,36 @@
-"""Личный кабинет репетитора: карточка вошедшего и заглушка дашборда."""
+"""Главная страница репетитора: дашборд «сегодня» по референсу.
 
-from datetime import datetime
+Четыре стат-карточки и два списка («Расписание на сегодня», «Недавние
+платежи») считает `app/tutor/services/dashboard.py`; вьюха только
+проверяет доступ и складывает контекст. Карточка профиля живёт на
+отдельной странице `/tutor/profile` — сайдбар ссылается на неё из футера.
+"""
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
+from app.common.access import LoginRequired, require_tutor_id
 from app.database import get_db
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
-from app.tutor.services.sessions import COOKIE_NAME, SessionService
+from app.tutor.services.dashboard import dashboard_context
 
 router = APIRouter()
 
-_sessions = SessionService()
-
 
 @router.get("/tutor/", response_class=HTMLResponse)
-def home(request: Request, db: Session = Depends(get_db)):
-    """Карточка вошедшего репетитора; без сессии — редирект на вход."""
-    tutor_id = _sessions.get_tutor_id_from_request(db, request)
-    if tutor_id is None:
-        return RedirectResponse(url="/tutor/login", status_code=303)
-
+def home(
+    request: Request,
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+):
+    """Дашборд главной; без сессии — редирект на вход (LoginRequired)."""
     tutor = db.get(Tutor, tutor_id)
     if tutor is None:
         # Сессия указывает на удалённого репетитора — считаем входа нет.
-        _sessions.delete(db, request.cookies.get(COOKIE_NAME))
-        return RedirectResponse(url="/tutor/login", status_code=303)
+        raise LoginRequired()
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return templates.TemplateResponse(
-        request, "tutor/home.html", {"tutor": tutor, "now": now}
-    )
+    context = dashboard_context(db, tutor)
+    context["tutor"] = tutor
+    return templates.TemplateResponse(request, "tutor/home.html", context)

@@ -26,6 +26,7 @@ from app.finance.models.account_operation import (
     PAYMENT_STATUS_LABELS,
     AccountOperation,
 )
+from app.finance.models.expense import EXPENSE_CATEGORY_LABELS
 from app.finance.services.balance import signed_amount
 
 # Типографский минус (U+2212), а не дефис-минус: в числах он читается
@@ -106,6 +107,11 @@ def payment_method_label(method: str | None) -> str:
     return PAYMENT_METHOD_LABELS.get(method or "", method or "")
 
 
+def expense_category_label(category: str | None) -> str:
+    """Подпись категории расхода: «Аренда», «Реклама», …; вне списка — как есть."""
+    return EXPENSE_CATEGORY_LABELS.get(category or "", category or "")
+
+
 def lessons_count_label(count: int) -> str:
     """«1 занятие» / «2 занятия» / «5 занятий» — русская плюрализация.
 
@@ -150,6 +156,7 @@ def register_template_helpers() -> None:
         operation_kind_label=operation_kind_label,
         payment_status_label=payment_status_label,
         payment_method_label=payment_method_label,
+        expense_category_label=expense_category_label,
         operation_datetime=operation_datetime,
         lessons_count_label=lessons_count_label,
     )

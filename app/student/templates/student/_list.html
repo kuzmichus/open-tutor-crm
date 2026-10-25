@@ -1,0 +1,136 @@
+{# Партиал списка учеников: панель долга, карточки и таблица.
+
+   Используется страницей списка и htmx-ответом; панель долга живёт здесь
+   же (design D2 change'а student-list-reference): переключатель «Показать
+   только их» — обычный запрос того же маршрута, и долг с карточками
+   перерисовываются одним ответом, числа не могут разойтись.
+
+   Вид «сетка/список» переключает Alpine-класс `students-grid--list` прямо
+   на контейнере `#students-grid`, и сервер об этом ничего не знает. Поэтому
+   обе разметки отдаются сразу (карточки и таблица), а видимость решает CSS:
+   в «список» карточки скрываются и показывается таблица зеброй. #}
+{% if debt %}
+<section class="students-debt" aria-label="Задолженность учеников">
+    <span class="students-debt__icon" aria-hidden="true">
+        <i data-lucide="users-round"></i>
+    </span>
+    <div class="students-debt__info">
+        <p class="students-debt__label">Общая задолженность</p>
+        <p class="students-debt__amount">{{ money(debt.total) }}</p>
+    </div>
+    <div class="students-debt__side">
+        <p class="students-debt__count">Должников <span>{{ debt.count }}</span></p>
+        <button class="students-debt__toggle" type="button"
+                hx-get="/tutor/students/list"
+                hx-include="#students-filters"
+                hx-target="#students-content"
+                hx-swap="innerHTML"
+                hx-vals='{"debtors": "{{ "0" if debtors else "1" }}"}'>
+            {{ "Показать всех" if debtors else "Показать только их" }}
+        </button>
+    </div>
+</section>
+{% endif %}
+
+{# Контейнер вида «сетка/список» — всегда в DOM (даже без учеников): в него
+   встаёт свежесозданная карточка (HX-Retarget `#students-grid`) и в нём
+   Alpine переключает вид. #}
+<div id="students-grid"
+     class="students-grid"
+     :class="view === 'list' ? 'students-grid--list' : ''">
+    {% if cards %}
+        {% for card in cards %}
+            {% include "student/_card.html" %}
+        {% endfor %}
+
+        <div class="students-table-wrap">
+            <table class="students-table">
+                <caption class="sr-only">Ученики: имя, уроки, баланс и статус</caption>
+                <thead>
+                    <tr class="students-table__head">
+                        <th class="students-table__th" scope="col">Фамилия и имя</th>
+                        <th class="students-table__th" scope="col">Контакты</th>
+                        <th class="students-table__th" scope="col">Класс/Школа</th>
+                        <th class="students-table__th students-table__th--num" scope="col">Уроки</th>
+                        <th class="students-table__th students-table__th--num" scope="col">Баланс</th>
+                        <th class="students-table__th" scope="col">Появился</th>
+                        <th class="students-table__th" scope="col">Первая оплата</th>
+                        <th class="students-table__th students-table__th--status" scope="col">Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for card in cards %}
+                    {% set student = card.student %}
+                    {# Строка целиком открывает ту же модалку, что и кнопка
+                       «Редактировать» на карточке. Enter работает через htmx-триггер,
+                       чтобы строка была доступна с клавиатуры. #}
+                    <tr class="students-table__row"
+                        id="student-row-{{ student.id }}"
+                        tabindex="0"
+                        hx-get="/tutor/students/{{ student.id }}/edit"
+                        hx-target="#modal"
+                        hx-swap="innerHTML"
+                        hx-trigger="click, keydown[key=='Enter']">
+                        <td class="students-table__cell">
+                            <span class="students-table__person">
+                                <span class="avatar" aria-hidden="true">{{ student_initials(student) }}</span>
+                                <span class="students-table__name">{{ student_full_name(student) }}</span>
+                            </span>
+                        </td>
+                        <td class="students-table__cell">
+                            {% if student.phone %}
+                            <span class="students-table__contact">{{ student.phone }}</span>
+                            {% endif %}
+                            {% if student.email %}
+                            <span class="students-table__contact">{{ student.email }}</span>
+                            {% endif %}
+                            {% if not student.phone and not student.email %}
+                            <span class="students-table__contact students-table__contact--empty">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="students-table__cell">
+                            {% if student.kind == 'child' and (student.grade or student.school) %}
+                            <span class="students-table__meta">
+                                {% if student.grade %}{{ student.grade }} класс{% if student.school %},{% endif %}{% endif %}
+                                {{ student.school or "" }}
+                            </span>
+                            {% else %}
+                            <span class="students-table__meta students-table__contact--empty">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="students-table__cell students-table__cell--num">{{ card.completed_count }}</td>
+                        <td class="students-table__cell students-table__cell--num">
+                            <span class="money-value{% if card.balance < 0 %} money-value--debt{% elif card.balance > 0 %} money-value--positive{% endif %}">
+                                {{ balance_label(card.balance) }}
+                            </span>
+                        </td>
+                        <td class="students-table__cell">{{ short_date_label(student.created_at, tutor) }}</td>
+                        <td class="students-table__cell">
+                            {% if card.first_payment_at %}
+                            {{ short_date_label(card.first_payment_at, tutor) }}
+                            {% else %}
+                            <span class="students-table__contact--empty">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="students-table__cell students-table__cell--status">
+                            <span class="chip chip--{{ student.status }}">{{ status_label(student.status) }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+        <div class="empty-state">
+            <i data-lucide="users"></i>
+            {% if q or status or debtors %}
+                <p class="empty-state__title">Ничего не найдено</p>
+                <p class="empty-state__text">Измените поисковый запрос или фильтр статуса.</p>
+            {% else %}
+                <p class="empty-state__title">Учеников пока нет</p>
+                <p class="empty-state__text">Добавьте первого ученика — карточка появится здесь.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>

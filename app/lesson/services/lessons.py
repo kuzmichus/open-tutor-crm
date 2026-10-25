@@ -25,21 +25,32 @@ from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import (
     local_week_bounds,
+    now_utc,
     today_local,
     to_local,
 )
 from app.group.models.group import Group
 from app.lesson.models.lesson import Lesson
+from app.lesson.services.unmarked import is_unmarked
 from app.student.models.student import Student
 from app.tutor.services.clock import as_utc
 
 # Значения фильтра-чипа периода; пусто — «Все» (спека: Все/Сегодня/На этой неделе).
 FILTER_PERIODS = ("", "today", "week")
 
+# Значения селекта статуса; пусто — «Все статусы», «unmarked» — прошедшие
+# уроки, не отмеченные как проведённые (change unmarked-lessons).
+FILTER_STATUSES = ("", "unmarked")
+
 
 def normalize_period(period: str) -> str:
     """Значение фильтра периода из query: неизвестное схлопывается в «Все»."""
     return period if period in FILTER_PERIODS else ""
+
+
+def normalize_status(status: str) -> str:
+    """Значение селекта статуса из query: неизвестное — «Все статусы»."""
+    return status if status in FILTER_STATUSES else ""
 
 
 def _matches_search(
@@ -58,6 +69,7 @@ def list_lessons(
     *,
     q: str = "",
     period: str = "",
+    status: str = "",
     student_id: str = "",
     tutor,
 ) -> list[dict]:
@@ -81,6 +93,10 @@ def list_lessons(
 
     needle = q.strip().casefold()
     period = normalize_period(period)
+    status = normalize_status(status)
+    # Момент «сейчас» один на всю выборку: строки не должны расходиться
+    # в том, что уже «прошло», посреди одного запроса.
+    moment = now_utc()
 
     # Границы считаются в зоне педагога (design D3): «сегодня» — локальная
     # дата, «неделя» — интервал UTC, вычисленный из локального понедельника.
@@ -99,6 +115,8 @@ def list_lessons(
         if period == "week" and not (
             week_start <= as_utc(lesson.starts_at) < week_end
         ):
+            continue
+        if status == "unmarked" and not is_unmarked(lesson, now=moment):
             continue
         student_name = (
             " ".join(part for part in (first_name, last_name) if part)

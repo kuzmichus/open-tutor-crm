@@ -36,6 +36,12 @@
     --success-foreground: #FFFFFF;      /* not specified — chosen: белый */
     --overlay: rgba(23, 23, 27, 0.45);  /* not specified — chosen: тёмный veil для off-canvas */
 
+    /* Предупреждающий баннер (напоминание о не отмеченных уроках).
+       finance-banner ссылается на эти же токены с fallback. */
+    --warning-soft: #FBF2D7;            /* тёплый жёлтый фон плашки */
+    --warning-border: #EFDFAF;
+    --warning-fg: #7A5514;              /* не указано — выбран: тёмный оттенок тона */
+
     /* Границы, фокус */
     --border: #E4E3DF;
     --input: #E4E3DF;
@@ -59,6 +65,17 @@
     --status-unplanned-fg: #166B58;
     --status-rescheduled-fg: #7A5514;
     --status-regular-fg: #26457F;
+
+    /* Дашборд главной: тинты иконок стат-карточек (свой набор, не статусы
+       уроков — семантика unrelated). Фиолетового в палитре статусов нет. */
+    --stat-blue: #DBE9FF;
+    --stat-blue-fg: #26457F;
+    --stat-green: #C9EEE5;
+    --stat-green-fg: #166B58;
+    --stat-orange: #F7E6C3;
+    --stat-orange-fg: #7A5514;
+    --stat-purple: #E8DFF6;
+    --stat-purple-fg: #5B3A8E;
 
     /* Карточка слота (спека slot-booking): собственный цвет, не цвета учеников */
     --cal-slot-accent: #3A7CA5;
@@ -136,6 +153,11 @@
     --success-foreground: #0E0E11;
     --overlay: rgba(0, 0, 0, 0.6);
 
+    /* Предупреждающий баннер: та же схема пастели, что у статусов. */
+    --warning-soft: rgba(247, 230, 195, 0.12);
+    --warning-border: rgba(247, 230, 195, 0.35);
+    --warning-fg: #E7C88A;
+
     --border: #26262B;
     --input: #26262B;
     --ring: #C97A4F;
@@ -157,6 +179,16 @@
     --status-unplanned-fg: #86DCC8;
     --status-rescheduled-fg: #E7C88A;
     --status-regular-fg: #A9C6F5;
+
+    /* Дашборд главной: приглушённая пастель — та же схема, что у статусов. */
+    --stat-blue: rgba(219, 233, 255, 0.16);
+    --stat-blue-fg: #A9C6F5;
+    --stat-green: rgba(201, 238, 229, 0.16);
+    --stat-green-fg: #86DCC8;
+    --stat-orange: rgba(247, 230, 195, 0.16);
+    --stat-orange-fg: #E7C88A;
+    --stat-purple: rgba(232, 223, 246, 0.16);
+    --stat-purple-fg: #CBB4EE;
 
     --cal-slot-accent: #7FB3D4;         /* слот: осветлённый стальной для контраста */
 
@@ -744,6 +776,372 @@
   }
 
   /* ==========================================================================
+     Настройки репетитора (/tutor/profile): табы, карточки, переключатели
+     ========================================================================== */
+
+  /* Ссылка «Назад» над заголовком */
+  .settings-back {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 3);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+
+    & [data-lucide] {
+      width: 16px;
+      height: 16px;
+    }
+
+    &:hover { color: var(--foreground); }
+  }
+
+  /* Табы настроек: строка на всю ширину, на узких экранах переносятся */
+  .settings-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    margin-bottom: calc(var(--space) * 4);
+
+    & .tab { flex: 1 1 auto; }
+  }
+
+  /* Карточка вкладки; между карточками — вертикальный зазор */
+  .settings-card {
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  /* Двухколоночная сетка полей вкладки (с телефона — одна колонка) */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+    margin-top: calc(var(--space) * 4);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* Поле на всю ширину сетки («О себе») */
+  .form-grid__full {
+    grid-column: 1 / -1;
+  }
+
+  /* Футер формы вкладки: действие справа (--start — слева, как у
+     карточки «Безопасность» референса) */
+  .settings-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: calc(var(--space) * 5);
+  }
+
+  .settings-actions--start {
+    justify-content: flex-start;
+  }
+
+  /* Список строк-переключателей (вкладка «Уведомления») */
+  .settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    margin-top: calc(var(--space) * 4);
+  }
+
+  /* Строка настройки: текст слева, переключатель справа */
+  .switch-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: calc(var(--space) * 4);
+    padding: calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .switch-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    min-width: 0;
+  }
+
+  .switch-row__title {
+    font-weight: 500;
+  }
+
+  .switch-row__desc {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .switch-row__params {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 3);
+    margin-top: calc(var(--space) * 2);
+  }
+
+  .switch-row__param-label {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Секция мессенджера (вкладка «Мессенджеры»): шапка «название + статус»,
+     ниже — поле токена и подсказка */
+  .messenger {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .messenger__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+  }
+
+  .messenger__name {
+    font-weight: 500;
+  }
+
+  /* Статус-пилюля: базовый стиль нейтральный, модификаторы красят текст */
+  .messenger__status {
+    flex: none;
+    padding: calc(var(--space) * 1) calc(var(--space) * 2);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  .messenger__status--on {
+    color: var(--success);
+  }
+
+  .messenger__status--off {
+    color: var(--destructive);
+  }
+
+  .messenger__status--soon {
+    color: var(--muted-foreground);
+  }
+
+  .messenger__hint {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  /* Переключатель: чекбокс со стилизованным треком. Состояние —
+     соседним селектором `input:checked + .switch__track`. */
+  .switch {
+    display: inline-flex;
+    flex: none;
+    cursor: pointer;
+  }
+
+  .switch__track {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    border: 1px solid var(--border);
+    transition: background-color var(--duration-fast) var(--ease),
+                border-color var(--duration-fast) var(--ease);
+  }
+
+  .switch__track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-full);
+    background: var(--background);
+    box-shadow: var(--shadow-card);
+    transition: transform var(--duration-fast) var(--ease);
+  }
+
+  .switch input:checked + .switch__track {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+
+  .switch input:checked + .switch__track::after {
+    transform: translateX(20px);
+    background: var(--primary-foreground);
+  }
+
+  .switch input:focus-visible + .switch__track {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* ==========================================================================
+     Дашборд главной (/tutor/): стат-карточки и два списка дня
+     ========================================================================== */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+    margin-bottom: calc(var(--space) * 5);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: calc(var(--space) * 5);
+  }
+
+  .stat-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .stat-card__label {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .stat-card__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--muted-foreground);
+
+    & [data-lucide] { width: 18px; height: 18px; }
+  }
+
+  .stat-card__icon--blue   { background: var(--stat-blue);   color: var(--stat-blue-fg); }
+  .stat-card__icon--green  { background: var(--stat-green);  color: var(--stat-green-fg); }
+  .stat-card__icon--orange { background: var(--stat-orange); color: var(--stat-orange-fg); }
+  .stat-card__icon--purple { background: var(--stat-purple); color: var(--stat-purple-fg); }
+
+  .stat-card__value {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-card__caption {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .home-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .home-panel {
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: calc(var(--space) * 5);
+  }
+
+  .home-panel__title {
+    font-size: var(--text-base);
+    font-weight: 600;
+    margin-bottom: calc(var(--space) * 3);
+  }
+
+  .home-panel__list {
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .home-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3) 0;
+    border-top: 1px solid var(--border);
+
+    &:first-child { border-top: 0; }
+  }
+
+  .home-row__main {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space));
+    min-width: 0;
+  }
+
+  .home-row__name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .home-row__meta {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .home-row__time {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  /* Сумма платежа — всегда «+»: в блок только оплаченные платежи. */
+  .home-row__amount {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--success);
+    white-space: nowrap;
+  }
+
+  .home-empty {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+    padding: calc(var(--space) * 4) 0;
+  }
+
+
+  /* ==========================================================================
      Табы (segmented control)
      ========================================================================== */
   .tabs {
@@ -1124,6 +1522,33 @@
     min-width: 160px;
   }
 
+  /* Быстрые пресеты «До даты» (значения — из настроек календаря
+     репетитора): строка чипов под полем «Дата окончания». */
+  .until-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 1);
+  }
+
+  .until-presets__chip {
+    padding: 0 calc(var(--space) * 2);
+    min-height: 26px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    font: inherit;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: border-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    &:hover {
+      border-color: var(--brand);
+      color: var(--brand);
+    }
+  }
+
   .rating-stars {
     display: inline-flex;
     gap: calc(var(--space) * 0.5);
@@ -1145,7 +1570,13 @@
     font-size: var(--text-sm);
   }
 
-  .rating-star input:checked + .rating-star__view {
+  /* Заливка «от начала»: активна выбранная звезда и все до неё.
+     `+` видит только соседа справа, поэтому «предыдущие» звёзды ловим
+     через `:has(~ …)`: метка, у которой правее есть метка с отмеченным
+     radio. Кнопка сброса («—», value="") никого не заливает — иначе
+     отметили бы все звёзды, стоящие левее неё. */
+  .rating-star:has(> input:checked) .rating-star__view,
+  .rating-star:has(~ .rating-star > input:checked:not([value=""])) .rating-star__view {
     color: var(--brand);
   }
 
@@ -1348,6 +1779,397 @@
     color: var(--muted-foreground);
   }
 
+  /* Колонки «Уроки»/«Баланс»: числа выровнены по правому краю колонки */
+  .students-table__th--num {
+    text-align: right;
+  }
+
+  .students-table__cell--num {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .students-table__person {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Тулбар списка: заголовок с переключателем вида, фильтры и «Удалённые» */
+  .students-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  .students-toolbar__main {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    margin-right: auto;
+  }
+
+  .students-toolbar__title {
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .students-toolbar__deleted {
+    flex: none;
+  }
+
+  /* Переключатель вида — две иконки; активная подсвечена (.btn--outline
+     уже красит .is-active, здесь только форма квадратной кнопки). */
+  .view-toggle__btn {
+    border-radius: var(--radius-md);
+  }
+
+  .filters__sort {
+    width: auto;
+    min-width: 150px;
+  }
+
+  /* ==========================================================================
+     Ученики: панель долга, деньги, модалки «Уроки», «Отчёт», «Доступ»
+     ========================================================================== */
+
+  /* Панель долга над списком (по референсу): мягкий красный фон из токенов */
+  .students-debt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 4);
+    margin-bottom: calc(var(--space) * 4);
+    padding: calc(var(--space) * 4) calc(var(--space) * 5);
+    border: 1px solid color-mix(in srgb, var(--destructive) 30%, transparent);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--destructive) 8%, transparent);
+  }
+
+  .students-debt__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    border-radius: var(--radius-full);
+    background: color-mix(in srgb, var(--destructive) 14%, transparent);
+    color: var(--destructive);
+
+    & [data-lucide] {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  .students-debt__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .students-debt__label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--destructive);
+  }
+
+  .students-debt__amount {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--destructive);
+  }
+
+  .students-debt__side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: calc(var(--space));
+    margin-left: auto;
+  }
+
+  .students-debt__count {
+    font-size: var(--text-sm);
+    color: var(--destructive);
+
+    & span {
+      display: inline-block;
+      min-width: 1.5em;
+      text-align: center;
+      font-weight: 700;
+    }
+  }
+
+  .students-debt__toggle {
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--text-sm);
+    color: var(--foreground);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  /* Деньги с окраской: долг — красным, плюс — зелёным (только токены) */
+  .money-value {
+    font-weight: 600;
+    color: var(--foreground);
+    white-space: nowrap;
+  }
+
+  .money-value--debt {
+    color: var(--destructive);
+  }
+
+  .money-value--positive {
+    color: var(--success);
+  }
+
+  /* Метрики карточки: «Проведено», следующий урок, «Осталось» */
+  .student-stats {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .student-stats__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--foreground);
+  }
+
+  .student-stats__label {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    min-width: 0;
+
+    & [data-lucide] {
+      width: 16px;
+      height: 16px;
+      flex: none;
+      color: var(--muted-foreground);
+    }
+  }
+
+  .student-stats__label--empty {
+    color: var(--muted-foreground);
+  }
+
+  /* Окно «Уроки» ученика: фиксированная высота тела. Смена чипа фильтра
+     меняет число строк, и модалка под их размер «прыгала»; теперь окно
+     постоянное — короткий список оставляет пустое место внизу, длинный
+     скроллится внутри (тело уже `overflow-y: auto`). `scrollbar-gutter`
+     держит место под скроллбар: его появление/скрытие не сдвигает контент. */
+  .modal-content--list {
+    height: min(30rem, 85dvh);
+
+    & .modal-body {
+      scrollbar-gutter: stable;
+    }
+  }
+
+  /* Модалка «Уроки»: строки занятий (по образцу вкладки группы) */
+  .student-lessons {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+
+  .student-lessons__list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .student-lesson {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    color: var(--card-foreground);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--accent);
+    }
+  }
+
+  .student-lesson__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .student-lesson__time {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-weight: 600;
+
+    & [data-lucide] {
+      width: 16px;
+      height: 16px;
+      color: var(--muted-foreground);
+    }
+  }
+
+  .student-lesson__meta {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Модалка «Отчёт»: навигация по месяцам и карточки-итоги */
+  .report {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+
+  .report-month {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+  }
+
+  .report-month__label {
+    font-weight: 600;
+  }
+
+  .report-month__nav {
+    border-radius: var(--radius-md);
+  }
+
+  .report-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--space) * 3);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .report-card {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space));
+    padding: calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+  }
+
+  .report-card__title {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+
+    & [data-lucide] {
+      width: 16px;
+      height: 16px;
+      flex: none;
+    }
+  }
+
+  .report-card__value {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: 700;
+  }
+
+  .report-card__note {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  /* Модалка «Доступ»: поясняющая плашка, пароль с генератором,
+     экран «данные один раз» */
+  .access-note {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 4);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+
+    & p {
+      margin: 0;
+    }
+
+    & [data-lucide] {
+      width: 16px;
+      height: 16px;
+      flex: none;
+      margin-top: 2px;
+      color: var(--muted-foreground);
+    }
+  }
+
+  /* Экран «данные показываются один раз»: предупреждение заметнее плашки */
+  .access-note--warn {
+    border-color: color-mix(in srgb, var(--warning-fg) 40%, transparent);
+    background: var(--warning-soft);
+  }
+
+  .access-password {
+    display: flex;
+    gap: calc(var(--space) * 2);
+
+    & .input {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  .access-password__generate {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .access-credentials {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+  }
+
+  .access-credentials__value {
+    margin: 0;
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
+
   /* На телефоне таблица теснеет: компактные отступы и шрифт. */
   @media (max-width: 639.98px) {
     .students-table {
@@ -1543,19 +2365,6 @@
     gap: calc(var(--space) * 2);
     font-size: var(--text-sm);
     color: var(--foreground);
-  }
-
-  /* Заглушка будущих модулей: нейтральная плашка без чисел */
-  .student-metrics {
-    padding: calc(var(--space) * 3);
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-md);
-    background: var(--muted);
-  }
-
-  .student-metrics__text {
-    font-size: var(--text-xs);
-    color: var(--muted-foreground);
   }
 
   .student-actions {
@@ -2052,6 +2861,15 @@
     background: var(--card);
   }
 
+  /* Левая группа футера модалки урока (удаление урока/серии): прижата
+     к левому краю, правые кнопки («Закрыть», сохранение) остаются справа. */
+  .modal-actions__group {
+    margin-right: auto;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
   /* ==========================================================================
      Счёт ученика (модуль finance)
      ========================================================================== */
@@ -2387,6 +3205,84 @@
     margin: 0;
     font-size: var(--text-xs, 0.75rem);
     color: var(--muted-foreground);
+  }
+
+  /* ==========================================================================
+     Занятия группы: вкладка «Занятия» модалки управления (модуль lesson)
+     ========================================================================== */
+  /* Панель — не форма: чипы статуса и список занятий-карточек.
+     Чипы переиспользуют `.period-chips` из дизайн-системы. */
+  .group-lessons {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+
+  .group-lessons__list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Строка-карточка — кнопка: клик открывает модалку урока во втором
+     слое (`#modal-lesson`), клавиатура получает фокус бесплатно. */
+  .group-lesson {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1.5);
+    width: 100%;
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    color: var(--card-foreground);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--brand);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--brand);
+      outline-offset: 1px;
+    }
+  }
+
+  .group-lesson__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+  }
+
+  /* Дата и интервал — моноширинные: цифры выровнены по разрядам,
+     как суммы в панели оплат. */
+  .group-lesson__time {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .group-lesson__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2) calc(var(--space) * 4);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .group-lesson__subject,
+  .group-lesson__hw {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 1.5);
+
+    & [data-lucide] {
+      width: 14px;
+      height: 14px;
+    }
   }
 
   .form-section {
@@ -3969,6 +4865,24 @@
     padding: calc(var(--space) * 4) calc(var(--space) * 4); /* 32px 16px */
   }
 
+  /* Ссылка «Назад» над заголовком страницы (по референсу списка учеников) */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space));
+    margin-bottom: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+    text-decoration: none;
+
+    & [data-lucide] {
+      width: 16px;
+      height: 16px;
+    }
+
+    &:hover { color: var(--foreground); }
+  }
+
   .page-header {
     display: flex;
     flex-direction: column;
@@ -4083,6 +4997,891 @@
     .main {
       padding-bottom: calc(var(--mobile-tabbar-h) + calc(var(--space) * 4));
     }
+  }
+
+  /* ==========================================================================
+     Напоминание о не отмеченных уроках (.notice-banner): предупреждающая
+     плашка вверху контента любой страницы кабинета. Разметку подгружает
+     партиал /tutor/notices в контейнер _notice_banner.html (change
+     unmarked-lessons); закрытие — Alpine, видимость управляется x-show.
+     ========================================================================== */
+  .notice-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 5);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius-md);
+    background: var(--warning-soft);
+    color: var(--warning-fg);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+
+  .notice-banner__icon {
+    display: inline-flex;
+    flex-shrink: 0;
+
+    & [data-lucide] { width: 16px; height: 16px; }
+  }
+
+  .notice-banner__body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+  }
+
+  .notice-banner__text {
+    font-weight: 500;
+  }
+
+  .notice-banner__dot {
+    margin: 0 calc(var(--space) * 1);
+    opacity: 0.7;
+  }
+
+  .notice-banner__link {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    margin-left: calc(var(--space) * 2);
+  }
+
+  .notice-banner__link:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .notice-banner__hint {
+    opacity: 0.85;
+  }
+
+  .notice-banner__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    cursor: pointer;
+
+    & [data-lucide] { width: 14px; height: 14px; }
+
+    &:hover { background: color-mix(in srgb, var(--warning-fg) 12%, transparent); }
+  }
+
+  /* ==========================================================================
+     Статистика (/tutor/stats): табы, KPI, риск, таблицы, периоды
+     ========================================================================== */
+  .stats-tabs {
+    margin-bottom: calc(var(--space) * 5);
+
+    /* Таб-чипы — ссылки, а не кнопки: сбрасываем оформление <a>. */
+    & .tab {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+  }
+
+  .stats-toolbar {
+    display: flex;
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .stats-forecast {
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .stats-forecast__title {
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .stats-duo {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 3);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .stats-duo__item {
+    padding: calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+  }
+
+  .stats-duo__label {
+    margin: 0 0 calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .stats-duo__value {
+    margin: 0 0 calc(var(--space) * 2);
+    font-size: var(--text-xl);
+    font-weight: 700;
+  }
+
+  .stats-duo__sub {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .stats-kpis {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+    margin-bottom: calc(var(--space) * 5);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  .stats-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .stats-kpi__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .stats-kpi__title {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .stats-kpi__icon {
+    display: inline-flex;
+    color: var(--muted-foreground);
+
+    & [data-lucide] { width: 18px; height: 18px; }
+  }
+
+  .stats-kpi__icon--up { color: var(--success); }
+  .stats-kpi__icon--info { color: var(--stat-blue-fg); }
+  .stats-kpi__icon--danger { color: var(--destructive); }
+
+  .stats-kpi__value {
+    margin: calc(var(--space) * 2) 0 0;
+    font-size: var(--text-xl);
+    font-weight: 700;
+  }
+
+  .stats-kpi__sub {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .stats-kpi__link {
+    margin-top: auto;
+    padding-top: calc(var(--space) * 2);
+    font-size: var(--text-xs);
+    color: var(--brand);
+    text-decoration: none;
+
+    &:hover { text-decoration: underline; }
+  }
+
+  .stats-risk {
+    border: 1px solid var(--warning-border);
+  }
+
+  .stats-risk__head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--warning-fg);
+
+    & [data-lucide] { width: 18px; height: 18px; }
+  }
+
+  .stats-risk__text {
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .stats-risk__list {
+    margin: 0;
+    padding-left: calc(var(--space) * 5);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+
+    & li { margin-bottom: calc(var(--space)); }
+  }
+
+  .stats-risk__ok {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--success);
+    text-align: center;
+  }
+
+  .stats-card__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  .stats-card__title {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .stats-filters {
+    flex: none;
+    margin-bottom: calc(var(--space) * 3);
+  }
+
+  .stats-filters__search {
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .stats-check {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+  }
+
+  .stats-hint {
+    margin: 0 0 calc(var(--space) * 4);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+
+  .stats-table-wrap {
+    overflow-x: auto;
+  }
+
+  .stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .stats-table__th {
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  .stats-table__th--num,
+  .stats-table__cell--num { text-align: right; }
+
+  .stats-table__row {
+    border-bottom: 1px solid var(--border);
+
+    &:last-child { border-bottom: none; }
+  }
+
+  .stats-table__cell {
+    padding: calc(var(--space) * 3);
+    vertical-align: middle;
+  }
+
+  .stats-state {
+    display: inline-flex;
+    align-items: center;
+    margin-top: calc(var(--space));
+    padding: 0 calc(var(--space) * 2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    background: var(--card);
+    color: var(--muted-foreground);
+  }
+
+  .stats-state--active {
+    border-color: var(--status-unplanned);
+    background: var(--status-unplanned);
+    color: var(--status-unplanned-fg);
+  }
+
+  .stats-state--risk {
+    border-color: var(--status-rescheduled);
+    background: var(--status-rescheduled);
+    color: var(--status-rescheduled-fg);
+  }
+
+  .stats-state--lost { color: var(--muted-foreground); }
+
+  .stats-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    margin-top: calc(var(--space) * 4);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .stats-pagination__nav {
+    display: flex;
+    gap: calc(var(--space) * 2);
+  }
+
+  .stats-pagination__info {
+    color: var(--muted-foreground);
+  }
+
+  .stats-pagination__ghost {
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted-foreground);
+    opacity: 0.6;
+  }
+
+  .stats-period {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .stats-period__caption {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .stats-period__custom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  .stats-panel {
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .stats-panel__title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+
+    & [data-lucide] { width: 18px; height: 18px; }
+  }
+
+  .stats-num {
+    font-size: var(--text-sm);
+
+    & summary {
+      cursor: pointer;
+      font-weight: 500;
+      color: var(--brand);
+    }
+  }
+
+  .stats-num__list {
+    margin: calc(var(--space) * 2) 0 0;
+    padding-left: calc(var(--space) * 4);
+    font-weight: 400;
+    text-align: left;
+    color: var(--muted-foreground);
+
+    & li { margin-bottom: calc(var(--space)); }
+  }
+
+  .stats-reconcile {
+    margin: calc(var(--space) * 4) 0 0;
+    font-size: var(--text-sm);
+    color: var(--foreground);
+  }
+
+  /* ==========================================================================
+     Страница финансов (/tutor/finance): тулбар периода, карточки-сводки,
+     сравнение «заработано/получено», чип выбранного ученика в диалоге.
+     ========================================================================== */
+  .fin-toolbar {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .fin-toolbar__period {
+    max-width: 260px;
+  }
+
+  .fin-kpis {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+    margin-bottom: calc(var(--space) * 5);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  .fin-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-kpi__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-kpi__title {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .fin-kpi__icon {
+    display: inline-flex;
+    color: var(--muted-foreground);
+
+    & [data-lucide] { width: 18px; height: 18px; }
+  }
+
+  /* Тинты дашборда главной: те же пары, что у стат-карточек главной. */
+  .fin-kpi__icon--green { color: var(--stat-green-fg); }
+  .fin-kpi__icon--red { color: var(--destructive); }
+  .fin-kpi__icon--violet { color: var(--stat-purple-fg); }
+
+  .fin-kpi__value {
+    margin: calc(var(--space) * 2) 0 0;
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--foreground);
+  }
+
+  .fin-kpi__value--green { color: var(--success); }
+  .fin-kpi__value--red { color: var(--destructive); }
+  .fin-kpi__value--violet { color: var(--stat-purple-fg); }
+
+  .fin-kpi__sub {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-compare {
+    padding: calc(var(--space) * 4);
+  }
+
+  .fin-compare__title {
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-compare__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    gap: calc(var(--space) * 4);
+  }
+
+  .fin-compare__item {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+  }
+
+  .fin-compare__label {
+    margin: 0 0 calc(var(--space) * 2);
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-compare__value {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--foreground);
+  }
+
+  .fin-compare__value--green { color: var(--success); }
+
+  /* Минус-строка «− Расходы» и её сумма — красные: расход вычитается
+     из арифметики блока (референс страницы финансов). */
+  .fin-compare__value--red { color: var(--destructive); }
+
+  .fin-compare__label--minus { color: var(--destructive); }
+
+  .fin-compare__note {
+    margin: calc(var(--space) * 4) 0 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Корень сводки — обновляемый контейнер: после сохранения платежа блок
+     приходит заново целиком (design D6 finance-page). */
+  .fin-summary {
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  /* Чип выбранного ученика в диалоге «Доход»: появляется под полем выбора,
+     клик по крестику сбрасывает выбор (payments.js). */
+  .fin-student-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin-top: calc(var(--space) * 2);
+    padding: calc(var(--space) * 1) calc(var(--space) * 2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+    background: var(--card);
+
+    & [data-lucide] { width: 16px; height: 16px; color: var(--muted-foreground); }
+  }
+
+  /* ==========================================================================
+     Секция операций страницы финансов: табы, таблица операций и карточка
+     «Балансы учеников» (справа от табов, по референсу).
+     ========================================================================== */
+
+  /* Двухколоночная раскладка: слева табы со списком, справа балансы.
+     minmax(0, 1fr) не даёт длинным именам растягивать колонку. */
+  .fin-operations__layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+    margin-bottom: calc(var(--space) * 5);
+
+    @media (min-width: 1024px) {
+      grid-template-columns: minmax(0, 1fr) 300px;
+      align-items: start;
+    }
+  }
+
+  .fin-operations__main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* Пять вкладок сегмента переносятся на узких экранах, а не сжимаются
+     в нечитаемые пилюли. */
+  .fin-operations__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: calc(var(--space) * 3);
+  }
+
+  /* Таблица операций: дата/тип/статус прячутся на телефоне — сумма и
+     заголовок важнее, широкий скролл на мобильном хуже неполной строки. */
+  .fin-ops {
+    padding: calc(var(--space) * 2) calc(var(--space) * 4);
+  }
+
+  .fin-ops__table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .fin-ops__head .fin-ops__th {
+    padding: calc(var(--space) * 2);
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  /* Дата/тип/статус прячутся на телефоне: заголовок и сумма важнее,
+     горизонтальный скролл таблицы хуже неполной строки. */
+  @media (max-width: 639px) {
+    .fin-ops__th--type,
+    .fin-ops__th--status,
+    .fin-ops__cell--type,
+    .fin-ops__cell--status {
+      display: none;
+    }
+  }
+
+  .fin-ops__th--amount,
+  .fin-ops__cell--amount {
+    text-align: right;
+  }
+
+  .fin-ops__row .fin-ops__cell {
+    padding: calc(var(--space) * 2);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+    vertical-align: top;
+  }
+
+  .fin-ops__row:last-child .fin-ops__cell {
+    border-bottom: 0;
+  }
+
+  .fin-ops__cell--title {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    min-width: 0;
+  }
+
+  .fin-ops__cell--date,
+  .fin-ops__cell--type {
+    white-space: nowrap;
+    color: var(--muted-foreground);
+  }
+
+  .fin-ops__icon {
+    display: inline-flex;
+    padding: calc(var(--space) * 1);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+
+    & [data-lucide] { width: 16px; height: 16px; }
+  }
+
+  .fin-ops__icon .fin-ops__amount--green { color: var(--success); }
+  .fin-ops__icon .fin-ops__amount--red { color: var(--destructive); }
+
+  .fin-ops__title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-weight: 500;
+    min-width: 0;
+  }
+
+  .fin-ops__comment {
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+
+  /* Бейдж статуса платежа: пара «тинт фона + цвет текста», как у
+     статусов карточки ученика. */
+  .fin-ops__status {
+    display: inline-flex;
+    padding: calc(var(--space) * 0.5) calc(var(--space) * 2);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .fin-ops__status--paid {
+    background: var(--stat-green);
+    color: var(--stat-green-fg);
+  }
+
+  .fin-ops__status--pending {
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  .fin-ops__status--cancelled {
+    background: var(--muted);
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+  }
+
+  .fin-ops__status--neutral {
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  .fin-ops__amount--green { color: var(--success); }
+
+  .fin-ops__amount--red { color: var(--destructive); }
+
+  /* Пустой период: сообщение вместо таблицы. */
+  .fin-ops__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 8) calc(var(--space) * 4);
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+
+    & p { margin: 0; }
+
+    & [data-lucide] { width: 28px; height: 28px; }
+  }
+
+  /* Заглушка вкладок «Аналитика»/«Прогноз на месяц»: разделы заявлены
+     референсом, данных пока нет. */
+  .fin-ops-stub {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 10) calc(var(--space) * 4);
+    color: var(--muted-foreground);
+
+    & [data-lucide] { width: 32px; height: 32px; }
+  }
+
+  .fin-ops-stub__title {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-ops-stub__note {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  /* Карточка «Балансы учеников»: должники и переплатчики с суммами сторон.
+     Список ограничен по высоте: при десятках учеников карточка не должна
+     вытягивать страницу, скролл внутри. */
+  .fin-balances {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 4);
+  }
+
+  .fin-balances__title {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-balances__section {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-balances__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .fin-balances__sum {
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .fin-balances__sum--red { color: var(--destructive); }
+  .fin-balances__sum--green { color: var(--success); }
+
+  .fin-balances__list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .fin-balances__row {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    min-width: 0;
+  }
+
+  .fin-balances__avatar {
+    width: 32px;
+    height: 32px;
+    font-size: var(--text-xs);
+  }
+
+  .fin-balances__name {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--text-sm);
+    color: var(--foreground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fin-balances__amount {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .fin-balances__amount--red { color: var(--destructive); }
+  .fin-balances__amount--green { color: var(--success); }
+
+  .fin-balances__empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
   }
 }
 

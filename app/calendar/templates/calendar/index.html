@@ -35,6 +35,7 @@
     <!-- Основной контент: карточка календаря на всю высоту -->
     <main class="main">
         <div class="main__container cal-page">
+            {% include "_notice_banner.html" %}
             <section class="card cal-card">
                 {# Корень Alpine-компонента живёт вне области подмены: htmx
                    меняет только содержимое #calendar-swap, состояние

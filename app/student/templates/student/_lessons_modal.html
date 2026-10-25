@@ -1,0 +1,41 @@
+{# Модалка «Уроки» ученика: список занятий с чипами статуса.
+
+   Чипы перезапрашивают тот же маршрут (hx-target — корень содержимого);
+   по заголовку `HX-Target` вьюха на такой запрос отвечает только партиалом
+   `_lessons_content.html`, а не этой модалкой: иначе модалка вложилась бы
+   сама в себя — фон темнел от второго оверлея, а крестик закрывал не тот
+   слой (ловушка наследования hx-target, как в `lesson/views/update.py`).
+
+   Клик по строке открывает стандартную модалку урока во втором слое
+   (`#modal-lesson`, design D10 — как диалоги счёта): сама модалка «Уроки»
+   остаётся открытой под ней, и после закрытия урока список не потерян.
+
+   Закрытие — локальное Alpine-состояние `open` (оверлей и Esc): модалка без
+   формы, и фабрика под неё не нужна.
+
+   Контекст: student, tutor, status, rows ({lesson, subject}). #}
+<div class="modal-root"
+     x-data="{ open: true }"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="open = false">
+    <div class="modal-overlay" @click="open = false"></div>
+
+    <div class="modal-content modal-content--list" role="dialog" aria-modal="true" aria-labelledby="student-lessons-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="student-lessons-title">Уроки: {{ student_full_name(student) }}</h2>
+                <p class="modal-subtitle">
+                    Список уроков ученика. Нажмите на урок, чтобы открыть его карточку.
+                </p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button" @click="open = false" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="modal-body">
+            {% include "student/_lessons_content.html" %}
+        </div>
+    </div>
+</div>

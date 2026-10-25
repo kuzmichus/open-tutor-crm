@@ -7,7 +7,7 @@
 
 from json import dumps
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.student.models.contact import Contact
@@ -16,6 +16,9 @@ from app.student.models.student_contact import StudentContact
 
 # Статусы, которые можно передать фильтром. Пустое значение = «не архивные».
 FILTERABLE_STATUSES = ("new", "active", "archived")
+
+# Варианты сортировки (по референсу — селект «По фамилии»): пусто = фамилия.
+SORT_OPTIONS = ("lastname", "firstname")
 
 
 def _matches_search(student: Student, needle: str) -> bool:
@@ -38,19 +41,37 @@ def _matches_search(student: Student, needle: str) -> bool:
     return needle in haystack.casefold()
 
 
+def normalize_sort(sort: str) -> str:
+    """Значение сортировки из query; неизвестное — «По фамилии» (умолчание)."""
+    return sort if sort in SORT_OPTIONS else "lastname"
+
+
 def list_students(
     db: Session,
     tutor_id: str,
     q: str = "",
     status: str = "",
+    sort: str = "lastname",
 ) -> list[Student]:
-    """Ученики репетитора с учётом поиска и фильтра по статусу."""
+    """Ученики репетитора с учётом поиска, фильтра статуса и сортировки.
+
+    «По фамилии» — `COALESCE(last_name, first_name)`: у ученика без фамилии
+    вместо неё встаёт имя, и «Петя» не проваливается в конец списка перед
+    всеми фамилиями (в SQLite ASC `NULL` шёл бы первым).
+    """
     stmt = select(Student).where(Student.tutor_id == tutor_id)
     if status in FILTERABLE_STATUSES:
         stmt = stmt.where(Student.status == status)
     else:
         stmt = stmt.where(Student.status != "archived")
-    stmt = stmt.order_by(Student.first_name, Student.last_name)
+
+    if normalize_sort(sort) == "firstname":
+        stmt = stmt.order_by(Student.first_name, Student.last_name)
+    else:
+        stmt = stmt.order_by(
+            func.coalesce(Student.last_name, Student.first_name),
+            Student.first_name,
+        )
     students = list(db.scalars(stmt).all())
 
     needle = q.strip().casefold()

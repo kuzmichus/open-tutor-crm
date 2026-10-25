@@ -41,6 +41,7 @@ from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import Lesson
 from app.student.models.student import Student
+from app.student.services.activation import activate_on_first_charge
 
 # SQL-выражение цены участника группы: индивидуальная цена перекрывает
 # общую (design D6). `coalesce` повторяет правило `charges.group_targets`
@@ -123,6 +124,10 @@ def recalculate(db: Session, tutor_id: str, student_id: str) -> int:
                 lesson_id=lesson.id,
             )
         )
+        # Backfill-списание — тоже «первый платный урок» для «нового»
+        # ученика: без хука кнопка «Пересчитать баланс» не активировала бы
+        # тех, чьи занятия прошли до появления счёта.
+        activate_on_first_charge(db, student_id)
         added += 1
 
     # Урок перестал быть проведённым — его списание больше не имеет смысла.
