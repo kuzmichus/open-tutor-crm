@@ -1,0 +1,143 @@
+# Публикация образа: только вручную, только с явно указанной версией.
+#
+# Почему не по тегу и не на push в main: автоматический push в реестр на каждый
+# merge засоряет теги, а ручной запуск — осознанное действие. Git-тег здесь
+# следствие публикации, а не её триггер: тег без образа невозможно отличить
+# от нормального без сверки с реестром.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия релиза, должна совпадать с version в pyproject.toml (например 0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Две одновременные публикации подрались бы за одни и те же теги в реестре.
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  # Сверка входа с манифестом идёт до сборки: опечатка в версии ловится
+  # дешёво, без мусорных тегов в реестре.
+  verify-version:
+    name: Сверка версии
+    runs-on: ubuntu-latest
+    outputs:
+      minor: ${{ steps.version.outputs.minor }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Сравнить вход с pyproject.toml
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          import tomllib
+
+          requested = os.environ["INPUT_VERSION"].strip()
+
+          # Форма x.y.z: минорный тег и git-тег выводятся из неё однозначно.
+          if not re.fullmatch(r"\d+\.\d+\.\d+", requested):
+              print(f"::error::Версия '{requested}' не в форме x.y.z")
+              sys.exit(1)
+
+          with open("pyproject.toml", "rb") as pyproject_file:
+              declared = tomllib.load(pyproject_file)["project"]["version"]
+
+          if requested != declared:
+              print(
+                  f"::error::Версия '{requested}' не совпадает с pyproject.toml "
+                  f"('{declared}'). Публикация прервана до сборки образа."
+              )
+              sys.exit(1)
+
+          minor = ".".join(requested.split(".")[:2])
+          print(f"Версия {requested} совпадает с манифестом; минорный тег {minor}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"minor={minor}\n")
+          PY
+
+  # Тот же набор проверок, что на push и pull_request. Отдельная джоба с
+  # `uses:`, а не копия шагов: правка в тестах не должна теряться в релизе.
+  checks:
+    name: Проверки
+    needs: verify-version
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Публикация образа
+    needs: [verify-version, checks]
+    runs-on: ubuntu-latest
+    # Ровно столько прав, сколько нужно: создать и запушить git-тег.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Полная история: тег ставится на конкретный коммит, и нужен origin
+          # для пуша тега.
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Войти в Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Собрать теги
+        id: tags
+        env:
+          VERSION: ${{ inputs.version }}
+          MINOR: ${{ needs.verify-version.outputs.minor }}
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          {
+            echo "image=kuzmichus/open-tutor-crm"
+            echo "list<<EOF"
+            echo "kuzmichus/open-tutor-crm:${VERSION}"
+            echo "kuzmichus/open-tutor-crm:${MINOR}"
+            echo "kuzmichus/open-tutor-crm:latest"
+            echo "kuzmichus/open-tutor-crm:sha-${SHORT_SHA}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # Только linux/amd64: решение владельца. Следствие — не нужен
+      # setup-qemu, сборка идёт нативно и не растягивается в разы.
+      - name: Собрать и опубликовать
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.tags.outputs.list }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Тег — последним шагом, после успешного push. При ошибке реестра шаг
+      # не выполнится, и тег в репозитории не появится.
+      - name: Создать git-тег релиза
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"

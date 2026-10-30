@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app import __version__ as APP_VERSION
 from app.booking.views import router as booking_router
 from app.cabinet.views import router as cabinet_router
 from app.calendar.views import router as calendar_router
@@ -40,7 +41,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Open Tutor CRM", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Open Tutor CRM", version=APP_VERSION, lifespan=lifespan)
     app.include_router(common_router)
     app.include_router(tutor_router)
     app.include_router(calendar_router)
