@@ -91,10 +91,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-        with:
-          # Полная история: тег ставится на конкретный коммит, и нужен origin
-          # для пуша тега.
-          fetch-depth: 0
 
       - uses: docker/setup-buildx-action@v4
 
@@ -133,13 +129,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Тег — последним шагом, после успешного push. При ошибке реестра шаг
-      # не выполнится, и тег в репозитории не появится.
-      - name: Создать git-тег релиза
+      # Релиз — последним шагом, после успешного push образа. `gh release
+      # create` сам создаёт тег v<version> на --target (отдельный git tag
+      # не нужен): при ошибке реестра шаг не выполнится, и ни релиза,
+      # ни тега в репозитории не появится. Повторный запуск на той же
+      # версии упадёт — существующий релиз не затирается.
+      - name: Создать релиз GitHub
         env:
           VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${VERSION}" -m "Release v${VERSION}"
-          git push origin "v${VERSION}"
+          gh release create "v${VERSION}" \
+            --target "$GITHUB_SHA" \
+            --title "v${VERSION}" \
+            --notes "Образ: \`docker pull kuzmichus/open-tutor-crm:${VERSION}\`" \
+            --generate-notes

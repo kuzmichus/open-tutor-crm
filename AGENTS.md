@@ -238,7 +238,8 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000  # запуск сервер�
 - **Публикация только ручная.** `.github/workflows/release.yml` запускается через
   `workflow_dispatch` с обязательным `version`, сверяет её с манифестом, вызывает
   `ci.yml` целиком, публикует `linux/amd64` с четырьмя тегами и последним шагом
-  создаёт git-тег `v<version>`. Секреты `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`
+  создаёт релиз GitHub (`gh release create --generate-notes` — он же ставит
+  git-тег `v<version>`). Секреты `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`
   используются только в этом workflow — не переносите их в `ci.yml`.
 
 ## Требования к изменениям
