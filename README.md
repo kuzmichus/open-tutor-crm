@@ -268,6 +268,47 @@ docker run -d --name open-tutor-crm \
 * * * * * docker run --rm -v open_tutor_data:/data open-tutor-crm python cron.py
 ```
 
+### Готовый образ и релизы
+
+Собранный образ публикуется в Docker Hub как
+[`kuzmichus/open-tutor-crm`](https://hub.docker.com/r/kuzmichus/open-tutor-crm)
+(только `linux/amd64`). Если не хочется собирать локально — скачайте нужный тег:
+
+```bash
+docker pull kuzmichus/open-tutor-crm:0.1.0    # точная версия
+docker pull kuzmichus/open-tutor-crm:0.1      # последняя в минорной ветке
+docker pull kuzmichus/open-tutor-crm:latest   # последний выпуск
+```
+
+У каждого выпуска четыре тега: точная версия (`0.1.0`), минорная (`0.1`),
+`latest` и `sha-<короткий SHA коммита>`. Дальше — те же шаги, что и при локальной
+сборке: одноразовый контейнер с `alembic upgrade head`, затем запуск сервиса.
+
+**Публикация только вручную.** Workflow `.github/workflows/release.yml` запускается
+на странице Actions → **Release** → «Run workflow» и требует заполнить поле `version`.
+(Кнопка появляется после того, как workflow попал в default-ветку `main`.) Версия
+обязана совпадать с `version` в `pyproject.toml` — иначе публикация прерывается
+до сборки, чтобы в реестре не появлялись мусорные теги. Порядок шагов: тот же
+набор проверок, что и на push → сборка и push образа → релиз GitHub с
+автоматически собранными release notes. Релиз создаётся последним и заодно
+ставит тег `v<version>`: при ошибке реестра не появится ни релиза, ни тега.
+
+Для публикации в настройках репозитория (Settings → Secrets and variables →
+Actions) должны быть два секрета:
+
+| Секрет | Значение |
+|---|---|
+| `DOCKERHUB_USERNAME` | логин Docker Hub |
+| `DOCKERHUB_TOKEN` | access token с правами Read/Write на `kuzmichus/open-tutor-crm` |
+
+Секреты доступны только workflow публикации: `ci.yml` запускается из форков
+без них, а `pull_request_target` в проекте не используется.
+
+Чтобы выпустить новую версию, поднимите `version` в `pyproject.toml`, закоммитьте,
+дождитесь зелёных проверок на PR и запустите `release.yml` с той же версией.
+Версия приложения (`app.version`, `info.version` в OpenAPI) читается из
+`pyproject.toml`, поэтому больше нигде править её не нужно.
+
 ### Обновление
 
 ```bash
@@ -624,6 +665,20 @@ Issues и pull request'ы приветствуются. Перед PR:
 1. Прочитайте [AGENTS.md](AGENTS.md) — там архитектурные правила проекта.
 2. Добавьте тесты на новое поведение.
 3. Убедитесь, что `uv run pytest -n auto` зелёный, а миграции созданы через autogenerate.
+
+**Автоматические проверки** запускаются на каждый push и pull request
+(`.github/workflows/ci.yml`) и идут параллельно:
+
+| Проверка | Что делает |
+|---|---|
+| Тесты | `uv sync --frozen` и `uv run pytest -n auto` |
+| Lock-файл | `uv lock --check` — `pyproject.toml` и `uv.lock` не разъехались |
+| Схема миграций | `alembic upgrade head` на пустой базе и `alembic check` — модель без миграции даёт красный PR |
+| Линт | `ruff check --select E9,F63,F7,F82` — синтаксис и неопределённые имена |
+| Сборка образа | `docker build` и запуск контейнера со смоук-проверкой `GET /health` |
+
+Тот же набор вызывается перед публикацией образа, поэтому красные тесты не
+могут уехать в релиз. Повторный push в ту же ветку отменяет предыдущий прогон.
 
 Вопросы и предложения — в Telegram: [@opentutorcrm](https://t.me/opentutorcrm).
 

@@ -208,11 +208,47 @@ uv run python scripts/build_icons.py      # пересобрать набор и
 uv run uvicorn main:app --host 0.0.0.0 --port 8000  # запуск сервера
 ```
 
+## Проверки и релиз (GitHub Actions)
+
+`.github/workflows/ci.yml` — переиспользуемый workflow с триггерами `push`,
+`pull_request` и `workflow_call`. Джобы (все — только чтение репозитория):
+
+| Джоба | Команда |
+|---|---|
+| `tests` | `uv sync --frozen`, `uv run pytest -n auto` |
+| `lock` | `uv lock --check` |
+| `migrations` | `alembic upgrade head` + `alembic check` на `sqlite:///./ci-check.db` |
+| `lint` | `uvx ruff@0.15.20 check --select E9,F63,F7,F82 app/ tests/ main.py cron.py` |
+| `docker` | `docker/build-push-action` (`push: false`) и смоук `GET /health` в контейнере |
+
+Правила, которые из этого следуют:
+
+- **Линт узкий намеренно.** Широкий набор ruff сейчас красный, `ruff format`
+  затронул бы 239 файлов — это отдельная задача. Версия ruff пинуется в
+  workflow, а не в `pyproject.toml`, чтобы не трогать `uv.lock`.
+- **`alembic check` — не формальность.** Он сравнивает модели со схемой,
+  поэтому правка модели без миграции даёт красный PR. Новый домен или поле —
+  всегда с autogenerate-миграцией.
+- **Новый каталог в корне** должен попасть в `COPY` рантайм-стадии `Dockerfile`:
+  смоук-проверка контейнера ловит забытый путь.
+- **Версия — только в `pyproject.toml`.** `app/__init__.py` и `main.py` читают её
+  через `tomllib`, отдельного литерала в коде нет (закреплено
+  `tests/test_app_version.py`). `pyproject.toml` копируется в рантайм-образ
+  именно ради этого.
+- **Публикация только ручная.** `.github/workflows/release.yml` запускается через
+  `workflow_dispatch` с обязательным `version`, сверяет её с манифестом, вызывает
+  `ci.yml` целиком, публикует `linux/amd64` с четырьмя тегами и последним шагом
+  создаёт релиз GitHub (`gh release create --generate-notes` — он же ставит
+  git-тег `v<version>`). Секреты `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`
+  используются только в этом workflow — не переносите их в `ci.yml`.
+
 ## Требования к изменениям
 
 - Тесты в `tests/` должны оставаться зелёными (`uv run pytest -n auto`).
 - Новый домен/поведение — с тестами, включая изоляцию по репетитору.
 - Миграции создаются через autogenerate и применяются штатно (`alembic upgrade head`).
+- Изменение модели без миграции, правка `pyproject.toml` без `uv lock` и
+  синтаксическая ошибка валят CI — проверяйте локально до push.
 - Новый BEM-класс в шаблоне — с правилом в `app/static/styles.css`.
 - Модули и функции сопровождаются docstring'ами на русском; комментарии объясняют
   **почему** так сделано (инвариант, ловушка, решение), а не пересказывают код.

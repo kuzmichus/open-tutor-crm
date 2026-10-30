@@ -32,7 +32,9 @@ RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 WORKDIR /app
 
 COPY --from=deps --chown=app:app /app/.venv ./.venv
-COPY --chown=app:app alembic.ini cron.py main.py ./
+# pyproject.toml нужен и в рантайме: из него читается версия приложения
+# (app/__init__.py), иначе образ, git-тег релиза и app.version расходятся.
+COPY --chown=app:app pyproject.toml alembic.ini cron.py main.py ./
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app app ./app
 
