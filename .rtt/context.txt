@@ -1,4 +1,4 @@
-# rtt index | generated 2026-10-30 15:25 | 578 files | 159000 tokens
+# rtt index | generated 2026-10-30 20:42 | 579 files | 159104 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -146,6 +146,7 @@ def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
 
 # app/__init__.py [python]
+imports: tomllib, pathlib.Path
 
 # app/booking/__init__.py [python]
 
@@ -3939,6 +3940,12 @@ def expect_integrity_error()  # Контекст: `session.commit()` обяза�
 def slot_factory(tutor_factory)  # Создаёт окно для записи и возвращает его id.
 def booking_factory()  # Создаёт бронь окна и возвращает её id.
 def contact_factory(tutor_factory)  # Создаёт контакт взрослого в тестовой БД и возвращает его id.
+
+# tests/test_app_version.py [python]
+imports: tomllib, pathlib.Path, main.app
+def _manifest_version() -> str
+def test_openapi_version_matches_manifest()  # info.version` в OpenAPI совпадает с версией из манифеста проекта.
+def test_app_version_matches_manifest()  # app.version` совпадает с версией из манифеста проекта.
 
 # tests/test_booking_models.py [python]
 imports: datetime.UTC, datetime.datetime, pytest, app.booking.models.booking.ACTIVE_BOOKING_STATUSES, app.booking.models.booking.BOOKING_STATUSES, app.booking.models.booking.BOOKING_STATUS_LABELS, app.booking.models.booking.Booking, app.database.SessionLocal, app.slot.models.slot.Slot

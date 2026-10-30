@@ -227,3 +227,5 @@ __marimo__/
 node_modules/
 /test-result/
 /.playwright-cli/
+/.impeccable/
+/.zcode/
