@@ -33,8 +33,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Точная версия, а не мажор: у astral-sh/setup-uv нет плавающего тега
+      # v10 (см. комментарий в ci.yml).
       - name: Установить uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           python-version: "3.14"

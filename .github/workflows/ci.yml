@@ -27,8 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # У astral-sh/setup-uv нет плавающего мажорного тега (только vX.Y.Z и
+      # старые vX до 6): ссылка на v10 роняет джобу ещё на «Set up job»,
+      # поэтому пин к точной версии. Остальные экшены имеют мажорные теги.
       - name: Установить uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           python-version: "3.14"
@@ -45,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Установить uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           python-version: "3.14"
@@ -63,7 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Установить uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           python-version: "3.14"
@@ -84,7 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Установить uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           python-version: "3.14"
