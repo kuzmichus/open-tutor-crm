@@ -7,6 +7,8 @@
 
 from datetime import timedelta
 
+import pytest
+
 from app.database import SessionLocal
 from app.finance.models.account_operation import AccountOperation
 from app.lesson.models.lesson import Lesson
@@ -124,45 +126,38 @@ def test_completed_lesson_untouched(tutor_factory, student_factory, lesson_facto
     assert _charges(student_id) == []
 
 
-def test_boundary_just_over_24h_is_completed(
-    tutor_factory, student_factory, lesson_factory
-):
-    """Граница окна: конец урока сутки назад — завершается.
-
-    Начало за 24,5 часа с длительностью 30 минут даёт конец ровно сутки
-    назад; «сейчас» на запросе всегда чуть позже захваченного момента,
-    поэтому `<=` гарантированно срабатывает.
-    """
-    student_id = student_factory()
-    lesson_id = lesson_factory(
-        student_id=student_id,
-        status="planned",
-        starts_at=utcnow() - timedelta(hours=24, minutes=30),
-        duration_min=30,
-        price=1200,
-    )
-
-    assert _run_auto_complete() == 1
-    assert _lesson(lesson_id).status == "completed"
-
-
-def test_boundary_just_under_24h_is_kept(
-    tutor_factory, student_factory, lesson_factory
-):
-    """Конец урока меньше суток назад — урок ещё ждёт ручной отметки."""
-    student_id = student_factory()
-    lesson_id = lesson_factory(
-        student_id=student_id,
-        status="planned",
+@pytest.mark.parametrize(
+    ("hours", "minutes", "duration_min", "expected_runs", "expected_status"),
+    [
+        # Начало за 24,5 ч с длительностью 30 мин даёт конец ровно сутки назад;
+        # «сейчас» на запросе всегда чуть позже, поэтому `<=` срабатывает.
+        pytest.param(24, 30, 30, 1, "completed", id="just-over-24h"),
         # Конец = начало + 60 минут ≈ 23:59 назад — до автозавершения минута.
-        starts_at=utcnow() - timedelta(hours=24, minutes=59),
-        duration_min=60,
+        pytest.param(24, 59, 60, 0, "planned", id="just-under-24h"),
+    ],
+)
+def test_auto_complete_boundary(
+    hours,
+    minutes,
+    duration_min,
+    expected_runs,
+    expected_status,
+    tutor_factory,
+    student_factory,
+    lesson_factory,
+):
+    """Автозавершение включается ровно через сутки после конца урока."""
+    student_id = student_factory()
+    lesson_id = lesson_factory(
+        student_id=student_id,
+        status="planned",
+        starts_at=utcnow() - timedelta(hours=hours, minutes=minutes),
+        duration_min=duration_min,
         price=1200,
     )
 
-    assert _run_auto_complete() == 0
-    assert _lesson(lesson_id).status == "planned"
-
+    assert _run_auto_complete() == expected_runs
+    assert _lesson(lesson_id).status == expected_status
 
 def test_group_lesson_charges_members(
     tutor_factory, student_factory, group_factory, group_member_factory, lesson_factory

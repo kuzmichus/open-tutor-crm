@@ -1,0 +1,17 @@
+{# Двухколоночная форма рассылки: список получателей + панель текста.
+
+   Одна форма на обе колонки: чекбоксы учеников и текст уходят одним POST
+   и работают без JS (303-редирект). Фабрика `mailingsPage` живёт на форме
+   и держит выбор и текст: партиалы списка и композера перерисовываются
+   независимо (фильтры, шаблоны, ответ отправки), состояние не теряется.
+   Событие `mailing-sent` (успешная отправка) чистит текст и выбор. #}
+<form class="mailing-layout"
+      action="/tutor/mailings/send" method="post"
+      hx-post="/tutor/mailings/send"
+      hx-target="#mailing-composer" hx-swap="outerHTML"
+      x-data="mailingsPage()" data-text="{{ form_text }}"
+      @mailing-sent.window="text = ''; selected = []">
+    {% include "mailing/_recipients.html" %}
+
+    {% include "mailing/_composer.html" %}
+</form>

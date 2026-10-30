@@ -20,6 +20,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from app.common.services.forms import text_value
 from app.common.services.tutor_time import today_local
 from app.tutor.models.tutor import Tutor
 from app.unavailability.models.unavailability import (
@@ -44,14 +45,6 @@ class MarkRow:
 
     mark: object
     is_past: bool
-
-
-def _text(form, name: str) -> str:
-    """Значение поля формы как строка (нет значения — пустая строка)."""
-    value = form.get(name)
-    if not isinstance(value, str):
-        return ""
-    return value.strip()
 
 
 def _parse_date(raw: str) -> tuple[date | None, bool]:
@@ -85,12 +78,12 @@ def parse_unavailability_form(form) -> tuple[dict, list[str]]:
     Возвращает `(данные, ошибки)`; данные содержат только очищенные
     значения полей панели — режим решает, какие из них значимы.
     """
-    mode = _text(form, "mode") or "period"
-    reason = _text(form, "reason")
-    start_date, start_error = _parse_date(_text(form, "start_date"))
-    end_date, end_error = _parse_date(_text(form, "end_date"))
-    weekday, weekday_error = _parse_weekday(_text(form, "weekday"))
-    until_date, until_error = _parse_date(_text(form, "until_date"))
+    mode = text_value(form, "mode") or "period"
+    reason = text_value(form, "reason")
+    start_date, start_error = _parse_date(text_value(form, "start_date"))
+    end_date, end_error = _parse_date(text_value(form, "end_date"))
+    weekday, weekday_error = _parse_weekday(text_value(form, "weekday"))
+    until_date, until_error = _parse_date(text_value(form, "until_date"))
 
     data = {
         "mode": mode,
@@ -150,7 +143,7 @@ def parse_end_form(form) -> tuple[date | None, list[str]]:
     отметки, а режим определяет, какое поле записи менять (design.md D9).
     Пустое значение — бессрочно, без ошибки.
     """
-    new_end, error = _parse_date(_text(form, "new_end"))
+    new_end, error = _parse_date(text_value(form, "new_end"))
     if error:
         return None, ["Укажите корректный последний день."]
     return new_end, []

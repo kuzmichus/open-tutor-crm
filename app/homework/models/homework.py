@@ -19,6 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.constraints import sql_string_in
 from app.database import Base
 
 # Закрытый список статусов ДЗ (спека «Статусы ДЗ»): «Не задано» —
@@ -39,12 +40,6 @@ HOMEWORK_STATUS_LABELS = {
 }
 
 
-def _sql_string_in(column: str, values: tuple[str, ...]) -> str:
-    """`column IN ('a', 'b')` — строковый список для CHECK-ограничения."""
-    quoted = ", ".join(f"'{value}'" for value in values)
-    return f"{column} IN ({quoted})"
-
-
 class Homework(Base):
     """Домашнее задание одного урока: задание, срок, статус и материалы.
 
@@ -55,7 +50,7 @@ class Homework(Base):
     __tablename__ = "homework"
     __table_args__ = (
         CheckConstraint(
-            _sql_string_in("status", HOMEWORK_STATUSES),
+            sql_string_in("status", HOMEWORK_STATUSES),
             name="ck_homework_status",
         ),
     )

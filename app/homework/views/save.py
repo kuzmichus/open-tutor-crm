@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.homework.services.homework_context import homework_panel_context
 from app.homework.services.homework_form import parse_homework_form
@@ -65,7 +66,7 @@ async def save_homework_view(
             homework_panel_context(db, lesson, tutor=tutor, data=data, errors=errors),
         )
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url=LESSONS_URL, status_code=303)
     # Успех: переотрендеренная панель с сохранёнными значениями (design
     # D3) и кнопкой в состоянии успеха (D8); outerHTML подменяет панель

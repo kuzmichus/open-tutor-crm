@@ -1,82 +1,135 @@
-{# Секция операций страницы финансов: табы, список и балансы учеников.
+{# Секция операций страницы финансов: вкладки, панель вкладки и балансы.
 
    Корень — обновляемый контейнер: после сохранения платежа или расхода
    диалоги шлют `payment-saved`/`expense-saved`, и секция перезапрашивает
    себя целиком — строки, суммы и балансы всегда с сервера (паттерн
    `finance/_summary.html`).
 
-   Вкладки — обычные ссылки с query-параметром (период сохраняется):
-   страница работает без JS, состояние видно в адресе. «Аналитика» и
-   «Прогноз на месяц» — заглушки по референсу: показывают заглушку,
-   данных не запрашивают.
+   Вкладки переключаются без перезагрузки страницы: ссылка вкладки несёт
+   `hx-get` на ручку `/tutor/finance/tabs/{tab}` с `hx-target` на этот же
+   корень и `hx-swap="outerHTML"`. Ответ — та же секция с новой вкладкой,
+   поэтому подсветка, содержимое и адрес перезапроса приезжают вместе.
+   Адрес страницы двигает сервер (`HX-Push-Url` ответа вкладки), а `href`
+   ссылки остаётся для работы без JS.
 
-   Списки за период: платежи и возвраты — движение денег учеников, расходы
-   — траты репетитора; списания за уроки остаются в истории карточки
-   ученика (см. `operations_feed`).
+   «Аналитика» — графики (`finance/_analytics.html`, контекст
+   `services/analytics.py`), «Прогноз на месяц» — карточки прогноза
+   (`finance/_forecast.html`, контекст `services/forecast.py`), остальные
+   вкладки — лента операций за период.
 
-   Контекст: period (key), tab, tab_keys, tab_labels, tab_is_stub,
-   operations (строки-представления), debtors/debtors_total,
-   overpayers/overpayers_total. #}
+   Лента вкладки «Все операций» — все движения средств: платежи, возвраты,
+   расходы и списания за проведённые уроки (движение баланса ученика, а не
+   деньги репетитора — см. `operations_feed`). Над таблицей — чипсы фильтра
+   по виду операции (`kind` в адресе, тот же механизм hx-get/`HX-Push-Url`,
+   что у вкладок) и карточки итогов отфильтрованного набора; у остальных
+   лента-вкладок фильтра нет — вкладка сама и есть фильтр.
+
+   Рядом с вкладками — кнопка «Добавить» (диалог расхода): она внутри секции,
+   поэтому работает и после htmx-подмены, а контейнер `#modal-expense` лежит
+   вне секции и подменой не затрагивается.
+
+   Контекст: period (key), tab, kind, tab_labels, tabs (ссылки вкладок),
+   kind_links (чипсы, только на «Все операциях»), page_url, refresh_url,
+   operations (строки-представления), totals (карточки итогов), analytics
+   (контекст вкладки «Аналитика» или None), forecast (контекст вкладки
+   «Прогноз» или None), debtors/debtors_total, overpayers/overpayers_total,
+   oob. #}
 <div class="fin-operations" id="finance-operations"
-     hx-get="/tutor/finance/operations?period={{ period.key }}&tab={{ tab }}"
+     hx-get="{{ refresh_url }}"
      hx-trigger="payment-saved from:body, expense-saved from:body"
      hx-swap="outerHTML">
 
     <div class="fin-operations__layout">
         <div class="fin-operations__main">
-            {# Вкладки — ссылки: смена вкладки — переход с периодом в адресе. #}
-            <nav class="tabs fin-operations__tabs" aria-label="Разделы операций">
-                {% for key in tab_keys %}
-                <a class="tab{% if tab == key %} tab--active{% endif %}"
-                   href="/tutor/finance?period={{ period.key }}&tab={{ key }}">
-                    {{ tab_labels[key] }}
-                </a>
-                {% endfor %}
-            </nav>
+            <div class="fin-operations__head">
+                {% include "finance/_tabs.html" %}
 
-            {% if tab_is_stub %}
-            <section class="card fin-ops-stub" aria-label="{{ tab_labels[tab] }}">
-                <i data-lucide="chart-column" aria-hidden="true"></i>
-                <h2 class="fin-ops-stub__title">{{ tab_labels[tab] }}</h2>
-                <p class="fin-ops-stub__note">Раздел в разработке</p>
-            </section>
+                {# Диалог расхода дублируется у вкладок: на лента-вкладках он
+                   под рукой, на «Аналитике»/«Прогнозе» ленты нет — и кнопки
+                   тоже (кнопки в шапке страницы сохраняются). #}
+                {% if tab != "analytics" and tab != "forecast" %}
+                <button class="btn btn--primary btn--sm fin-operations__add"
+                        type="button"
+                        hx-get="/tutor/expenses/new"
+                        hx-target="#modal-expense"
+                        hx-swap="innerHTML">
+                    <i data-lucide="plus" aria-hidden="true"></i>
+                    Добавить
+                </button>
+                {% endif %}
+            </div>
+
+            {% if tab == "analytics" %}
+            {% include "finance/_analytics.html" %}
+            {% elif tab == "forecast" %}
+            {% include "finance/_forecast.html" %}
             {% else %}
             <section class="card fin-ops" aria-label="{{ tab_labels[tab] }}">
+                {# Чипсы фильтра — только на «Все операциях»: остальные
+                   вкладки сами являются фильтром. #}
+                {% if kind_links %}
+                <nav class="fin-ops__filters" aria-label="Фильтр по виду операции">
+                    {% for chip in kind_links %}
+                    <a class="fin-ops__chip{% if chip.active %} fin-ops__chip--active{% endif %}"
+                       href="{{ chip.href }}"
+                       hx-get="{{ chip.url }}"
+                       hx-target="#finance-operations"
+                       hx-swap="outerHTML"
+                       {% if chip.active %}aria-current="true"{% endif %}>
+                        {{ chip.label }}
+                    </a>
+                    {% endfor %}
+                </nav>
+                {% endif %}
+
+                {# Итоги отфильтрованного набора до лимита ленты: те же
+                   строки, что в таблице, разбитые по направлению денег. #}
+                {% if totals %}
+                <div class="fin-ops__totals">
+                    {% for card in totals %}
+                    <div class="fin-ops__total">
+                        <span class="fin-ops__total-label">{{ card.label }}</span>
+                        <span class="fin-ops__total-value {{ card.value_class }}">{{ card.value }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
                 {% if operations %}
                 <table class="fin-ops__table">
                     <thead class="fin-ops__head">
                         <tr>
-                            <th class="fin-ops__th" scope="col">Ученик / категория</th>
                             <th class="fin-ops__th" scope="col">Дата</th>
                             <th class="fin-ops__th fin-ops__th--type" scope="col">Тип</th>
-                            <th class="fin-ops__th fin-ops__th--status" scope="col">Статус</th>
+                            <th class="fin-ops__th" scope="col">Описание</th>
                             <th class="fin-ops__th fin-ops__th--amount" scope="col">Сумма</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in operations %}
                         <tr class="fin-ops__row">
-                            <td class="fin-ops__cell fin-ops__cell--title">
+                            <td class="fin-ops__cell fin-ops__cell--date">{{ row.date }}</td>
+                            <td class="fin-ops__cell fin-ops__cell--type">
+                                {{ row.kind_label }}
+                                {# Статус есть только у платежа — бейджем рядом
+                                   с видом операции, без отдельной колонки. #}
+                                {% if row.status_label %}
+                                <span class="fin-ops__status {{ row.status_class }}">{{ row.status_label }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="fin-ops__cell fin-ops__cell--desc">
                                 <span class="fin-ops__icon {{ row.amount_class }}">
                                     <i data-lucide="{{ row.icon }}" aria-hidden="true"></i>
                                 </span>
                                 <span class="fin-ops__title">
                                     {{ row.title }}
                                     {# Комментарий — подписью под заголовком:
-                                       что именно куплено или за что платёж. #}
+                                       что именно куплено, за что платёж или
+                                       какой это урок. #}
                                     {% if row.comment %}
                                     <span class="fin-ops__comment">{{ row.comment }}</span>
                                     {% endif %}
                                 </span>
-                            </td>
-                            <td class="fin-ops__cell fin-ops__cell--date">{{ row.date }}</td>
-                            <td class="fin-ops__cell fin-ops__cell--type">{{ row.kind_label }}</td>
-                            <td class="fin-ops__cell fin-ops__cell--status">
-                                {% if row.status_label %}
-                                <span class="fin-ops__status {{ row.status_class }}">{{ row.status_label }}</span>
-                                {% else %}
-                                <span class="fin-ops__status fin-ops__status--neutral">Проведено</span>
-                                {% endif %}
                             </td>
                             <td class="fin-ops__cell fin-ops__cell--amount {{ row.amount_class }}">
                                 {{ row.amount }}
@@ -95,7 +148,9 @@
             {% endif %}
         </div>
 
-        {# Балансы учеников — состояние на сейчас, а не за период. #}
+        {# Балансы учеников — состояние на сейчас, а не за период. От вкладки
+           они не зависят, поэтому при клике по вкладке остаются на месте:
+           подменяется только колонка выше. #}
         <aside class="card fin-balances" aria-label="Балансы учеников">
             <h2 class="fin-balances__title">Балансы учеников</h2>
 
@@ -151,3 +206,15 @@
         </aside>
     </div>
 </div>
+
+{# Ответ htmx на клик по вкладке: скрытые поля формы периода живут вне
+   секции, и без этой подмены следующая смена периода отправила бы прежнюю
+   вкладку (и потеряла горизонт «Аналитики» или месяц «Прогноза»).
+
+   Блок стоит на верхнем уровне ответа, рядом с подменяемым корнем: htmx
+   находит OOB-узлы по атрибуту в любом месте фрагмента, но так разметка
+   честно говорит, что это две независимые части ответа. На полной загрузке
+   страницы блок рендерит `index.html` — без `hx-swap-oob`. #}
+{% if oob %}
+{% include "finance/_period_state.html" %}
+{% endif %}

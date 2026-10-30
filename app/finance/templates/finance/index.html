@@ -58,7 +58,10 @@
                открытый раздел операций. #}
             <form class="fin-toolbar" method="get" action="/tutor/finance" x-data>
                 <label class="sr-only" for="fin-period">Период</label>
-                <input type="hidden" name="tab" value="{{ tab }}">
+                {# Скрытые поля вкладки и её состояния: при клике по вкладке
+                   htmx подменяет только секцию операций, а этот блок
+                   приезжает в ответе через `hx-swap-oob`. #}
+                {% include "finance/_period_state.html" %}
                 <select class="input fin-toolbar__period" id="fin-period" name="period"
                         @change="$el.form.requestSubmit()">
                     {% for key in period_options %}

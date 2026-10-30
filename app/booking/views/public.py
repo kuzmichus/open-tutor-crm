@@ -2,30 +2,35 @@
 
 Два маршрута без сессии — единственная публичная поверхность проекта:
 
-- `GET /s/<tutor_id>?start=YYYY-MM-DD` — свободные окна недели;
-- `POST /s/<tutor_id>/book` — заявка на конкретное окно.
+- `GET /s/<tutor_id>?start=YYYY-MM-DD&slot=<id>` — сетка недели и форма;
+- `POST /s/<tutor_id>/book` — заявка на выбранное окно.
 
 **Доступ.** `tutor_id` берётся из адреса, а не из сессии (сессии здесь нет
 по определению). Неизвестный идентификатор даёт обычную 404-страницу
 проекта, а не отдельный шаблон: существование чужого аккаунта не
 раскрывается (тот же принцип, что 404 вместо 403 в `get_owned_*`).
 
-**Что показывается.** Только дата, время и длительность свободных
-публичных окон. Ни имён учеников, ни заметок, ни контактов — выборка
-`availability.free_slots` отдаёт лишь окна, а занятые не попадают в неё
-вовсе (design D8).
+**Что показывается.** Дата, время и состояние публичных окон недели:
+свободное — выбор, занятое — «Занято» без указания, кем занято. Ни имён
+учеников, ни заметок, ни контактов (design D1).
 
-**Заявка.** Форма шлёт `slot_id`, имя и контакт. Окно перечитывается из
-БД по id и проверяется заново: пока ученик заполнял форму, педагог мог
-снять публичность, поставить урок или окно могло пройти. Тогда бронь не
-создаётся, а страница показывает причину.
+**Выбор окна** приходит параметром `slot` в адресе: сервер засчитывает его,
+только если окно реально есть в отрисованной сетке и свободно (design D2).
+Кривой или чужой `slot` молча игнорируется — ученик видит сетку без формы,
+а не ошибку.
+
+**Заявка.** Форма шлёт `slot_id`, имя, контакт и комментарий. Окно
+перечитывается из БД по id и проверяется заново: пока ученик заполнял
+форму, педагог мог снять публичность, поставить урок или окно могло пройти.
+Тогда бронь не создаётся, а страница показывает причину и сохранённые
+значения.
 
 **Лимит** (design D12) проверяется до создания брони и увеличивается после
 успешной заявки: неудачная попытка (опечатка в имени) не съедает лимит.
 
-Ответ на успешную заявку — та же страница с подтверждением «заявка
-отправлена и ждёт подтверждения педагога»: отдельной страницы «спасибо»
-нет, ученик остаётся на знакомой странице со списком окон.
+Ответ на успешную заявку — экран «Заявка отправлена!» с выбранным временем
+(design D3): сетку и форму после успеха показывать незачем, окно уже
+занято ожидающей бронью.
 """
 
 from datetime import datetime, timedelta
@@ -35,8 +40,8 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.booking.services.availability import (
-    free_slots,
-    slots_by_day,
+    public_week,
+    selected_slot,
     unavailable_reason,
 )
 from app.booking.services.booking_form import (
@@ -44,6 +49,15 @@ from app.booking.services.booking_form import (
     parse_booking_form,
 )
 from app.booking.services.booking_writer import request_booking
+from app.booking.services.public_presentation import (
+    selected_summary,
+    selected_time_label,
+    utc_offset_label,
+    week_range,
+    weekday_name,
+    day_number,
+    zone_banner,
+)
 from app.booking.services.rate_limit import (
     RATE_LIMITED_MESSAGE,
     client_fingerprint,
@@ -53,28 +67,42 @@ from app.booking.services.rate_limit import (
 from app.common.services.tutor_time import now_utc, today_local, tutor_zone_name
 from app.database import get_db
 from app.slot.models.slot import Slot
-from app.slot.services.public_link import week_from_start
+from app.slot.services.public_link import PUBLIC_PREFIX, week_from_start
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
 from app.unavailability.services.marks import coverage_for_week
 
 router = APIRouter()
 
-PUBLIC_PREFIX = "/s"
-
 # Понятное сообщение вместо «окно не найдено»: ученик пришёл по ссылке, а
 # не вводил адрес руками, поэтому причина должна быть человеческой.
 SLOT_GONE_MESSAGE = "Это окно больше недоступно. Выберите другое время."
 
 # Подтверждение после успешной заявки (спека public-booking).
-SENT_MESSAGE = (
-    "Заявка отправлена. Она ждёт подтверждения педагога — "
-    "он свяжется с вами по указанному контакту."
-)
+SENT_TITLE = "Заявка отправлена!"
+SENT_MESSAGE = "Ожидайте подтверждение от преподавателя."
 
 def _tutor_or_none(db: Session, tutor_id: str) -> Tutor | None:
     """Репетитор по id из адреса; неизвестный id — None (вьюха отдаёт 404)."""
     return db.get(Tutor, tutor_id)
+
+def _days_context(days) -> list[dict]:
+    """Столбцы сетки для шаблона: подписи дня и карточки окон.
+
+    Ссылка выбора собирается здесь, а не в шаблоне: адрес должен нести и
+    понедельник недели, и id окна — после выбора страница остаётся на той
+    же неделе (design D2).
+    """
+    return [
+        {
+            "date": day.day,
+            "weekday": weekday_name(day.day),
+            "day_number": day_number(day.day),
+            "is_empty": day.is_empty,
+            "slots": day.slots,
+        }
+        for day in days
+    ]
 
 def _page(
     request: Request,
@@ -83,18 +111,23 @@ def _page(
     monday,
     *,
     now: datetime,
+    slot_id: str | None = None,
     message: str = "",
     errors: list[str] | None = None,
     values: dict | None = None,
+    success: bool = False,
+    sent_label: str = "",
 ) -> HTMLResponse:
-    """Страница записи: окна недели, подпись пояса и состояние формы.
+    """Страница записи: сетка недели, форма выбранного окна или экран успеха.
 
     Один сборщик контекста на GET и POST: после неудачной заявки страница
-    выглядит так же, как до неё, плюс сообщение — ученик не теряет список
-    окон и видит, что поправить.
+    выглядит так же, как до неё, плюс сообщение — ученик не теряет сетку и
+    видит, что поправить.
     """
     coverage = coverage_for_week(db, tutor.id, monday)
-    slots = free_slots(db, tutor.id, monday, tutor, now=now)
+    days = public_week(db, tutor.id, monday, tutor, now=now)
+    selected = selected_slot(days, slot_id)
+    zone_name = tutor_zone_name(tutor)
 
     return templates.TemplateResponse(
         request,
@@ -102,18 +135,32 @@ def _page(
         {
             "booking_tutor": tutor,
             "booking_monday": monday,
-            "booking_days": slots_by_day(slots),
-            "booking_empty": not slots,
-            # Причина вместо списка — только когда неделя целиком в
-            # недоступности: иначе пустой список объясняется подписью
-            # «свободных окон нет» (спека public-booking).
+            "booking_days": _days_context(days),
+            "booking_selected": selected,
+            "booking_selected_summary": (
+                selected_summary(
+                    selected.day, selected.start, selected.end
+                )
+                if selected
+                else ""
+            ),
+            "booking_week_label": week_range(monday, monday + timedelta(days=6)),
+            # Причина вместо сетки — только когда неделя целиком в
+            # недоступности: иначе пустая сетка объясняется подписью
+            # «нет мест» в каждом столбце (спека public-booking).
             "booking_unavailable": unavailable_reason(coverage, monday),
-            "booking_timezone": tutor_zone_name(tutor),
+            "booking_zone_banner": zone_banner(
+                zone_name, utc_offset_label(tutor)
+            ),
             "booking_message": message,
             "booking_errors": errors or [],
-            "booking_values": values or {"name": "", "contact": ""},
+            "booking_values": values
+            or {"name": "", "contact": "", "comment": ""},
+            "booking_success": success,
+            "booking_sent_label": sent_label,
             # Ссылки на соседние недели: ученик может посмотреть дальше,
-            # не возвращаясь в мессенджер за новой ссылкой.
+            # не возвращаясь в мессенджер за новой ссылкой. Выбор окна при
+            # листании сбрасывается — оно к другой неделе не относится.
             "booking_prev": (
                 f"{PUBLIC_PREFIX}/{tutor.id}?start="
                 f"{(monday - timedelta(days=7)).isoformat()}"
@@ -122,7 +169,15 @@ def _page(
                 f"{PUBLIC_PREFIX}/{tutor.id}?start="
                 f"{(monday + timedelta(days=7)).isoformat()}"
             ),
+            "booking_prev_label": week_range(
+                monday - timedelta(days=7), monday - timedelta(days=1)
+            ),
+            "booking_next_label": week_range(
+                monday + timedelta(days=7), monday + timedelta(days=13)
+            ),
             "booking_action": f"{PUBLIC_PREFIX}/{tutor.id}/book",
+            "booking_slot_url": f"{PUBLIC_PREFIX}/{tutor.id}",
+            "booking_monday_iso": monday.isoformat(),
         },
     )
 
@@ -131,6 +186,7 @@ def public_page(
     tutor_id: str,
     request: Request,
     start: str | None = None,
+    slot: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Публичная страница недели; входа не требует (спека public-booking)."""
@@ -140,7 +196,7 @@ def public_page(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     monday = week_from_start(start, today_local(tutor))
-    return _page(request, db, tutor, monday, now=now_utc())
+    return _page(request, db, tutor, monday, now=now_utc(), slot_id=slot)
 
 @router.post(f"{PUBLIC_PREFIX}/{{tutor_id}}/book", response_class=HTMLResponse)
 def submit_booking(
@@ -148,6 +204,7 @@ def submit_booking(
     request: Request,
     name: str = Form(""),
     contact: str = Form(""),
+    comment: str = Form(""),
     slot_id: str = Form(""),
     start: str = Form(""),
     db: Session = Depends(get_db),
@@ -162,7 +219,7 @@ def submit_booking(
     if tutor is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-    form = {"name": name, "contact": contact}
+    form = {"name": name, "contact": contact, "comment": comment}
     monday = week_from_start(start, today_local(tutor))
     now = now_utc()
 
@@ -174,6 +231,7 @@ def submit_booking(
             tutor,
             monday,
             now=now,
+            slot_id=slot_id,
             errors=errors,
             values=booking_form_values(form),
         )
@@ -200,6 +258,7 @@ def submit_booking(
             tutor,
             monday,
             now=now,
+            slot_id=slot.id,
             errors=[RATE_LIMITED_MESSAGE],
             values=booking_form_values(form),
         )
@@ -214,6 +273,10 @@ def submit_booking(
     # опечатка в имени не должна съедать лимит и мешать исправить форму.
     register_attempt(db, slot.id, fingerprint, now=now)
 
+    # Подпись выбранного времени считается до записи: после неё окно стало
+    # занятым и в сетке его уже нет, а экран успеха обязан показать время.
+    sent_label = selected_time_label(slot.starts_at, slot.duration_min, tutor)
+
     booking, errors = request_booking(db, slot, params, now=now)
     if errors:
         return _page(
@@ -222,10 +285,18 @@ def submit_booking(
             tutor,
             monday,
             now=now,
+            slot_id=slot.id,
             errors=errors,
             values=booking_form_values(form),
         )
 
-    # После заявки окно занято ожидающей бронью и из списка исчезает —
-    # страница перерисовывается уже без него, с подтверждением.
-    return _page(request, db, tutor, monday, now=now, message=SENT_MESSAGE)
+    return _page(
+        request,
+        db,
+        tutor,
+        monday,
+        now=now,
+        success=True,
+        message=SENT_MESSAGE,
+        sent_label=sent_label,
+    )

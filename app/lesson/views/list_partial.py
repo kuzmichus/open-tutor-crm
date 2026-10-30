@@ -1,4 +1,13 @@
-"""Партиал таблицы уроков для htmx (фильтры и поиск без перезагрузки)."""
+"""Партиал таблицы уроков для htmx (фильтры, сортировка, пагинация).
+
+Контекст собирает тот же `table_context`, что и страница: полная загрузка и
+фильтрация не должны расходиться в порядке строк и разметке пагинации
+(change lessons-table-scale).
+
+Ссылки пагинации ведут на страницу целиком (`/tutor/lessons?...`), но
+внутри htmx перехватываются: контейнер таблицы слушает `click` по своим
+ссылкам и перезапрашивает партиал — без перезагрузки страницы.
+"""
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -6,11 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.common.access import require_tutor_id
 from app.database import get_db
-from app.lesson.services.lessons import (
-    list_lessons,
-    normalize_period,
-    normalize_status,
-)
+from app.lesson.services.lookup import search_students
+from app.lesson.services.table_context import table_context
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
 
@@ -23,31 +29,20 @@ def lessons_list_partial(
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 ) -> HTMLResponse:
-    """Таблица с учётом поиска `q`, фильтров `period`/`status` и ученика."""
-    q = request.query_params.get("q", "")
-    period = normalize_period(request.query_params.get("period", ""))
-    status = normalize_status(request.query_params.get("status", ""))
-    student_id = request.query_params.get("student", "")
+    """Таблица с учётом поиска, фильтров, сортировки и страницы."""
     tutor = db.get(Tutor, tutor_id)
-    rows = list_lessons(
+    context = table_context(
         db,
         tutor_id,
-        q=q,
-        period=period,
-        status=status,
-        student_id=student_id,
-        tutor=tutor,
+        tutor,
+        q=request.query_params.get("q", ""),
+        period=request.query_params.get("period", ""),
+        status=request.query_params.get("status", ""),
+        student_id=request.query_params.get("student", ""),
+        sort=request.query_params.get("sort", ""),
+        direction=request.query_params.get("direction", ""),
+        page=request.query_params.get("page", ""),
+        student_options=search_students(db, tutor_id),
     )
 
-    return templates.TemplateResponse(
-        request,
-        "lesson/_table.html",
-        {
-            "rows": rows,
-            "q": q,
-            "period": period,
-            "status": status,
-            "student_id": student_id,
-            "tutor": tutor,
-        },
-    )
+    return templates.TemplateResponse(request, "lesson/_table.html", context)

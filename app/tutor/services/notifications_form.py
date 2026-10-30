@@ -7,6 +7,7 @@
 
 import re
 
+from app.common.services.forms import int_or_none
 from app.tutor.models.tutor_settings import REMINDER_OFFSETS
 
 # Время «ЧЧ:ММ»: input[type=time] присылает именно такой формат,
@@ -27,13 +28,6 @@ TOGGLE_FIELDS = (
 )
 
 
-def _int_or_none(raw: str) -> int | None:
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
-
-
 def parse_notifications_form(form: dict) -> tuple[dict | None, list[str]]:
     """Разбирает форму уведомлений: (значения для записи, ошибки)."""
     errors: list[str] = []
@@ -48,7 +42,7 @@ def parse_notifications_form(form: dict) -> tuple[dict | None, list[str]]:
     picked = {
         minutes
         for raw in raw_offsets
-        if (minutes := _int_or_none(raw)) in REMINDER_OFFSETS
+        if (minutes := int_or_none(raw)) in REMINDER_OFFSETS
     }
     values["reminder_offsets"] = [
         offset for offset in REMINDER_OFFSETS if offset in picked
@@ -60,7 +54,7 @@ def parse_notifications_form(form: dict) -> tuple[dict | None, list[str]]:
     else:
         values["digest_time"] = digest_time
 
-    threshold = _int_or_none((form.get("low_balance_threshold") or "").strip())
+    threshold = int_or_none((form.get("low_balance_threshold") or "").strip())
     if threshold is None or threshold < 0:
         errors.append("Порог низкого баланса — целое число не меньше нуля.")
     else:

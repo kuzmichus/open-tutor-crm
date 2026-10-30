@@ -70,15 +70,29 @@
         this.selectedName = config.selectedName || "";
       },
 
+      /* Список — накладной поповер (`dropdown.js`): раскрытие не двигает
+         поля формы и не обрезается прокручиваемым телом модалки. */
+      positionList: function () {
+        if (!this.listOpen) return;
+        if (window.openDropdown) {
+          window.openDropdown(this.$refs.input, this.$refs.list);
+        }
+      },
+
       /* Список открывается сразу по клику/фокусу: запрос с пустым
          `q` возвращает весь список выбора — ввод ждать не нужно. */
       openList: function () {
         this.listOpen = true;
         this.refresh();
+        var self = this;
+        this.$nextTick(function () {
+          self.positionList();
+        });
       },
 
       closeList: function () {
         this.listOpen = false;
+        if (window.closeDropdown) window.closeDropdown(this.$refs.list);
       },
 
       /* Ввод фильтрует открытый список, не закрывая его. */
@@ -126,13 +140,13 @@
         this.selectedId = id;
         this.selectedName = name;
         this.query = "";
-        this.listOpen = false;
+        this.closeList();
       },
 
       /* --- Мини-формы создания (D7) --- */
 
       openMiniForm: function () {
-        this.listOpen = false;
+        this.closeList();
         this.miniError = "";
         this.miniOpen = true;
         var self = this;
@@ -234,6 +248,9 @@
       type: "individual",
       repeat: false,
       slots: [], /* [{weekday: 0..6, start: "HH:MM", end: "HH:MM"}] */
+      /* Блок «Присутствие» (design D6): участники с отметками приходят
+         из `data-config` (attendance_participants контекста формы). */
+      attendance: [], /* [{student_id, name, present, reason}] */
       startsAt: "",      /* «Начало»: "YYYY-MM-DDTHH:MM" */
       durationMin: 60,   /* «Длительность» в минутах */
       startPrefill: "",  /* значение, подставленное при открытии пикера */
@@ -245,6 +262,7 @@
       init: function () {
         var config = parseJson(this.$root.dataset.config, {}) || {};
         if (config.type) this.type = config.type;
+        if (Array.isArray(config.attendance)) this.attendance = config.attendance;
         var startsEl = document.getElementById("lesson-starts-at");
         var durationEl = document.getElementById("lesson-duration");
         if (startsEl && startsEl.value) this.startsAt = startsEl.value;
@@ -352,6 +370,57 @@
         );
       },
 
+      /* --- Блок «Присутствие» (design D6) --- */
+
+      cameCount: function () {
+        return this.attendance.filter(function (member) {
+          return member.present;
+        }).length;
+      },
+
+      /* Счётчик «Пришли N из M» в шапке блока. */
+      cameLabel: function () {
+        return "Пришли " + this.cameCount() + " из " + this.attendance.length;
+      },
+
+      /* Причина обязательна у каждого отсутствовавшего (CHECK в БД),
+         поэтому по умолчанию — «Без причины». */
+      onPresentChange: function (member) {
+        if (member.present) {
+          member.reason = "";
+        } else if (!member.reason) {
+          member.reason = "no_reason";
+        }
+      },
+
+      allCame: function () {
+        this.attendance.forEach(function (member) {
+          member.present = true;
+          member.reason = "";
+        });
+      },
+
+      noneCame: function () {
+        this.attendance.forEach(function (member) {
+          member.present = false;
+          if (!member.reason) member.reason = "no_reason";
+        });
+      },
+
+      /* Отметки формы — JSON-список {student_id, present, reason} одним
+         скрытым полем; сервер валидирует состав и причины (design D7). */
+      attendanceValue: function () {
+        return JSON.stringify(
+          this.attendance.map(function (member) {
+            return {
+              student_id: member.student_id,
+              present: !!member.present,
+              reason: member.present ? null : member.reason || "no_reason",
+            };
+          })
+        );
+      },
+
       /* Чип пресета «До даты» (значения — из настроек календаря
          репетитора): подставляет дату в поле «Дата окончания»; поле
          остаётся обычным input — выбранное можно поправить вручную. */
@@ -405,6 +474,81 @@
       );
     }
     flashHwSave();
+    syncBulkSelection();
     if (typeof window.renderIcons === "function") window.renderIcons();
   });
+
+  /* ------------------------------------------------------------------------
+     Массовая отметка уроков проведёнными (change lessons-table-scale).
+
+     Выбор строк — клиентское состояние, но не источник истины: сервер
+     всё равно отбирает уроки по `tutor_id` и статусу, поэтому подделанный
+     id в форме не даёт ни доступа, ни второго списания.
+
+     Делегированные обработчики на документе, а не на таблице: таблица
+     подменяется htmx-свопом после каждого фильтра, и подписки на её узлы
+     умирали бы вместе с ней.
+     ---------------------------------------------------------------------- */
+
+  function selectableBoxes() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll("[data-lesson-select]:not([disabled])")
+    );
+  }
+
+  function selectAllBox() {
+    return document.querySelector("[data-lessons-select-all]");
+  }
+
+  /* Кнопка и подпись отражают выбор: без выбранных строк действие
+     недоступно, а подпись говорит, сколько уроков уйдёт в «Проведён». */
+  function syncBulkSelection() {
+    var boxes = selectableBoxes();
+    var checked = boxes.filter(function (box) { return box.checked; });
+    var button = document.querySelector("[data-lessons-complete]");
+    var hint = document.querySelector("[data-lessons-selection-hint]");
+    var all = selectAllBox();
+
+    if (button) button.disabled = checked.length === 0;
+    if (hint) {
+      hint.textContent = checked.length
+        ? "Выбрано: " + checked.length + " — отметить проведёнными"
+        : "Отметьте уроки, которые уже прошли";
+    }
+    if (all) {
+      all.checked = boxes.length > 0 && checked.length === boxes.length;
+      /* Промежуточное состояние: часть строк выбрана. Без него чекбокс
+         «выбрать все» выглядел бы просто выключенным. */
+      all.indeterminate = checked.length > 0 && checked.length < boxes.length;
+    }
+  }
+
+  document.addEventListener("change", function (event) {
+    var target = event.target;
+    if (!target || !target.matches) return;
+
+    if (target.matches("[data-lessons-select-all]")) {
+      selectableBoxes().forEach(function (box) {
+        box.checked = target.checked;
+      });
+      syncBulkSelection();
+      return;
+    }
+    if (target.matches("[data-lesson-select]")) syncBulkSelection();
+  });
+
+  /* Клик по чекбоксу не должен открывать модалку: строка ловит клик
+     целиком (`hx-get` на `<tr>`). Гасится не здесь, а фильтром триггера
+     строки (`hx-trigger="click[!event.target.closest('.lessons-select-hit')]"`):
+     обработчик htmx висит на самой строке, и `stopPropagation` с
+     `document` в фазе всплытия приходил уже после неё — модалка успевала
+     открыться. Проверено в браузере. */
+
+  /* Список перерисован — выбора больше нет: строки другие. */
+  document.addEventListener("htmx:beforeSwap", function (event) {
+    var target = event.detail && event.detail.target;
+    if (target && target.id === "lessons-table") syncBulkSelection();
+  });
+
+  syncBulkSelection();
 })();

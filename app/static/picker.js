@@ -119,19 +119,38 @@
         return false;
       },
 
+      /* Список — накладной поповер (`dropdown.js`): раскрытие не двигает
+         соседние поля и не обрезается прокручиваемым телом модалки. */
+      positionList: function () {
+        if (!this.listOpen) return;
+        if (window.openDropdown) {
+          window.openDropdown(this.$refs.input, this.$refs.list);
+        }
+      },
+
       openList: function () {
         this.listOpen = true;
+        var self = this;
+        this.$nextTick(function () {
+          self.positionList();
+        });
       },
 
       closeList: function () {
         this.listOpen = false;
         this.active = -1;
+        if (window.closeDropdown) window.closeDropdown(this.$refs.list);
       },
 
       onInput: function (value) {
         this.query = value;
         this.listOpen = true;
         this.active = -1;
+        /* Отфильтрованный список короче — высота изменилась. */
+        var self = this;
+        this.$nextTick(function () {
+          self.positionList();
+        });
       },
 
       choose: function (item) {

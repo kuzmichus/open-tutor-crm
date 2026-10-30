@@ -1,0 +1,101 @@
+{# Сайдбар кабинета ученика: тот же каркас и те же классы, что у CRM
+   (`.sidebar`, `.nav-item`, `.sidebar__footer`), но своё меню — решение
+   владельца от 2026-10-30: интерфейс кабинета повторяет кабинет репетитора,
+   стили переиспользуются. «Домашние задания» — рабочая ссылка (change
+   cabinet-homework); «Профиль» пока показан неактивной заглушкой и
+   запросов не отправляет (прецедент — кнопка «Импорт» в списке учеников).
+
+   Тема и сворачивание работают общим `app.js`: `data-theme-toggle` -
+   кнопки переключают класс `.dark` на <html> (источник истины для
+   подсветки — CSS), `data-sidebar-toggle`/`data-sidebar-open` - сайдбар.
+
+   Использование:
+       {% set active_page = 'cabinet-lessons' %}
+       {% include "cabinet/_sidebar.html" %}
+
+   Контекст: student (строка пользователя). #}
+{% set _active = active_page | default('') %}
+<aside class="sidebar" aria-label="Навигация кабинета">
+
+    <div class="sidebar__header">
+        <span class="sidebar__logo" aria-hidden="true">
+            {% include "_logo.html" %}
+        </span>
+        <span class="sidebar__brand">Кабинет ученика</span>
+    </div>
+
+    <button class="sidebar__toggle" type="button"
+            data-sidebar-toggle
+            aria-controls="cabinet-nav"
+            aria-expanded="true"
+            aria-label="Свернуть сайдбар">
+        <i data-lucide="chevron-left"></i>
+    </button>
+
+    <nav class="sidebar__nav" id="cabinet-nav">
+        <a href="/student"
+           class="nav-item{% if _active == 'cabinet-lessons' %} nav-item--active{% endif %}"
+           title="Мои уроки"
+           {% if _active == 'cabinet-lessons' %}aria-current="page"{% endif %}>
+            <i data-lucide="book-open"></i>
+            <span>Мои уроки</span>
+        </a>
+
+        <hr class="nav-divider">
+
+        {# «Профиль» — заглушка раздела будущего change'а: видна в меню,
+           но не ссылка — клик не ведёт на 404. #}
+        <a href="/student/homework"
+           class="nav-item{% if _active == 'cabinet-homework' %} nav-item--active{% endif %}"
+           title="Домашние задания"
+           {% if _active == 'cabinet-homework' %}aria-current="page"{% endif %}>
+            <i data-lucide="file-text"></i>
+            <span>Домашние задания</span>
+        </a>
+        <span class="nav-item nav-item--disabled" title="Раздел появится позже">
+            <i data-lucide="user"></i>
+            <span>Профиль</span>
+        </span>
+    </nav>
+
+    {# Футер — как у репетитора: тема и строка пользователя. Выход ведёт
+       в POST `/student/logout` (отзыв сессии ученика), а не `/tutor/logout`. #}
+    <div class="sidebar__footer">
+        <div class="sidebar__theme">
+            <div class="theme-switch" role="group" aria-label="Тема оформления">
+                <button class="theme-switch__btn" type="button"
+                        data-theme-toggle="light"
+                        aria-pressed="true"
+                        title="Светлая тема">
+                    <i data-lucide="sun"></i>
+                    <span>Светлая</span>
+                </button>
+                <button class="theme-switch__btn" type="button"
+                        data-theme-toggle="dark"
+                        aria-pressed="false"
+                        title="Тёмная тема">
+                    <i data-lucide="moon"></i>
+                    <span>Тёмная</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="user-row-wrap flex items-center">
+            <span class="user-row user-row--grow">
+                <span class="user-avatar" aria-hidden="true">{{ student_full_name(student)[:1]|upper }}</span>
+                <span class="user-row__meta">
+                    <span class="user-row__name truncate">{{ student_full_name(student) }}</span>
+                    <span class="user-row__role truncate">Ученик</span>
+                </span>
+            </span>
+            <form method="post" action="/student/logout">
+                <button class="btn btn--ghost btn--icon" type="submit" title="Выйти" aria-label="Выйти">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</aside>
+
+<!-- Overlay для мобильного off-canvas -->
+<div class="overlay" aria-hidden="true"></div>

@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.templating import templates
 from app.unavailability.services.access import require_tutor_id
@@ -52,7 +53,7 @@ async def create_unavailability(
             panel_context(db, tutor_id, data=data, errors=errors),
         )
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url=CALENDAR_URL, status_code=303)
 
     response = templates.TemplateResponse(

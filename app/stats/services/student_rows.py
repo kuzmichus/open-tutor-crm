@@ -207,7 +207,6 @@ def collect_rows(db: Session, tutor, *, now: datetime) -> list[dict]:
     ничего не считает сам.
     """
     students = _tutor_students(db, tutor.id)
-    student_ids = [student.id for student in students]
     last_map = _last_regular_lessons(db, tutor.id)
     counts = _regular_counts_since(
         db, tutor.id, now - timedelta(days=RATE_WEEKS * 7)

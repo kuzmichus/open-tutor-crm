@@ -1,0 +1,75 @@
+{# Вкладка ребёнка «Мои уроки» кабинета родителя (change parent-cabinet).
+
+   Тот же CRM-каркас, что у кабинета ученика; список строит сервис
+   `cabinet/services/lessons.py` (переиспользование, design D6) —
+   ближайшие запланированные уроки, индивидуальные и групповые. Время
+   выводится в зоне репетитора (design: своя зона родителя — после
+   появления «Профиля»).
+
+   Контекст: contact, children, child (ученик вкладки), tutor, lessons,
+   nearest (первый элемент lessons либо None). #}
+{% extends "base.html" %}
+{% block title %}Мои уроки — {{ student_full_name(child) }} — Open Tutor CRM{% endblock %}
+
+{% block body %}
+{% set active_page = 'lessons' %}
+{% set active_student_id = child.id %}
+{% include "cabinet/parent/_sidebar.html" %}
+
+<!-- Мобильная шапка -->
+<header class="mobile-header">
+    <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+        <i data-lucide="menu"></i>
+    </button>
+    <span class="sidebar__brand">Кабинет родителя</span>
+</header>
+
+<main class="main">
+    <div class="main__container">
+        <div class="page-header">
+            <div>
+                <h1>{{ student_full_name(child) }}</h1>
+                <p>Ближайшие запланированные занятия</p>
+            </div>
+        </div>
+
+        {% if nearest %}
+        <section class="card cabinet-nearest">
+            <span class="cabinet-nearest__label">Ближайшее занятие</span>
+            <span class="cabinet-nearest__when">
+                {{ lesson_datetime(nearest.starts_at, tutor) }}
+                · {{ lesson_time_span(nearest, tutor) }}
+            </span>
+        </section>
+        {% endif %}
+
+        {% if lessons %}
+        <div class="card">
+            <table class="cabinet-table">
+                <caption class="sr-only">Ближайшие уроки: дата, время, тип занятия</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Дата</th>
+                    <th scope="col">Время</th>
+                    <th scope="col">Занятие</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for lesson in lessons %}
+                <tr>
+                    <td class="cabinet-table__date">{{ lesson_date(lesson.starts_at, tutor) }}</td>
+                    <td class="cabinet-table__time">{{ lesson_time_span(lesson, tutor) }}</td>
+                    <td class="cabinet-table__type">{{ lesson_type_chip(lesson.type) }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="card">
+            <p class="cabinet-empty">Запланированных занятий пока нет.</p>
+        </div>
+        {% endif %}
+    </div>
+</main>
+{% endblock %}

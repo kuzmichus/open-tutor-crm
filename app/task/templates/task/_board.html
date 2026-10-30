@@ -1,0 +1,37 @@
+{# Доска задач: четыре колонки по этапам (спека task-management).
+
+   Контекст: `columns` — [{stage, label, count, rows}], где `rows` уже
+   отсортированы сервисом (ближайший срок сверху, без срока — в конце;
+   «Готово» — последняя завершённая сверху).
+
+   Карточка кликабельна целиком: клик открывает диалог правки. Кнопка
+   «⋯» — меню действий (перевод на этап и удаление), она останавливает
+   всплытие, чтобы клик по меню не открывал диалог.
+
+   Тело колонки — цель перетаскивания: `data-stage` читает `tasks.js`
+   при drop и шлёт этап тем же POST-маршрутом, что и меню карточки. #}
+<div class="task-board">
+    {% for column in columns %}
+    <section class="task-column" aria-labelledby="task-column-{{ column.stage }}">
+        <header class="task-column__head">
+            <h2 class="task-column__title" id="task-column-{{ column.stage }}">
+                {{ column.label }}
+            </h2>
+            <span class="task-column__count">{{ column.count }}</span>
+        </header>
+
+        <div class="task-column__body" data-stage="{{ column.stage }}">
+            {% for row in column.rows %}
+                {% include "task/_card.html" %}
+            {% endfor %}
+
+            {% if not column.rows %}
+            <div class="task-column__empty">
+                <i data-lucide="inbox"></i>
+                <span>Пусто</span>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endfor %}
+</div>

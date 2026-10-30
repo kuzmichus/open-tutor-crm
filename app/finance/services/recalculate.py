@@ -40,6 +40,7 @@ from app.finance.services.charges import (
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import Lesson
+from app.lesson.models.lesson_attendance import LessonAttendance
 from app.student.models.student import Student
 from app.student.services.activation import activate_on_first_charge
 
@@ -55,6 +56,18 @@ _CHARGE_EXISTS = exists(
         AccountOperation.kind == "lesson",
         AccountOperation.lesson_id == Lesson.id,
         AccountOperation.student_id == Student.id,
+    )
+)
+
+# Ученик отмечен на уроке отсутствовавшим — условие для NOT EXISTS
+# групповой ветки (design D4). SQL-дубликат правила `charges.lesson_targets`:
+# детектор баннера не читает ORM-цели, поэтому оба места обязаны совпадать
+# (риск «рассинхрон» закрывается тестом «Отсутствовавший не будит баннер»).
+_ABSENT_MARK_EXISTS = exists(
+    select(LessonAttendance.id).where(
+        LessonAttendance.lesson_id == Lesson.id,
+        LessonAttendance.student_id == Student.id,
+        LessonAttendance.present.is_(False),
     )
 )
 
@@ -149,8 +162,11 @@ def has_missing_charges(db: Session, tutor_id: str, student_id: str) -> bool:
     панели, поэтому N+1 здесь недопустим — в отличие от редкого пересчёта.
 
     Условия совпадают с `recalculate`: статус «Проведён», цена определима,
-    строка `(lesson_id, student_id)` отсутствует. Иначе баннер мог бы
-    висеть после ремонта или не появиться перед ним.
+    строка `(lesson_id, student_id)` отсутствует, у группового — ученик не
+    отмечен отсутствовавшим (`~_ABSENT_MARK_EXISTS`, design D4). Иначе
+    баннер мог бы висеть после ремонта или не появиться перед ним, а у
+    отсутствовавшего предлагал бы «пересчитать» то, что пересчитывать
+    нельзя.
     """
     student = db.get(Student, student_id)
     if student is None or student.tutor_id != tutor_id:
@@ -180,6 +196,7 @@ def has_missing_charges(db: Session, tutor_id: str, student_id: str) -> bool:
             Lesson.status == COMPLETED_STATUS,
             _GROUP_PRICE.is_not(None),
             ~_CHARGE_EXISTS,
+            ~_ABSENT_MARK_EXISTS,
         )
         .exists()
     )

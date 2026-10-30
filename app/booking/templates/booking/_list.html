@@ -1,0 +1,101 @@
+{# Партиал списка броней: «Ожидают подтверждения» + «История».
+
+   Контекст собирает `booking/services/booking_list.py`: каждая строка —
+   готовые подписи (`span`, `day_full`, `day_time`, `decided`,
+   `status_label`) и объекты `booking`/`slot` для действий.
+
+   «Принять» открывает диалог окна: подтверждение может потребовать выбор
+   ученика (несколько совпадений) или признак «ребёнок/взрослый», эти
+   формы уже живут в диалоге — карточка их не дублирует. «Отклонить» и
+   «Отменить» — прямые POST: им выбора не нужно.
+
+   Ответ успеха у всех действий — пустое тело с `HX-Trigger: slot-saved`:
+   контейнер `#bookings-content` перечитывает этот партиал целиком. Ошибка
+   приходит диалогом окна в `#modal`. #}
+<section class="bookings-pending" aria-labelledby="bookings-pending-title">
+    <h2 class="bookings-title" id="bookings-pending-title">
+        <i data-lucide="clock"></i>
+        <span>Ожидают подтверждения</span>
+        <span class="bookings-title__count">{{ bookings.pending|length }}</span>
+    </h2>
+
+    {% for row in bookings.pending %}
+    <article class="booking-card">
+        <div class="booking-card__body">
+            <p class="booking-card__time">{{ row.span }}</p>
+            <ul class="booking-card__details">
+                <li class="booking-card__field">
+                    <i data-lucide="user"></i>
+                    <span>{{ row.booking.name }}</span>
+                </li>
+                <li class="booking-card__field">
+                    <i data-lucide="calendar"></i>
+                    <span>{{ row.day_full }}</span>
+                </li>
+                <li class="booking-card__field">
+                    <i data-lucide="phone"></i>
+                    <span>{{ row.booking.contact }}</span>
+                </li>
+            </ul>
+        </div>
+        <div class="booking-card__actions">
+            <button class="btn btn--success" type="button"
+                    hx-get="/tutor/slots/{{ row.slot.id }}"
+                    hx-target="#modal"
+                    hx-swap="innerHTML">
+                <i data-lucide="check"></i>
+                Принять
+            </button>
+            <form hx-post="/tutor/bookings/{{ row.booking.id }}/reject"
+                  hx-target="#modal"
+                  hx-swap="innerHTML">
+                <button class="btn btn--destructive" type="submit">
+                    <i data-lucide="x"></i>
+                    Отклонить
+                </button>
+            </form>
+        </div>
+    </article>
+    {% endfor %}
+
+    {% if not bookings.pending %}
+    <p class="bookings-empty">Нет заявок, ожидающих подтверждения.</p>
+    {% endif %}
+</section>
+
+<section class="bookings-history" aria-labelledby="bookings-history-title">
+    <h2 class="bookings-title" id="bookings-history-title">
+        <i data-lucide="history"></i>
+        <span>История</span>
+    </h2>
+
+    {% for row in bookings.history %}
+    <div class="booking-history__row">
+        <span class="chip chip--{{ row.booking.status }}">{{ row.status_label }}</span>
+        <div class="booking-history__main">
+            <span class="booking-history__name">{{ row.booking.name }}</span>
+            <span class="booking-history__meta">
+                {{ row.day_time }} · {{ row.booking.contact }}
+            </span>
+        </div>
+        {% if row.cancellable %}
+        {# Отмена доступна только подтверждённой брони на будущее;
+           урок и ученик при этом остаются (design D10). #}
+        <form class="booking-history__cancel"
+              hx-post="/tutor/bookings/{{ row.booking.id }}/cancel"
+              hx-target="#modal"
+              hx-swap="innerHTML">
+            <button class="btn btn--outline btn--sm" type="submit"
+                    title="Урок и ученик останутся: отмена брони их не удаляет">
+                Отменить
+            </button>
+        </form>
+        {% endif %}
+        <span class="booking-history__date">{{ row.decided }}</span>
+    </div>
+    {% endfor %}
+
+    {% if not bookings.history %}
+    <p class="bookings-empty">История пока пуста.</p>
+    {% endif %}
+</section>

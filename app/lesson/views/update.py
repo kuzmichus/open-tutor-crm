@@ -15,9 +15,10 @@
 """
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
+from app.common.responses import saved_response
 from app.common.services.tutor_time import to_local
 from app.database import get_db
 from app.finance.services.charges import sync_lesson_charges
@@ -58,13 +59,6 @@ def _modal_target(request: Request) -> str:
     if request.headers.get("HX-Target") == STACKED_MODAL_TARGET.lstrip("#"):
         return STACKED_MODAL_TARGET
     return DEFAULT_MODAL_TARGET
-
-
-def _saved_response(request: Request):
-    """Успех: пустое тело закрывает модалку, событие обновляет список."""
-    if request.headers.get("HX-Request") != "true":
-        return RedirectResponse(url=LESSONS_URL, status_code=303)
-    return HTMLResponse(content="", headers={"HX-Trigger": "lesson-saved"})
 
 
 def _start_day_changed(lesson, data: dict, tutor) -> bool:
@@ -169,4 +163,4 @@ async def update_lesson_view(
     sync_lesson_charges(db, lesson, series_applied=form.get("series_all") == "1")
     db.commit()
 
-    return _saved_response(request)
+    return saved_response(request, "lesson-saved", LESSONS_URL)

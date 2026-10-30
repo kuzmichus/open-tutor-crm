@@ -9,11 +9,14 @@
 вьюхи модуля не зависят от `common` напрямую и не тянут чужой домен.
 """
 
-from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.common.access import LOGIN_URL, LoginRequired, require_tutor_id
+from app.common.access import (
+    LOGIN_URL,
+    LoginRequired,
+    get_owned_entity,
+    require_tutor_id,
+)
 from app.slot.models.slot import Slot
 
 __all__ = ["LOGIN_URL", "LoginRequired", "get_owned_slot", "require_tutor_id"]
@@ -21,9 +24,4 @@ __all__ = ["LOGIN_URL", "LoginRequired", "get_owned_slot", "require_tutor_id"]
 
 def get_owned_slot(db: Session, slot_id: str, tutor_id: str) -> Slot:
     """Окно этого репетитора либо 404."""
-    slot = db.scalars(
-        select(Slot).where(Slot.id == slot_id, Slot.tutor_id == tutor_id)
-    ).one_or_none()
-    if slot is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return slot
+    return get_owned_entity(db, Slot, slot_id, tutor_id)

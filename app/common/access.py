@@ -8,6 +8,7 @@
 """
 
 from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -37,3 +38,24 @@ def require_tutor_id(
     if tutor_id is None:
         raise LoginRequired()
     return tutor_id
+
+
+def get_owned_entity(db: Session, model: type, entity_id: str, tutor_id: str):
+    """Строка `model` с колонкой `tutor_id`, принадлежащая репетитору, либо 404.
+
+    Единая реализация правила «одна запись одним SELECT»: `id` и `tutor_id`
+    проверяются одним запросом, чужая и несуществующая запись неразличимы —
+    404, а не 403 и не пустая страница: существование чужой записи не
+    раскрывается. Доменные `get_owned_<entity>` делегируют сюда и остаются
+    публичным API модулей (типизация, docstring, ри-экспорт);
+
+    Для записей без собственной колонки `tutor_id` (владелец выводится из
+    цели — урок, бронь, операция счёта) правило то же, но запрос с JOIN:
+    такие выборки живут в своих доменных `services/access.py`.
+    """
+    entity = db.scalars(
+        select(model).where(model.id == entity_id, model.tutor_id == tutor_id)
+    ).one_or_none()
+    if entity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return entity

@@ -23,9 +23,10 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
+from app.common.responses import saved_response
 from app.common.services.tutor_time import to_utc
 from app.database import get_db
 from app.lesson.services.access import get_owned_lesson, require_tutor_id
@@ -71,13 +72,6 @@ def _acknowledged(form) -> bool:
     return value.strip().lower() in {"1", "on", "true", "yes"}
 
 
-def _moved_response(request: Request):
-    """Успех: пустое тело, событие перерисовывает неделю календаря."""
-    if request.headers.get("HX-Request") != "true":
-        return RedirectResponse(url=CALENDAR_URL, status_code=303)
-    return HTMLResponse(content="", headers={"HX-Trigger": "lesson-saved"})
-
-
 @router.post(f"{LESSONS_URL}/{{lesson_id}}/move", response_class=HTMLResponse)
 async def move_lesson(
     lesson_id: str,
@@ -114,4 +108,4 @@ async def move_lesson(
     lesson.starts_at = starts_at
     db.commit()
 
-    return _moved_response(request)
+    return saved_response(request, "lesson-saved", CALENDAR_URL)

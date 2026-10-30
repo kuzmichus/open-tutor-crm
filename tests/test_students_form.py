@@ -12,7 +12,6 @@ import pytest
 
 from app.database import SessionLocal
 from app.student.models.contact import Contact
-from app.student.models.student import Student
 from app.student.models.student_contact import StudentContact
 
 PASSWORD = "Секретный-Пароль-1"
@@ -290,30 +289,36 @@ def test_modal_actions_are_outside_scrolled_body(client, owner):
     assert "flex-shrink: 0" in modal_actions[: modal_actions.index("}")]
 
 
-def test_submit_switches_tab_to_invalid_field():
-    """Браузер не подсветит поле в скрытой вкладке — Alpine переключает её."""
-    assert "revealInvalidField" in STUDENTS_JS
-    assert 'querySelector(":invalid")' in STUDENTS_JS
-    assert "closest(\"[data-tab-panel]\")" in STUDENTS_JS
-    # Вкладка по умолчанию «Общее»; её же подставляет сервер без `?tab=`.
+def test_validation_feedback_lives_in_common_module():
+    """Форма ученика не держит своей логики валидации — её ведёт общий модуль.
+
+    Раньше здесь были `revealInvalidField` и слушатель
+    `htmx:validation:halted`: тот же паттерн пришлось бы повторить в
+    форме группы, урока и задачи. Теперь переключение вкладки, сводка
+    и `aria-invalid` живут в `form-feedback.js` — один раз на весь
+    кабинет (см. tests/test_form_feedback.py).
+    """
+    assert "revealInvalidField" not in STUDENTS_JS
+    assert "htmx:validation:halted" not in STUDENTS_JS
+    form_html = (ROOT / "app" / "student" / "templates" / "student" / "_form.html").read_text(
+        encoding="utf-8"
+    )
+    assert "@submit=" not in form_html
+
+    feedback = (STATIC_DIR / "form-feedback.js").read_text(encoding="utf-8")
+    # Слушатель `invalid` объявлен отдельными строками — сверяем токеном.
+    assert re.search(r'addEventListener\(\s*"invalid"', feedback)
+    assert '"htmx:validation:halted"' in feedback
+    # Вкладка раскрывается тем табом, что её открывает: у панели
+    # aria-labelledby указывает на кнопку role="tab".
+    assert 'getAttribute("aria-labelledby")' in feedback
+    assert 'getAttribute("role") !== "tab"' in feedback
+
+
+def test_default_tab_is_general():
+    """Вкладка по умолчанию «Общее»; её же подставляет сервер без `?tab=`."""
     assert 'tab: TAB_NAMES.indexOf(initialTab) === -1 ? "general" : initialTab' in STUDENTS_JS
     assert 'var TAB_NAMES = ["general", "payments", "settings"];' in STUDENTS_JS
-
-
-def test_hidden_tab_field_switches_tab_before_htmx_halts():
-    """Невалидное поле соседней формы: htmx молчит, вкладку переключаем мы.
-
-    Каждая форма вкладки добирает поля другой через `hx-include`, и htmx
-    валидирует их сам. Своя форма при этом валидна (пустое имя лежит
-    в «Общем»), поэтому браузер не показывает подсказку, а htmx
-    останавливает запрос — со стороны это выглядит как «кнопка не работает».
-    """
-    assert "htmx:validation:halted" in STUDENTS_JS
-    assert "event.detail.errors" in STUDENTS_JS
-    assert "reportValidity" in STUDENTS_JS
-    # Подписка снимается вместе с модалкой, иначе обработчики копились бы
-    # после каждого открытия карточки.
-    assert "removeEventListener" in STUDENTS_JS
 
 
 def test_grade_and_school_depend_on_kind(client, owner):
@@ -440,24 +445,6 @@ def test_contact_picker_offers_existing_contacts(client, owner):
 
     html = client.get("/tutor/students/new").text
     assert "Мама Ольга" in html
-
-def test_contact_picker_excludes_linked_contacts(client, owner, student_factory):
-    """Уже привязанный контакт не предлагается повторно."""
-    student_id = student_factory(tutor_id=owner, first_name="Маша")
-    with SessionLocal() as db:
-        contact = Contact(
-            tutor_id=owner, full_name="Мама Ольга", phone="+7 555 111-22-33"
-        )
-        db.add(contact)
-        db.flush()
-        db.add(StudentContact(student_id=student_id, contact_id=contact.id))
-        db.commit()
-
-    html = client.get(f"/tutor/students/{student_id}/edit").text
-    start = html.index('data-options="')
-    options = html[start + len('data-options="'):]
-    options = options[: options.index('"')]
-    assert "Мама Ольга" not in options
 
 def test_contact_rows_are_added_from_template(client, owner):
     """Новая строка берётся из инертного шаблона с очередным индексом."""

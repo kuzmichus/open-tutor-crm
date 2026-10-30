@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.common.responses import is_htmx
 from app.common.services.tutor_time import now_utc
 from app.database import get_db
 from app.slot.services.access import require_tutor_id
@@ -105,7 +106,7 @@ async def create_batch(
     created, plan = apply(db, tutor, params, now=now_utc())
     preview = preview_context(plan, tutor, created=len(created))
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url=CALENDAR_URL, status_code=303)
 
     response = templates.TemplateResponse(

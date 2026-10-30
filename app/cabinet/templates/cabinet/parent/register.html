@@ -1,0 +1,49 @@
+{# Регистрация по приглашению: публичная страница `/parent/invite/<token>`.
+
+   Каркас общий с кабинетом ученика (`cabinet/base.html`), бренд — свой.
+   Форма только Email и Пароль: имя контакта, детей и согласий нет —
+   страница не раскрывает, кому принадлежит ссылка (спека parent-cabinet). #}
+{% extends "cabinet/base.html" %}
+{% block cabinet_title %}Регистрация{% endblock %}
+{% block cabinet_brand %}Кабинет родителя{% endblock %}
+
+{% block cabinet_content %}
+<section class="cabinet__card">
+    <h1 class="cabinet__title">Приглашение в кабинет</h1>
+
+    {% if not show_form %}
+    {# Недействительная ссылка: одно сообщение для всех причин — имя
+       контакта и факт существования ссылки не раскрываются (D9). #}
+    <p class="error" role="alert">{{ error }}</p>
+    {% else %}
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    {% if errors %}
+    <div class="error" role="alert">
+        <ul>
+            {% for message in errors %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {# Только Email и Пароль: без поля имени и без согласий (спека
+       parent-cabinet). Имя контакта и дети страницей не показываются. #}
+    <form method="post" action="/parent/invite/{{ token }}" class="cabinet__form">
+        <div class="field">
+            <label class="label" for="invite-email">Email</label>
+            <input class="input" id="invite-email" type="email" name="email"
+                   value="{{ email_value }}" required
+                   autocomplete="email" placeholder="you@example.com">
+        </div>
+        <div class="field">
+            <label class="label" for="invite-password">Пароль</label>
+            <input class="input" id="invite-password" type="password" name="password"
+                   minlength="8" required autocomplete="new-password">
+        </div>
+        <p class="cabinet__hint">Минимум 8 символов. Пароль понадобится для входа в кабинет родителя.</p>
+        <button class="btn btn--primary btn--block" type="submit">Создать вход</button>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}

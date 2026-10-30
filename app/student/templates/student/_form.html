@@ -17,7 +17,8 @@
 
    Контекст: form, contact_rows, contact_rows_count, contact_rows_open,
    contact_options_json, errors, student, student_id, action, title,
-   from_card, statuses, status_label, timezone_options_json. #}
+   from_card, statuses, status_label, timezone_options_json,
+   invites_block (NULL у нового ученика), cabinet (NULL у нового ученика). #}
 <div class="modal-root"
      x-data="studentForm('{{ form.kind }}', '{{ tab }}')"
      x-show="open"
@@ -72,8 +73,7 @@
                   hx-swap="innerHTML"
                   hx-include="#student-form-settings"
                   x-show="tab === 'general'"
-                  x-cloak
-                  @submit="revealInvalidField">
+                  x-cloak>
                 <input type="hidden" name="from_card" value="{{ '1' if from_card else '' }}">
 
                 <div class="modal-body">
@@ -288,8 +288,7 @@
                   hx-swap="innerHTML"
                   hx-include="#student-form-general"
                   x-show="tab === 'settings'"
-                  x-cloak
-                  @submit="revealInvalidField">
+                  x-cloak>
                 <input type="hidden" name="from_card" value="{{ '1' if from_card else '' }}">
 
                 <div class="modal-body">
@@ -313,6 +312,19 @@
                             </label>
                         </div>
                     </fieldset>
+
+                    {# Приглашение в мессенджеры — ради доставки этих
+                       напоминаний: без привязанного чата ученику их
+                       отправлять некуда. У нового ученика блока нет. #}
+                    {% if invites_block %}
+                    {% include "student/_invites_block.html" %}
+                    {% endif %}
+
+                    {# Личный кабинет: состояние входа и приглашение на
+                       регистрацию по ссылке. У нового ученика блока нет. #}
+                    {% if cabinet %}
+                    {% include "student/_cabinet_block.html" %}
+                    {% endif %}
                 </div>
 
                 <div class="modal-actions">

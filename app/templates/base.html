@@ -5,13 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Open Tutor CRM{% endblock %}</title>
 
-    {# Шрифты: Geist + Geist Mono (интерфейс/числа) + Lexend (display) #}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    {# Дизайн-система + иконки Lucide (локально) + минимальный JS #}
+    {# Дизайн-система + иконки Lucide (локально) + минимальный JS.
+       Шрифты Geist / Geist Mono / Lexend объявлены `@font-face` в начале
+       `styles.css` и лежат в `/static/fonts/`: кабинет работает на своём
+       сервере и не зависит от доступности fonts.googleapis.com
+       (правило AGENTS.md п. 8 — без CDN). #}
     <link rel="stylesheet" href="/static/styles.css">
+
+    {# Накладные выпадающие списки: позиционирование `fixed` под полем,
+       чтобы раскрытие не сдвигало вёрстку и не обрезалось телом модалки. #}
+    <script src="/static/dropdown.js" defer></script>
 
     {# Список выбора человека (ученика/контакта) — общий для формы ученика и
        формы группы. Идёт до страниценных скриптов: они собирают своё
@@ -36,7 +39,16 @@
     {# Alpine — локальный вендорный файл (без CDN): клиентское состояние
        модалки, сегмента «ребёнок/взрослый» и переключателя вида. #}
     <script src="/static/alpine.min.js" defer></script>
-    <script src="/static/lucide.min.js" defer></script>
+    {# Фокус-ловушка диалогов: изоляция фона и цикл Tab. Идёт после Alpine,
+       но до app.js — работает на любые диалоги, включая пришедшие свопом. #}
+    <script src="/static/modal.js" defer></script>
+    {# Обратная связь при остановленной отправке формы: сводка вместо
+       молчания, когда браузерная валидация не пустила запрос. #}
+    <script src="/static/form-feedback.js" defer></script>
+    {# Иконки: не полный бандл Lucide (444 КБ), а набор используемых иконок,
+       собранный `scripts/build_icons.py`. Добавили иконку в разметку —
+       пересоберите набор (тест `test_icons_bundle.py` следит за свежестью). #}
+    <script src="/static/icons.js" defer></script>
     <script src="/static/app.js" defer></script>
 
     {# Ранняя инициализация сворачивания сайдбара: класс на <html> ставится

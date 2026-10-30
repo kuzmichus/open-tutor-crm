@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.lesson.services.access import get_owned_lesson, require_tutor_id
 from app.lesson.services.lesson_remover import delete_series
@@ -32,6 +33,6 @@ def delete_series_view(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     delete_series(db, lesson.series_id)
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url=LESSONS_URL, status_code=303)
     return HTMLResponse(content="", headers={"HX-Trigger": "lesson-saved"})

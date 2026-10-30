@@ -1,0 +1,85 @@
+{# Блок «Каналы уведомлений» вкладки «Уведомления»: карточка на каждый
+   поддерживаемый мессенджер. Живёт как HTMX-фрагмент (#channels-block):
+   действия заменяют его целиком (outerHTML), а пока привязка «в процессе»
+   — фрагмент опрашивает сам себя, и привязка происходит без кликов,
+   когда репетитор нажал «Запустить» в чате с ботом. #}
+
+<div id="channels-block"
+     {% if channels_block.channels | selectattr("pending") | list %}
+     hx-get="/tutor/profile/notifications/channels" hx-trigger="every 4s"
+     hx-swap="outerHTML"
+     {% endif %}>
+    <section class="card settings-card">
+        <h2 class="card__title">Каналы уведомлений</h2>
+        <p class="card__desc">
+            Подключите Telegram и/или Max — уведомления придут по любому из подключённых каналов.
+        </p>
+
+        {% if channels_block.errors %}
+        <div class="error" role="alert">
+            <ul>
+                {% for message in channels_block.errors %}
+                <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="channels-list">
+            {% for channel in channels_block.channels %}
+            {% if channel.bound %}
+            <div class="channel-card channel-card--connected">
+                <i class="channel-card__icon channel-card__icon--on" data-lucide="circle-check" aria-hidden="true"></i>
+                <div class="channel-card__main">
+                    <span class="channel-card__title">{{ channel.label }} подключен</span>
+                    <span class="channel-card__desc">{{ channel.chat_label }}</span>
+                </div>
+                <form class="channel-card__action" method="post"
+                      action="/tutor/profile/notifications/channels/{{ channel.messenger }}/unlink"
+                      hx-post="/tutor/profile/notifications/channels/{{ channel.messenger }}/unlink"
+                      hx-target="#channels-block" hx-swap="outerHTML">
+                    <button class="channel-card__unlink" type="submit">
+                        <i data-lucide="unlink" aria-hidden="true"></i>
+                        Отвязать
+                    </button>
+                </form>
+            </div>
+            {% elif channel.pending %}
+            <div class="channel-card channel-card--pending">
+                <i class="channel-card__icon" data-lucide="{{ channel.icon }}" aria-hidden="true"></i>
+                <div class="channel-card__main">
+                    <span class="channel-card__title">Уведомления в {{ channel.label }}</span>
+                    <span class="channel-card__desc">
+                        Перейдите в чат с ботом и нажмите «Запустить» — канал привяжется автоматически
+                    </span>
+                    <a class="channel-card__link" href="{{ channel.link }}" target="_blank" rel="noopener">
+                        <i data-lucide="external-link" aria-hidden="true"></i>
+                        Открыть {{ channel.label }}
+                    </a>
+                </div>
+                <form class="channel-card__action" method="get"
+                      action="/tutor/profile/notifications/channels"
+                      hx-get="/tutor/profile/notifications/channels"
+                      hx-target="#channels-block" hx-swap="outerHTML">
+                    <button class="btn btn--ghost btn--sm" type="submit">Проверить</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="channel-card">
+                <i class="channel-card__icon" data-lucide="{{ channel.icon }}" aria-hidden="true"></i>
+                <div class="channel-card__main">
+                    <span class="channel-card__title">Уведомления в {{ channel.label }}</span>
+                    <span class="channel-card__desc">Подключите бота для уведомлений</span>
+                </div>
+                <form class="channel-card__action" method="post"
+                      action="/tutor/profile/notifications/channels/{{ channel.messenger }}/connect"
+                      hx-post="/tutor/profile/notifications/channels/{{ channel.messenger }}/connect"
+                      hx-target="#channels-block" hx-swap="outerHTML">
+                    <button class="btn btn--primary btn--sm" type="submit">Подключить</button>
+                </form>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </section>
+</div>

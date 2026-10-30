@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.common.responses import dialog_closed
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.finance.services.access import get_owned_student, require_tutor_id
 from app.finance.services.payment_dialog import payment_dialog_context
@@ -53,6 +54,6 @@ async def update_payment_view(
             ),
         )
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url=f"/tutor/students/{student.id}", status_code=303)
     return dialog_closed("payment-saved")

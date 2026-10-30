@@ -8,6 +8,8 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from app.database import SessionLocal
 from app.finance.services.balance import (
     affects_balance,
@@ -52,27 +54,22 @@ def test_balance_goes_negative_after_refund(student_factory, operation_factory):
         assert balance(session, student_id) == -200
 
 
-def test_pending_payment_is_not_counted(student_factory, operation_factory):
-    """«Ожидает» виден в списке платежей, но баланс не меняет."""
+@pytest.mark.parametrize(
+    "status",
+    [
+        pytest.param("pending", id="pending"),
+        pytest.param("cancelled", id="cancelled"),
+    ],
+)
+def test_unpaid_payment_is_not_counted(status, student_factory, operation_factory):
+    """Неоплаченный платёж виден в списке платежей, но баланс не меняет."""
     student_id = student_factory()
     operation_factory(
-        student_id=student_id, kind="payment", amount=2400, status="pending"
+        student_id=student_id, kind="payment", amount=2400, status=status
     )
 
     with SessionLocal() as session:
         assert balance(session, student_id) == 0
-
-
-def test_cancelled_payment_is_not_counted(student_factory, operation_factory):
-    """«Отменено» не входит в баланс."""
-    student_id = student_factory()
-    operation_factory(
-        student_id=student_id, kind="payment", amount=2400, status="cancelled"
-    )
-
-    with SessionLocal() as session:
-        assert balance(session, student_id) == 0
-
 
 def test_payment_becomes_counted_when_status_turns_paid(
     student_factory, operation_factory

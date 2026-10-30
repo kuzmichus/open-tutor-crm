@@ -27,6 +27,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.constraints import sql_string_in
 from app.database import Base
 
 # Вид операции: платёж, возврат средств, списание за проведённый урок.
@@ -61,12 +62,6 @@ PAYMENT_FALLBACK_LABEL = "Платёж"
 BALANCE_PAYMENT_STATUS = "paid"
 
 
-def _sql_string_in(column: str, values: tuple[str, ...]) -> str:
-    """`column IN ('a', 'b')` — строковый список для CHECK-ограничения."""
-    quoted = ", ".join(f"'{value}'" for value in values)
-    return f"{column} IN ({quoted})"
-
-
 class AccountOperation(Base):
     """Операция счёта ученика: платёж, возврат или списание за урок.
 
@@ -95,7 +90,7 @@ class AccountOperation(Base):
     __tablename__ = "account_operations"
     __table_args__ = (
         CheckConstraint(
-            _sql_string_in("kind", OPERATION_KINDS),
+            sql_string_in("kind", OPERATION_KINDS),
             name="ck_account_operations_kind",
         ),
         CheckConstraint(
@@ -103,11 +98,11 @@ class AccountOperation(Base):
             name="ck_account_operations_amount",
         ),
         CheckConstraint(
-            "status IS NULL OR " + _sql_string_in("status", PAYMENT_STATUSES),
+            "status IS NULL OR " + sql_string_in("status", PAYMENT_STATUSES),
             name="ck_account_operations_status",
         ),
         CheckConstraint(
-            "method IS NULL OR " + _sql_string_in("method", PAYMENT_METHODS),
+            "method IS NULL OR " + sql_string_in("method", PAYMENT_METHODS),
             name="ck_account_operations_method",
         ),
         # Статус и способ — только у платежа (design D4).

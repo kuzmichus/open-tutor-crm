@@ -28,12 +28,14 @@ def profile_calendar(
     quarter2_end: str = Form(""),
     quarter3_end: str = Form(""),
     quarter4_end: str = Form(""),
+    workday_start: str = Form(""),
+    workday_end: str = Form(""),
     default_lesson_duration: str = Form(""),
     default_lesson_price: str = Form(""),
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 ):
-    """Сохраняет часовой пояс, учебный год и уроки по умолчанию."""
+    """Сохраняет часовой пояс, учебный год, рабочее время и уроки по умолчанию."""
     tutor = db.get(Tutor, tutor_id)
     if tutor is None:
         raise LoginRequired()
@@ -44,6 +46,8 @@ def profile_calendar(
         "quarter2_end": quarter2_end,
         "quarter3_end": quarter3_end,
         "quarter4_end": quarter4_end,
+        "workday_start": workday_start,
+        "workday_end": workday_end,
         "default_lesson_duration": default_lesson_duration,
         "default_lesson_price": default_lesson_price,
     }

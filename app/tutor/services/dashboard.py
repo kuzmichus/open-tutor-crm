@@ -101,14 +101,17 @@ def today_lessons(db: Session, tutor) -> list[TodayLesson]:
 
 
 def active_students_count(db: Session, tutor_id: str) -> int:
-    """Сколько учеников репетитора в статусе «Активный»."""
+    """Сколько учеников репетитора в статусе «Активный».
+
+    `count()` без GROUP BY всегда возвращает ровно одну строку —
+    «может прийти None» здесь не бывает.
+    """
     return int(
         db.scalar(
             select(func.count())
             .select_from(Student)
             .where(Student.tutor_id == tutor_id, Student.status == "active")
         )
-        or 0
     )
 
 
@@ -132,7 +135,6 @@ def month_income(db: Session, tutor) -> int:
                 AccountOperation.occurred_at < end,
             )
         )
-        or 0
     )
 
 
@@ -157,7 +159,6 @@ def month_hours(db: Session, tutor) -> int:
                 Lesson.starts_at < end,
             )
         )
-        or 0
     )
     return (minutes + 30) // 60
 

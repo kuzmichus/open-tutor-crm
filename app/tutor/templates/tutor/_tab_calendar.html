@@ -1,6 +1,6 @@
-{# Вкладка «Календарь»: часовой пояс, учебный год и уроки по умолчанию.
-   Одна форма на все три карточки: значения независимы, а один POST
-   проще трёх отдельных с одинаковым набором скрытых полей. #}
+{# Вкладка «Календарь»: часовой пояс, учебный год, рабочее время и уроки
+   по умолчанию. Одна форма на все четыре карточки: значения независимы,
+   а один POST проще четырёх отдельных с одинаковым набором скрытых полей. #}
 {% set tz_id = 'tutor-timezone' %}
 <form method="post" action="{{ action }}">
     <section class="card settings-card">
@@ -75,6 +75,32 @@
                 <label class="label" for="tutor-quarter4">IV четверть / конец уч. года</label>
                 <input class="input" id="tutor-quarter4" type="text" name="quarter4_end"
                        value="{{ form.quarter4_end }}" placeholder="05-25">
+            </div>
+        </div>
+    </section>
+
+    <section class="card settings-card">
+        <h2 class="card__title">Рабочее время</h2>
+        <p class="card__desc">
+            Границы сетки календаря: часы до начала и после окончания
+            рабочего дня не показываются. Выбираются целыми часами.
+        </p>
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-workday-start">Начало рабочего дня</label>
+                <select class="input" id="tutor-workday-start" name="workday_start">
+                    {% for option in workday_hour_options %}
+                    <option value="{{ option }}"{% if option == form.workday_start %} selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-workday-end">Конец рабочего дня</label>
+                <select class="input" id="tutor-workday-end" name="workday_end">
+                    {% for option in workday_hour_options %}
+                    <option value="{{ option }}"{% if option == form.workday_end %} selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
     </section>

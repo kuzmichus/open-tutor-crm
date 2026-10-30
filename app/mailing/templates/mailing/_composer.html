@@ -1,0 +1,85 @@
+{# Панель «Текст сообщения»: селект шаблона, сохранение шаблона, текст,
+   отправка.
+
+   Корень #mailing-composer перечитывается по `templates-saved` (обновить
+   список шаблонов после правки в модалке) и подменяется ответом POST
+   отправки. Текст сообщения и выбор учеников живут в Alpine-состоянии
+   формы (см. _compose.html): перерисовка панели ввод не теряет. #}
+<section class="card mailing-composer" id="mailing-composer"
+         hx-get="/tutor/mailings/composer"
+         hx-trigger="templates-saved from:body"
+         hx-swap="outerHTML">
+    <h2 class="mailing-composer__title">Текст сообщения</h2>
+    <p class="mailing-composer__counter"
+       x-text="recipientsCountLabel(selected.length)">Будет отправлено 0 пользователей</p>
+
+    {% if send_errors %}
+    <div class="error" role="alert">
+        <ul>
+            {% for message in send_errors %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% if send_summary %}
+    <p class="mailing-composer__summary" role="status">
+        {{ delivery_summary_label(send_summary) }}
+    </p>
+    {% endif %}
+
+    <div class="mailing-composer__row">
+        <label class="sr-only" for="mailing-template">Шаблон</label>
+        <select class="input mailing-composer__template" id="mailing-template"
+                x-model="chosenTemplate" x-ref="templateSelect"
+                @change="applyTemplate()">
+            <option value="">Шаблон</option>
+            {% for template in templates %}
+            <option value="{{ template.id }}"
+                    data-text="{{ template.text }}">{{ template.title }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn--ghost mailing-composer__save" type="button"
+                hx-get="/tutor/mailings/templates/new"
+                hx-vals="js:{text: document.getElementById('mailing-text').value}"
+                hx-target="#modal" hx-swap="innerHTML">
+            <i data-lucide="save"></i>
+            Сохранить
+        </button>
+    </div>
+
+    <button class="btn btn--outline mailing-composer__templates" type="button"
+            hx-get="/tutor/mailings/templates"
+            hx-target="#modal" hx-swap="innerHTML">
+        <i data-lucide="book-open"></i>
+        Шаблоны
+    </button>
+
+    <label class="sr-only" for="mailing-text">Текст сообщения</label>
+    <textarea class="input mailing-composer__text" id="mailing-text"
+              name="text" rows="10"
+              placeholder="Текст сообщения..."
+              x-model="text" x-ref="textArea">{{ form_text }}</textarea>
+
+    {# Кнопки-облочки подстановок: вставляют токен в позицию курсора.
+       `mousedown.prevent` не даёт кнопке забрать фокус — каретка в поле
+       остаётся на месте между нажатием и кликом. #}
+    <div class="mailing-tokens" role="group" aria-label="Вставить подстановку">
+        {% for token, label in placeholders.items() %}
+        <button class="mailing-tokens__btn" type="button"
+                title="Вставить: {{ label }}"
+                @mousedown.prevent
+                @click="insertToken('{{ token }}')">{{ token }}</button>
+        {% endfor %}
+    </div>
+
+    <p class="mailing-composer__hint">
+        Сообщение уйдёт в Telegram и/или MAX — по подключённым каналам ученика.
+        Поддерживается базовое HTML-форматирование: &lt;b&gt;, &lt;i&gt;.
+    </p>
+
+    <button class="btn btn--primary mailing-composer__submit" type="submit">
+        Отправить
+        <i data-lucide="send"></i>
+    </button>
+</section>

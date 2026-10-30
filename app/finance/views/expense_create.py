@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.common.responses import dialog_closed
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.finance.services.access import LoginRequired, require_tutor_id
 from app.finance.services.expense_dialog import expense_dialog_context
@@ -48,6 +49,6 @@ async def create_expense_view(
             expense_dialog_context(tutor, data=data, errors=errors),
         )
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url="/tutor/finance", status_code=303)
     return dialog_closed("expense-saved")

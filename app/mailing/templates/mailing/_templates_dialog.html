@@ -1,0 +1,61 @@
+{# Модалка «Шаблоны сообщений»: список своих шаблонов, правка и удаление.
+
+   Кнопка-карандаш заменяет модалку формой правки (в #modal); удаление
+   перерисовывает этот диалог ответом POST — обновлённый список приходит
+   с сервера, и отдельного обработчика `templates-saved` здесь не нужно
+   (селект композера обновит свой слушатель). #}
+<div class="modal-root"
+     id="mailings-templates-dialog"
+     x-data="mailingsDialog()"
+     x-show="open" x-cloak
+     @keydown.escape.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content mailing-templates" role="dialog" aria-modal="true"
+         aria-labelledby="mailings-templates-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="mailings-templates-title">Шаблоны сообщений</h2>
+                <p>Редактируйте или удаляйте свои шаблоны.</p>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="modal-body mailing-templates__list">
+            {% for template in templates %}
+            <div class="mailing-templates__item">
+                <div class="mailing-templates__meta">
+                    <div class="mailing-templates__name">{{ template.title }}</div>
+                    <div class="mailing-templates__text">{{ template.text }}</div>
+                </div>
+                <div class="mailing-templates__actions">
+                    <button class="btn btn--ghost btn--icon" type="button"
+                            hx-get="/tutor/mailings/templates/{{ template.id }}/edit"
+                            hx-target="#modal" hx-swap="innerHTML"
+                            aria-label="Редактировать шаблон «{{ template.title }}»">
+                        <i data-lucide="pencil"></i>
+                    </button>
+                    <button class="btn btn--ghost btn--icon mailing-templates__delete" type="button"
+                            hx-post="/tutor/mailings/templates/{{ template.id }}/delete"
+                            hx-confirm="Удалить шаблон «{{ template.title }}»?"
+                            hx-target="#mailings-templates-dialog" hx-swap="outerHTML"
+                            aria-label="Удалить шаблон «{{ template.title }}»">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <p class="mailing-templates__empty">
+                Шаблонов пока нет. Введите текст сообщения и нажмите «Сохранить».
+            </p>
+            {% endfor %}
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn btn--ghost" type="button" @click="close()">Закрыть</button>
+        </div>
+    </div>
+</div>

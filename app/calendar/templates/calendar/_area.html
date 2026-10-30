@@ -6,6 +6,11 @@
   (design.md D4, риск «HTMX-фрагмент и полная страница разойтись»).
 
   Ожидаемый контекст — build_calendar_context() из services/presentation.py.
+  Границы рабочего времени приходят готовыми строками (`grid_rows`,
+  `grid_end_label`) и минутами (`data-grid-start`/`data-grid-end` для
+  calendar.js, дизайн D4). Атрибуты ставятся здесь, на корне сетки, а не
+  на #calendar-swap: HTMX-листание подменяет содержимое корня, атрибуты
+  корня не обновились бы, а область перерисовывается при каждом свопе.
 #}
 <div class="cal-toolbar">
     <button class="btn btn--ghost btn--icon" type="button"
@@ -36,23 +41,9 @@
     <span class="cal-tz">
         <i data-lucide="globe"></i>{{ timezone_label }}
     </span>
-
-    {# Кнопки панели: «Ссылка на окна» копирует публичную ссылку на
-       просматриваемую неделю (`/s/<tutor_id>?start=<понедельник>`, design
-       D7) — ученик откроет её без входа. При недоступном буфере обмена
-       ссылка показывается в поле рядом: её можно выделить и скопировать
-       вручную, страница не ломается (спека calendar, «Буфер обмена
-       недоступен»).
-
-       «Цвет» — работающий контрол режима раскраски (design.md D5):
-       «По ученику» / «По статусу». Активный режим приходит с сервера
-       (`?color=`), выбор запоминается в localStorage.
-
-       Иконка палитры стоит рядом с подписью, а не внутри неё: подпись
-       обновляет `x-text`, и он заменил бы содержимое кнопки вместе с
-       иконкой, поэтому `x-text` живёт на отдельном `<span>`. #}
+    
     <button class="btn btn--ghost" type="button" id="cal-link"
-            @click="copyWeekLink()">Ссылка на окна</button>
+            @click="copyWeekLink()">Ссылка для записи</button>
     {# Поле показа ссылки: скрыто, пока копирование удалось; открывается,
        если браузер запретил запись в буфер обмена. Значение заполняет
        `copyWeekLink` — сервер отдаёт только префикс и id репетитора. #}
@@ -61,7 +52,7 @@
                type="text" readonly x-ref="linkField"
                :value="linkFallback.url"
                @focus="$event.target.select()"
-               aria-label="Ссылка на окна для копирования">
+               aria-label="Ссылка для записи — скопируйте вручную">
     </div>
     {# «Цвет», «Добавить» и «⋮» — один flex-элемент панели: панель
        переносит строки, и без общей обёртки кнопка «⋮» оставалась на
@@ -129,7 +120,9 @@
 {% endif %}
 
 <div class="cal-scroll">
-    <div class="cal-grid">
+    {# Сетка недели: границы рабочего времени в data-атрибутах корня — их
+   читает calendar.js (подсказка времени, зажим драга и предзаполнения). #}
+<div class="cal-grid" data-grid-start="{{ grid_start_min }}" data-grid-end="{{ grid_end_min }}">
 
         {# Подсказка времени наведённой четверти часа (calendar.js) #}
         <div class="cal-hover" x-cloak x-show="hoverTime !== null"
@@ -162,30 +155,35 @@
         </div>
         {% endfor %}
 
-        {# Таймлайн 6:00–23:00: целый час крупно, половина — мелко #}
+        {# Таймлайн рабочего времени: целый час крупно, половина — мелко.
+           Строки и подписи построены на сервере (build_grid_rows) —
+           шаблон не считает часы сам. #}
         <div class="cal-times">
-            {% for hour in hours %}
+            {% for row in grid_rows %}
             <div class="cal-times__hour">
-                <span class="cal-times__h">{{ '%02d:00'|format(hour) }}</span>
-                <span class="cal-times__m">{{ '%02d:30'|format(hour) }}</span>
+                <span class="cal-times__h">{{ row.hour_label }}</span>
+                {% if row.half_label %}
+                <span class="cal-times__m">{{ row.half_label }}</span>
+                {% endif %}
             </div>
             {% endfor %}
-            <div class="cal-times__end"><span class="cal-times__h">23:00</span></div>
+            <div class="cal-times__end"><span class="cal-times__h">{{ grid_end_label }}</span></div>
         </div>
 
-        {# Семь колонок дней: четверти часа + карточки событий поверх #}
+        {# Семь колонок дней: кликабельные четверти рабочего времени +
+           карточки событий поверх. #}
         {% for day in days %}
         <div class="cal-day{% if day.unavailable %} cal-day--unavailable{% endif %}"
              data-date="{{ day.iso_date }}"
              {% if day.unavailable %}data-unavailable="{{ day.unavailable_title }}"
              title="{{ day.unavailable_title }}"{% endif %}>
-            {% for hour in hours %}
+            {% for row in grid_rows %}
             <div class="cal-hour">
-                {% for quarter in [0, 15, 30, 45] %}
+                {% for quarter in row.quarters %}
                 <div class="cal-slot"
                      @click="openSlot($event.currentTarget)"
-                     data-start="{{ day.iso_date }}T{{ '%02d:%02d'|format(hour, quarter) }}"
-                     data-end="{{ day.iso_date }}T{{ '%02d:%02d'|format(hour, quarter + 15) }}"></div>
+                     data-start="{{ day.iso_date }}T{{ quarter.start_label }}"
+                     data-end="{{ day.iso_date }}T{{ quarter.end_label }}"></div>
                 {% endfor %}
             </div>
             {% endfor %}
@@ -275,6 +273,6 @@
     <i data-lucide="plus"></i>
 </button>
 
-{# Тост демо-режима: подтверждения заглушек («Ссылка на окна», «Цвет») #}
+{# Тост: подтверждения действий панели («Ссылка для записи», «Цвет») #}
 <div class="cal-toast" x-cloak x-show="toast.open" x-text="toast.text"
      role="status" aria-live="polite"></div>

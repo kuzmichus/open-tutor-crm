@@ -1,0 +1,46 @@
+{# Вкладка «Домашние задания» кабинета ученика (change cabinet-homework).
+
+   Страница на CRM-каркасе, как «Мои уроки»: сайдбар кабинета и контент
+   в `.main`. Список — карточки `<details>` (партиал
+   `cabinet/_homework_card.html`), свежее задание сверху.
+
+   Контекст: student, tutor, cards (список HomeworkCard из
+   cabinet/services/homework.py). Время выводится в зоне репетитора. #}
+{% extends "base.html" %}
+{% block title %}Домашние задания — Open Tutor CRM{% endblock %}
+
+{% block body %}
+{% set active_page = 'cabinet-homework' %}
+{% include "cabinet/_sidebar.html" %}
+
+<!-- Мобильная шапка -->
+<header class="mobile-header">
+    <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+        <i data-lucide="menu"></i>
+    </button>
+    <span class="sidebar__brand">Кабинет ученика</span>
+</header>
+
+<main class="main">
+    <div class="main__container">
+        <div class="page-header">
+            <div>
+                <h1>Домашние задания</h1>
+                <p>Нажмите на задание, чтобы открыть его и отправить ответ репетитору</p>
+            </div>
+        </div>
+
+        {% if cards %}
+        <div class="hw-list">
+            {% for item in cards %}
+            {% include "cabinet/_homework_card.html" %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <p class="cabinet-empty">Домашних заданий пока нет.</p>
+        </div>
+        {% endif %}
+    </div>
+</main>
+{% endblock %}

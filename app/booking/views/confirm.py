@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.booking.services.access import get_owned_booking, require_tutor_id
 from app.booking.services.confirmation import confirm
 from app.common.responses import dialog_closed
+from app.common.responses import is_htmx
 from app.common.services.tutor_time import now_utc
 from app.database import get_db
 from app.slot.models.slot import Slot
@@ -76,6 +77,6 @@ async def confirm_booking(
             dialog_context(db, tutor, slot=slot, errors=errors),
         )
 
-    if request.headers.get("HX-Request") != "true":
+    if not is_htmx(request):
         return RedirectResponse(url=CALENDAR_URL, status_code=303)
     return dialog_closed()

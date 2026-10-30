@@ -1,0 +1,123 @@
+{# Сайдбар кабинета родителя: тот же каркас и те же классы, что у CRM
+   (`.sidebar`, `.nav-item`, `.sidebar__footer`) — интерфейс кабинета
+   повторяет кабинет репетитора (решение владельца, design D4/D5).
+
+   Навигация: секция на каждого привязанного ребёнка (имя ученика и ссылки
+   «Мои уроки» и «Домашние задания») плюс общие «Финансы» и «Профиль».
+   Дети в архиве показываются наравне с активными (D5): иначе навигация
+   разошлась бы с «Финансами», где их история остаётся видна. У контакта
+   без детей секций нет — остаются общие пункты (спека).
+
+   Тема и сворачивание работают общим `app.js`: `data-theme-toggle` -
+   кнопки переключают класс `.dark` на <html>, `data-sidebar-toggle` /
+   `data-sidebar-open` - сайдбар.
+
+   Использование:
+       {% set active_page = 'lessons' %}{% set active_student_id = child.id %}
+       {% include "cabinet/parent/_sidebar.html" %}
+
+   Контекст: contact (строка контакта), children (список учеников). #}
+{% set _active = active_page | default('') %}
+{% set _active_child = active_student_id | default('') %}
+<aside class="sidebar" aria-label="Навигация кабинета">
+
+    <div class="sidebar__header">
+        <span class="sidebar__logo" aria-hidden="true">
+            {% include "_logo.html" %}
+        </span>
+        <span class="sidebar__brand">Кабинет родителя</span>
+    </div>
+
+    <button class="sidebar__toggle" type="button"
+            data-sidebar-toggle
+            aria-controls="parent-nav"
+            aria-expanded="true"
+            aria-label="Свернуть сайдбар">
+        <i data-lucide="chevron-left"></i>
+    </button>
+
+    <nav class="sidebar__nav" id="parent-nav">
+        {% for child in children %}
+        {# Секция ребёнка: имя и две его страницы. Активность — пара
+           «раздел + ребёнок», у двух детей одна вкладка не может быть
+           активной одновременно. #}
+        <div class="parent-nav__section">
+            <span class="parent-nav__heading" title="{{ student_full_name(child) }}">
+                {{ student_full_name(child) }}
+            </span>
+            <a href="/parent/students/{{ child.id }}"
+               class="nav-item{% if _active == 'lessons' and _active_child == child.id %} nav-item--active{% endif %}"
+               title="Мои уроки"
+               {% if _active == 'lessons' and _active_child == child.id %}aria-current="page"{% endif %}>
+                <i data-lucide="book-open"></i>
+                <span>Мои уроки</span>
+            </a>
+            <a href="/parent/students/{{ child.id }}/homework"
+               class="nav-item{% if _active == 'homework' and _active_child == child.id %} nav-item--active{% endif %}"
+               title="Домашние задания"
+               {% if _active == 'homework' and _active_child == child.id %}aria-current="page"{% endif %}>
+                <i data-lucide="file-text"></i>
+                <span>Домашние задания</span>
+            </a>
+        </div>
+        {% endfor %}
+
+        <hr class="nav-divider">
+
+        <a href="/parent/finance"
+           class="nav-item{% if _active == 'finance' %} nav-item--active{% endif %}"
+           title="Финансы"
+           {% if _active == 'finance' %}aria-current="page"{% endif %}>
+            <i data-lucide="wallet"></i>
+            <span>Финансы</span>
+        </a>
+        <a href="/parent/profile"
+           class="nav-item{% if _active == 'profile' %} nav-item--active{% endif %}"
+           title="Профиль"
+           {% if _active == 'profile' %}aria-current="page"{% endif %}>
+            <i data-lucide="user"></i>
+            <span>Профиль</span>
+        </a>
+    </nav>
+
+    {# Футер — как у репетитора: тема и строка пользователя. Выход ведёт
+       в POST `/parent/logout` (отзыв сессии контакта), а не `/tutor/logout`. #}
+    <div class="sidebar__footer">
+        <div class="sidebar__theme">
+            <div class="theme-switch" role="group" aria-label="Тема оформления">
+                <button class="theme-switch__btn" type="button"
+                        data-theme-toggle="light"
+                        aria-pressed="true"
+                        title="Светлая тема">
+                    <i data-lucide="sun"></i>
+                    <span>Светлая</span>
+                </button>
+                <button class="theme-switch__btn" type="button"
+                        data-theme-toggle="dark"
+                        aria-pressed="false"
+                        title="Тёмная тема">
+                    <i data-lucide="moon"></i>
+                    <span>Тёмная</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="user-row-wrap flex items-center">
+            <span class="user-row user-row--grow">
+                <span class="user-avatar" aria-hidden="true">{{ contact.full_name[:1]|upper }}</span>
+                <span class="user-row__meta">
+                    <span class="user-row__name truncate">{{ contact.full_name }}</span>
+                    <span class="user-row__role truncate">Родитель</span>
+                </span>
+            </span>
+            <form method="post" action="/parent/logout">
+                <button class="btn btn--ghost btn--icon" type="submit" title="Выйти" aria-label="Выйти">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</aside>
+
+<!-- Overlay для мобильного off-canvas -->
+<div class="overlay" aria-hidden="true"></div>

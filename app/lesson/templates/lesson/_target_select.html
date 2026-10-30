@@ -65,7 +65,8 @@
                @keydown.enter.prevent="enterChoose()"
                @keydown.escape="closeList()">
 
-        <div class="combobox__list lesson-target__list" x-show="listOpen" x-cloak
+        <div class="combobox__list lesson-target__list" x-ref="list"
+             x-show="listOpen" x-cloak
              @click="choose($event.target)">
             <div class="lesson-target__options" id="{{ config.optionsId }}"></div>
             <div class="combobox__divider"></div>

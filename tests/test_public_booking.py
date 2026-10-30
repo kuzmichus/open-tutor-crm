@@ -1,8 +1,12 @@
-"""Тесты публичной страницы записи: ссылка, окна, заявка, лимит.
+"""Тесты публичной страницы записи: ссылка, сетка, выбор окна, заявка, лимит.
 
 Проверяется поведение через HTTP без сессии — тем же путём, что у ученика
 (правило AGENTS.md). Страница не должна раскрывать данные других учеников,
 поэтому часть тестов ищет в разметке отсутствие подстрок.
+
+Сетка показывает публичные окна недели: свободное — ссылкой выбора,
+занятое — карточкой «Занято» без указания, кем занято (спека public-booking,
+design D1). Приватные и прошедшие окна не показываются вовсе.
 """
 
 from datetime import UTC, date, datetime
@@ -18,6 +22,10 @@ MONDAY = date(2027, 10, 11)
 def _public_url(tutor_id: str, monday: date = MONDAY) -> str:
     """Адрес публичной страницы недели."""
     return f"/s/{tutor_id}?start={monday.isoformat()}"
+
+def _select_url(tutor_id: str, slot_id: str, monday: date = MONDAY) -> str:
+    """Адрес страницы с выбранным окном (ссылка свободной карточки)."""
+    return f"{_public_url(tutor_id, monday)}&slot={slot_id}"
 
 # --------------------------------------------------------------------------
 # 6.1 Ссылка: сборка и разбор
@@ -60,23 +68,22 @@ def test_public_page_opens_without_session(client, tutor_factory):
     response = client.get(_public_url(tutor_id))
 
     assert response.status_code == 200
-    assert "Запись на занятие" in response.text
+    assert "Запись на пробный урок" in response.text
+    assert "Преподаватель:" in response.text
 
 # --------------------------------------------------------------------------
-# 6.2 Что показывается на странице
+# 6.2 Сетка недели
 # --------------------------------------------------------------------------
 
-def test_page_shows_only_free_public_future_slots(client, tutor_factory, slot_factory):
-    """Приватное, прошедшее и занятое окно не показываются."""
+def test_grid_shows_free_and_busy_slots(client, tutor_factory, slot_factory):
+    """Свободное окно — ссылка выбора, занятое — карточка «Занято»."""
     from app.booking.models.booking import Booking
     from app.lesson.models.lesson import Lesson
 
-    tutor_id = tutor_factory(email="public-filter@example.com")
+    tutor_id = tutor_factory(email="public-grid@example.com")
     free_id = slot_factory(tutor_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
-    private_id = slot_factory(tutor_id, datetime(2027, 10, 12, 11, 0, tzinfo=UTC), is_public=False)
     busy_lesson_id = slot_factory(tutor_id, datetime(2027, 10, 12, 13, 0, tzinfo=UTC))
     busy_booking_id = slot_factory(tutor_id, datetime(2027, 10, 12, 14, 0, tzinfo=UTC))
-    past_id = slot_factory(tutor_id, datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
 
     # Окно 13:00 занято уроком, 14:00 — активной бронью.
     with SessionLocal() as session:
@@ -106,14 +113,29 @@ def test_page_shows_only_free_public_future_slots(client, tutor_factory, slot_fa
     response = client.get(_public_url(tutor_id))
 
     assert response.status_code == 200
+    # Свободное окно: время видно, карточка — ссылка на выбор.
     assert "10:00" in response.text
-    assert f'value="{free_id}"' in response.text
-    # Приватное, занятое уроком, занятое бронью и прошедшее окна отсутствуют.
-    for hidden in (private_id, busy_lesson_id, busy_booking_id, past_id):
-        assert f'value="{hidden}"' not in response.text, hidden
+    assert f"slot={free_id}" in response.text
+    assert "Свободно" in response.text
+    # Занятые окна видны, но безлики: время есть, выбора нет.
+    assert "13:00" in response.text
+    assert "14:00" in response.text
+    assert "Занято" in response.text
+    for busy_id in (busy_lesson_id, busy_booking_id):
+        assert f"slot={busy_id}" not in response.text, busy_id
+    # Имя ученика не попадает в разметку.
+    assert "Иван" not in response.text
+
+def test_page_hides_private_and_past_slots(client, tutor_factory, slot_factory):
+    """Приватное и прошедшее окно не показываются ученику."""
+    tutor_id = tutor_factory(email="public-filter@example.com")
+    slot_factory(tutor_id, datetime(2027, 10, 12, 11, 0, tzinfo=UTC), is_public=False)
+    slot_factory(tutor_id, datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
+
+    response = client.get(_public_url(tutor_id))
+
+    assert response.status_code == 200
     assert "11:00" not in response.text
-    assert "13:00" not in response.text
-    assert "14:00" not in response.text
     assert "05.01.2026" not in response.text
 
 def test_page_hides_slot_in_unavailable_day(client, tutor_factory, unavailability_factory, slot_factory):
@@ -130,21 +152,24 @@ def test_page_hides_slot_in_unavailable_day(client, tutor_factory, unavailabilit
 
     assert response.status_code == 200
     assert "10:00" not in response.text
-    assert "свободных окон нет" in response.text
+    # Пустой день объясняется подписью, а не пустотой.
+    assert "нет мест" in response.text
 
-def test_empty_week_explains_no_slots(client, tutor_factory):
-    """Пустая неделя даёт пояснение, а не ошибку."""
+def test_empty_week_shows_no_seats_per_day(client, tutor_factory):
+    """Пустая неделя даёт сетку из семи дней с подписью «нет мест»."""
     tutor_id = tutor_factory(email="public-empty@example.com")
 
     response = client.get(_public_url(tutor_id))
 
     assert response.status_code == 200
-    assert "свободных окон нет" in response.text
+    assert response.text.count("нет мест") == 7
+    assert "Понедельник" in response.text
+    assert "Воскресенье" in response.text
 
 def test_week_fully_unavailable_shows_reason(
     client, tutor_factory, unavailability_factory
 ):
-    """Неделя целиком в отпуске объясняет причину вместо списка окон."""
+    """Неделя целиком в отпуске объясняет причину вместо сетки окон."""
     tutor_id = tutor_factory(email="public-full-vacation@example.com")
     unavailability_factory(
         tutor_id=tutor_id,
@@ -157,14 +182,23 @@ def test_week_fully_unavailable_shows_reason(
     assert "Педагог недоступен: Отпуск" in response.text
 
 def test_page_warns_about_timezone(client, tutor_factory):
-    """Подпись о поясе показывает зону педагога."""
+    """Баннер о поясе показывает зону педагога и смещение UTC."""
     tutor_id = tutor_factory(
         email="public-zone@example.com", timezone="Europe/Samara"
     )
 
     response = client.get(_public_url(tutor_id))
 
-    assert "Обратите внимание, время указано: Europe/Samara" in response.text
+    assert "Внимание: время указано по Europe/Samara (UTC+4)" in response.text
+    assert "Учитывайте разницу с вашим часовым поясом" in response.text
+
+def test_week_navigation_shows_range(client, tutor_factory):
+    """Подпись недели — диапазон дат «11 окт. — 17 окт. 2027»."""
+    tutor_id = tutor_factory(email="public-range@example.com")
+
+    response = client.get(_public_url(tutor_id, MONDAY))
+
+    assert "11 окт. — 17 окт. 2027" in response.text
 
 def test_page_shows_only_own_tutor_slots(client, tutor_factory, slot_factory):
     """Публичная страница не показывает окна другого репетитора.
@@ -182,8 +216,8 @@ def test_page_shows_only_own_tutor_slots(client, tutor_factory, slot_factory):
     response = client.get(_public_url(own_id))
 
     assert response.status_code == 200
-    assert f'value="{own_slot}"' in response.text
-    assert f'value="{foreign_slot}"' not in response.text
+    assert f"slot={own_slot}" in response.text
+    assert f"slot={foreign_slot}" not in response.text
     assert "11:00" not in response.text
 
 def test_page_does_not_leak_student_data(client, tutor_factory, student_factory, slot_factory):
@@ -225,11 +259,70 @@ def test_page_does_not_leak_student_data(client, tutor_factory, student_factory,
         assert secret not in response.text, secret
 
 # --------------------------------------------------------------------------
-# 6.3 Форма заявки
+# 6.3 Выбор окна
 # --------------------------------------------------------------------------
 
-def test_booking_creates_pending(client, tutor_factory, slot_factory):
-    """Валидная заявка создаёт бронь в статусе «Ожидает подтверждения»."""
+def test_selected_slot_opens_form(client, tutor_factory, slot_factory):
+    """`?slot=` свободного окна подсвечивает его и открывает форму заявки."""
+    tutor_id = tutor_factory(email="public-select@example.com", timezone="UTC")
+    slot_id = slot_factory(tutor_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
+
+    response = client.get(_select_url(tutor_id, slot_id))
+
+    assert response.status_code == 200
+    assert "Запись на урок" in response.text
+    assert "Выбрано:" in response.text
+    assert "12 октября, вторник, 10:00 — 10:40" in response.text
+    assert f'value="{slot_id}"' in response.text
+    assert "Ваше имя" in response.text
+
+def test_no_form_without_selection(client, tutor_factory, slot_factory):
+    """Без выбора формы нет — только сетка."""
+    tutor_id = tutor_factory(email="public-noselect@example.com")
+    slot_factory(tutor_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
+
+    response = client.get(_public_url(tutor_id))
+
+    assert "Запись на урок" not in response.text
+    assert "Выбрано:" not in response.text
+
+def test_unknown_slot_is_ignored(client, tutor_factory):
+    """Несуществующий `slot` игнорируется: сетка без формы, без ошибки."""
+    tutor_id = tutor_factory(email="public-badslot@example.com")
+
+    response = client.get(_select_url(tutor_id, "00000000-0000-0000-0000-000000000000"))
+
+    assert response.status_code == 200
+    assert "Запись на урок" not in response.text
+
+def test_busy_slot_cannot_be_selected(client, tutor_factory, slot_factory, booking_factory):
+    """Занятое окно выбором не становится: форма не открывается."""
+    tutor_id = tutor_factory(email="public-busyselect@example.com")
+    slot_id = slot_factory(tutor_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
+    booking_factory(slot_id)
+
+    response = client.get(_select_url(tutor_id, slot_id))
+
+    assert response.status_code == 200
+    assert "Запись на урок" not in response.text
+
+def test_foreign_slot_cannot_be_selected(client, tutor_factory, slot_factory):
+    """Окно другого репетитора через `?slot=` не выбирается."""
+    tutor_id = tutor_factory(email="public-foreignselect@example.com")
+    other_id = tutor_factory(email="public-foreignowner@example.com")
+    foreign_slot = slot_factory(other_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
+
+    response = client.get(_select_url(tutor_id, foreign_slot))
+
+    assert response.status_code == 200
+    assert "Запись на урок" not in response.text
+
+# --------------------------------------------------------------------------
+# 6.4 Форма заявки
+# --------------------------------------------------------------------------
+
+def test_booking_creates_pending_with_comment(client, tutor_factory, slot_factory):
+    """Валидная заявка создаёт бронь «Ожидает подтверждения» с комментарием."""
     from app.booking.models.booking import Booking
 
     tutor_id = tutor_factory(email="public-book@example.com")
@@ -241,20 +334,67 @@ def test_booking_creates_pending(client, tutor_factory, slot_factory):
             "slot_id": slot_id,
             "name": "Мария Петрова",
             "contact": "+7 999 000-00-00",
+            "comment": "Хочу подтянуть разговорный английский",
             "start": MONDAY.isoformat(),
         },
     )
 
     assert response.status_code == 200
-    assert "Заявка отправлена" in response.text
+    # Экран успеха: заголовок, пояснение и выбранное время (design D3).
+    assert "Заявка отправлена!" in response.text
+    assert "Ожидайте подтверждение от преподавателя." in response.text
+    assert "Выбранное время:" in response.text
+    assert "12 октября 2027 10:00 — 10:40" in response.text
 
     with SessionLocal() as session:
         bookings = session.query(Booking).all()
     assert len(bookings) == 1
     assert bookings[0].status == "pending"
     assert bookings[0].name == "Мария Петрова"
+    assert bookings[0].comment == "Хочу подтянуть разговорный английский"
     assert bookings[0].student_id is None
     assert bookings[0].lesson_id is None
+
+def test_booking_without_comment_stores_none(client, tutor_factory, slot_factory):
+    """Пустой комментарий сохраняется как NULL, а не пустой строкой."""
+    from app.booking.models.booking import Booking
+
+    tutor_id = tutor_factory(email="public-nocomment@example.com")
+    slot_id = slot_factory(tutor_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
+
+    client.post(
+        f"/s/{tutor_id}/book",
+        data={
+            "slot_id": slot_id,
+            "name": "Мария",
+            "contact": "+7 999 000-00-00",
+            "comment": "   ",
+        },
+    )
+
+    with SessionLocal() as session:
+        assert session.query(Booking).one().comment is None
+
+def test_too_long_comment_is_rejected(client, tutor_factory, slot_factory):
+    """Комментарий длиннее 500 символов блокирует заявку."""
+    from app.booking.models.booking import Booking
+
+    tutor_id = tutor_factory(email="public-longcomment@example.com")
+    slot_id = slot_factory(tutor_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
+
+    response = client.post(
+        f"/s/{tutor_id}/book",
+        data={
+            "slot_id": slot_id,
+            "name": "Мария",
+            "contact": "+7 999 000-00-00",
+            "comment": "а" * 501,
+        },
+    )
+
+    assert "Комментарий — не длиннее 500 символов." in response.text
+    with SessionLocal() as session:
+        assert session.query(Booking).count() == 0
 
 @pytest.mark.parametrize(
     ("overrides", "message"),
@@ -265,20 +405,27 @@ def test_booking_creates_pending(client, tutor_factory, slot_factory):
     ids=["no-name", "no-contact"],
 )
 def test_booking_without_required_field_is_rejected(
-    client, tutor_factory, overrides, message
-, slot_factory):
+    client, tutor_factory, slot_factory, overrides, message
+):
     """Пустое имя или контакт блокируют заявку, бронь не создаётся."""
     from app.booking.models.booking import Booking
 
     tutor_id = tutor_factory(email="public-invalid@example.com")
     slot_id = slot_factory(tutor_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
-    data = {"slot_id": slot_id, "name": "Мария", "contact": "+7 999 000-00-00"}
+    data = {
+        "slot_id": slot_id,
+        "name": "Мария",
+        "contact": "+7 999 000-00-00",
+        "start": MONDAY.isoformat(),
+    }
     data.update(overrides)
 
     response = client.post(f"/s/{tutor_id}/book", data=data)
 
     assert response.status_code == 200
     assert message in response.text
+    # Введённые значения не теряются: выбранное окно и форма снова на месте.
+    assert f'value="{slot_id}"' in response.text
     with SessionLocal() as session:
         assert session.query(Booking).count() == 0
 
@@ -351,7 +498,44 @@ def test_booking_on_foreign_slot_is_rejected(client, tutor_factory, slot_factory
         assert session.query(Booking).count() == 0
 
 # --------------------------------------------------------------------------
-# 6.4 Ограничение частоты
+# 6.5 Комментарий виден педагогу
+# --------------------------------------------------------------------------
+
+def test_tutor_sees_booking_comment_in_slot_dialog(
+    client, tutor_factory, slot_factory
+):
+    """Комментарий заявки показывается педагогу в диалоге окна."""
+    tutor_id = tutor_factory(
+        email="public-dialog@example.com",
+        password="Секретный-Пароль-1",
+        timezone="UTC",
+    )
+    slot_id = slot_factory(tutor_id, datetime(2027, 10, 12, 10, 0, tzinfo=UTC))
+    client.post(
+        f"/s/{tutor_id}/book",
+        data={
+            "slot_id": slot_id,
+            "name": "Мария Петрова",
+            "contact": "+7 999 000-00-00",
+            "comment": "Английский для работы",
+        },
+    )
+    client.post(
+        "/tutor/login",
+        data={
+            "email": "public-dialog@example.com",
+            "password": "Секретный-Пароль-1",
+        },
+        follow_redirects=False,
+    )
+
+    response = client.get(f"/tutor/slots/{slot_id}")
+
+    assert response.status_code == 200
+    assert "Английский для работы" in response.text
+
+# --------------------------------------------------------------------------
+# 6.6 Ограничение частоты
 # --------------------------------------------------------------------------
 
 def test_rate_limit_blocks_sixth_attempt(client, tutor_factory, slot_factory):
@@ -377,7 +561,7 @@ def test_rate_limit_blocks_sixth_attempt(client, tutor_factory, slot_factory):
 
     # Первая заявка проходит и создаёт бронь.
     first = client.post(f"/s/{tutor_id}/book", data=data)
-    assert "Заявка отправлена" in first.text
+    assert "Заявка отправлена!" in first.text
 
     # Остальные до лимита отклоняются как «время занято», но считаются.
     for _ in range(BOOKING_ATTEMPT_LIMIT - 1):
@@ -420,7 +604,7 @@ def test_rate_limit_is_per_slot(client, tutor_factory, slot_factory):
         },
     )
 
-    assert "Заявка отправлена" in response.text
+    assert "Заявка отправлена!" in response.text
 
 def test_rate_limit_does_not_eat_limit_on_form_errors(client, tutor_factory, slot_factory):
     """Опечатка в имени не съедает лимит: форма проверяется до счётчика."""
@@ -446,7 +630,7 @@ def test_rate_limit_does_not_eat_limit_on_form_errors(client, tutor_factory, slo
         },
     )
 
-    assert "Заявка отправлена" in ok.text
+    assert "Заявка отправлена!" in ok.text
 
 def test_rate_limit_purges_old_rows():
     """Счётчики старше срока хранения удаляются при обращении."""

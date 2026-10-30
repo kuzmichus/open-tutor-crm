@@ -28,6 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.constraints import sql_string_in
 from app.database import Base
 
 # Категория расхода; «Прочее» — умолчание формы.
@@ -60,12 +61,6 @@ EXPENSE_CATEGORY_LABELS = {
 DEFAULT_EXPENSE_CATEGORY = "other"
 
 
-def _sql_string_in(column: str, values: tuple[str, ...]) -> str:
-    """`column IN ('a', 'b')` — строковый список для CHECK-ограничения."""
-    quoted = ", ".join(f"'{value}'" for value in values)
-    return f"{column} IN ({quoted})"
-
-
 class Expense(Base):
     """Трата репетитора: категория, сумма и день траты.
 
@@ -85,7 +80,7 @@ class Expense(Base):
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_expenses_amount"),
         CheckConstraint(
-            _sql_string_in("category", EXPENSE_CATEGORIES),
+            sql_string_in("category", EXPENSE_CATEGORIES),
             name="ck_expenses_category",
         ),
     )

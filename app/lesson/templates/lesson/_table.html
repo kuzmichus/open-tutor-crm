@@ -1,48 +1,145 @@
 {# Партиал таблицы уроков: используется страницей списка и htmx-ответом
    фильтров (`/tutor/lessons/list`).
 
-   Контекст: rows ({lesson, student_name, group_name}), q, period, student_id.
+   Контекст: rows ({lesson, student_name, group_name}), total, paging, columns,
+   sort, direction, q, period, status, student_id, student_options.
 
    Подписи берутся из помощников модуля (`lesson_target`, `lesson_datetime`,
    `lesson_price`, `lesson_rating`, `lesson_status_label`) — см.
    `app/lesson/services/presentation.py`. Дата и время переводятся в зону
-   `tutor` на сервере (спека tutor-timezone). #}
+   `tutor` на сервере (спека tutor-timezone).
+
+   Сортировка и страницы — обычные ссылки (`href`) с `hx-get`: без JS они
+   перезагружают страницу, с htmx — только таблицу (change
+   lessons-table-scale). Ссылки собирает `table_context`, шаблон их не
+   склеивает: иначе фильтры терялись бы при переходе на вторую страницу. #}
 {% if rows %}
-<div class="lessons-table-wrap">
-    <table class="lessons-table">
-        <caption class="sr-only">Уроки: цель, дата и время, стоимость, оценка, статус</caption>
-        <thead>
-            <tr class="lessons-table__head">
-                <th class="lessons-table__th" scope="col">Ученик / Группа</th>
-                <th class="lessons-table__th" scope="col">Дата и время</th>
-                <th class="lessons-table__th" scope="col">Стоимость</th>
-                <th class="lessons-table__th" scope="col">Оценка</th>
-                <th class="lessons-table__th lessons-table__th--status" scope="col">Статус</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in rows %}
-            {% set lesson = row.lesson %}
-            {# Клик по строке открывает модалку редактирования (задача 6.1). #}
-            <tr class="lessons-table__row" id="lesson-row-{{ lesson.id }}"
-                    hx-get="/tutor/lessons/{{ lesson.id }}/edit"
-                    hx-target="#modal" hx-swap="innerHTML">
-                <td class="lessons-table__cell">
-                    <span class="lessons-table__target">
-                        <span class="lessons-table__name">{{ lesson_target(row.student_name, row.group_name, lesson.type) }}</span>
-                        <span class="chip chip--{{ lesson.type }}">{{ lesson_type_chip(lesson.type) }}</span>
-                    </span>
-                </td>
-                <td class="lessons-table__cell">{{ lesson_datetime(lesson.starts_at, tutor) }}</td>
-                <td class="lessons-table__cell">{{ lesson_price(lesson.price, lesson_type=lesson.type, status=lesson.status) }}</td>
-                <td class="lessons-table__cell lessons-table__rating">{{ lesson_rating(lesson.rating) }}</td>
-                <td class="lessons-table__cell lessons-table__cell--status">
-                    <span class="chip chip--{{ lesson.status }}">{{ lesson_status_label(lesson.status) }}</span>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+{# Форма вокруг таблицы: массовая отметка работает и без JS — обычный POST
+   с 303-редиректом. `hx-swap="none"` при ответе htmx: сервер отвечает
+   пустым телом и событием `lesson-saved`, таблица перезапрашивается сама,
+   а не мигает пустотой. #}
+<form class="lessons-bulk"
+      method="post"
+      action="/tutor/lessons/complete-selected"
+      hx-post="/tutor/lessons/complete-selected"
+      hx-swap="none">
+    {# Панель действий — над таблицей, а не под ней: при 50 строках кнопка
+       оказывалась в конце прокрутки, и, отметив уроки вверху, педагог не
+       видел действия (проверено в браузере). #}
+    <div class="lessons-bulk__actions">
+        <button class="btn btn--outline" type="submit" data-lessons-complete disabled>
+            <i data-lucide="check-check"></i>
+            Отметить выбранные проведёнными
+        </button>
+        <span class="lessons-bulk__hint" data-lessons-selection-hint>
+            Отметьте уроки, которые уже прошли
+        </span>
+    </div>
+
+    <div class="lessons-table-wrap">
+        <table class="lessons-table">
+            <caption class="sr-only">Уроки: цель, дата и время, стоимость, оценка, статус</caption>
+            <thead>
+                <tr class="lessons-table__head">
+                    <th class="lessons-table__th lessons-table__th--check" scope="col">
+                        <label class="lessons-select-hit">
+                            <input class="lessons-select" type="checkbox"
+                                   data-lessons-select-all
+                                   aria-label="Выбрать все уроки на странице">
+                        </label>
+                    </th>
+                    {% for column in columns %}
+                    <th class="lessons-table__th{% if column.key == 'status' %} lessons-table__th--status{% endif %}"
+                        scope="col"
+                        {% if column.aria_sort %}aria-sort="{{ column.aria_sort }}"{% endif %}>
+                        {% if column.sortable %}
+                        <a class="lessons-table__sort{% if column.active %} lessons-table__sort--active{% endif %}"
+                           href="{{ column.url }}"
+                           hx-get="{{ column.url }}"
+                           hx-target="#lessons-table"
+                           hx-swap="innerHTML"
+                           hx-push-url="true">
+                            {{ column.label }}
+                            <span class="lessons-table__sort-icon" aria-hidden="true">
+                                {% if column.active %}
+                                <i data-lucide="{{ 'arrow-up' if column.direction == 'asc' else 'arrow-down' }}"></i>
+                                {% else %}
+                                <i data-lucide="chevrons-up-down"></i>
+                                {% endif %}
+                            </span>
+                        </a>
+                        {% else %}
+                        {{ column.label }}
+                        {% endif %}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                {% set lesson = row.lesson %}
+                {# Клик по строке открывает модалку редактирования (задача 6.1).
+                   Клик по цели чекбокса исключён фильтром триггера: строка
+                   ловит клик целиком, и без фильтра выбор строки открывал бы
+                   форму. Декларативно — надёжнее, чем гасить всплытие в JS:
+                   обработчик htmx висит на самой строке. #}
+                <tr class="lessons-table__row" id="lesson-row-{{ lesson.id }}"
+                        hx-get="/tutor/lessons/{{ lesson.id }}/edit"
+                        hx-trigger="click[!event.target.closest('.lessons-select-hit')]"
+                        hx-target="#modal" hx-swap="innerHTML">
+                    <td class="lessons-table__cell lessons-table__cell--check">
+                        {# Проведённый урок отметить нечего: чекбокс выключен,
+                           сервер такие строки всё равно пропускает. #}
+                        <label class="lessons-select-hit">
+                            <input class="lessons-select" type="checkbox"
+                                   name="lesson_id" value="{{ lesson.id }}"
+                                   data-lesson-select
+                                   {% if lesson.status != 'planned' %}disabled{% endif %}
+                                   aria-label="Выбрать урок: {{ lesson_target(row.student_name, row.group_name, lesson.type) }}">
+                        </label>
+                    </td>
+                    <td class="lessons-table__cell">
+                        <span class="lessons-table__target">
+                            <span class="lessons-table__name">{{ lesson_target(row.student_name, row.group_name, lesson.type) }}</span>
+                            <span class="chip chip--{{ lesson.type }}">{{ lesson_type_chip(lesson.type) }}</span>
+                        </span>
+                    </td>
+                    <td class="lessons-table__cell">{{ lesson_datetime(lesson.starts_at, tutor) }}</td>
+                    <td class="lessons-table__cell">{{ lesson_price(lesson.price, lesson_type=lesson.type, status=lesson.status) }}</td>
+                    <td class="lessons-table__cell lessons-table__rating">{{ lesson_rating(lesson.rating) }}</td>
+                    {# Статус — последняя ячейка: порядок обязан совпадать с
+                       шапкой (`COLUMNS` в `table_context`), иначе «Статус»
+                       стоит над стоимостью. #}
+                    <td class="lessons-table__cell lessons-table__cell--status">
+                        <span class="chip chip--{{ lesson.status }}">{{ lesson_status_label(lesson.status) }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</form>
+
+<div class="lessons-pagination">
+    <span class="lessons-pagination__info">
+        Всего: {{ paging.total }} · страница {{ paging.page }} из {{ paging.pages }}
+    </span>
+    <div class="lessons-pagination__nav">
+        {% if paging.prev_url %}
+        <a class="btn btn--outline btn--sm" href="{{ paging.prev_url }}"
+           hx-get="{{ paging.prev_url }}" hx-target="#lessons-table"
+           hx-swap="innerHTML" hx-push-url="true">Назад</a>
+        {% else %}
+        <span class="lessons-pagination__ghost">Назад</span>
+        {% endif %}
+        {% if paging.next_url %}
+        <a class="btn btn--outline btn--sm" href="{{ paging.next_url }}"
+           hx-get="{{ paging.next_url }}" hx-target="#lessons-table"
+           hx-swap="innerHTML" hx-push-url="true">Вперёд</a>
+        {% else %}
+        <span class="lessons-pagination__ghost">Вперёд</span>
+        {% endif %}
+    </div>
 </div>
 {% else %}
 <div class="empty-state">

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Брони и заявки — Open Tutor CRM{% endblock %}
+
+{# Диалог окна (Alpine.data `slotDialog`) приходит свопом в `#modal` и
+   открывается кнопкой «Принять»: закрытие (крестик, «Закрыть», Escape,
+   `slot-saved` после подтверждения) живёт в этом компоненте. Подключается
+   до alpine.min.js — подписка на `alpine:init` должна сработать раньше
+   обхода DOM (тот же паттерн, что на странице календаря). #}
+{% block head %}
+    <script src="/static/slots.js" defer></script>
+{% endblock %}
+
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            <a class="back-link" href="/tutor/">
+                <i data-lucide="arrow-left"></i>
+                Назад
+            </a>
+
+            <div class="page-header page-header--row">
+                <div>
+                    <h1>Брони и заявки</h1>
+                    <p>Управляйте своими бронями и заявками</p>
+                </div>
+                {# Публичная ссылка на запись текущей недели: открывается
+                   новой вкладкой — репетитор проверяет, что видит ученик,
+                   и копирует адрес оттуда. #}
+                <a class="btn btn--primary" href="{{ share_url }}" target="_blank"
+                   rel="noopener noreferrer">
+                    <i data-lucide="share-2"></i>
+                    Поделиться расписанием
+                </a>
+            </div>
+
+            {# Список живёт в партиале и перезапрашивается по `slot-saved`:
+               это событие шлют успешные подтверждение/отклонение/отмена —
+               карточка уходит (или переезжает в историю) без перезагрузки. #}
+            <div id="bookings-content"
+                 hx-get="/tutor/bookings/list"
+                 hx-trigger="slot-saved from:body"
+                 hx-swap="innerHTML">
+                {% include "booking/_list.html" %}
+            </div>
+
+            {# Сюда htmx вставляет диалог окна: подтверждение заявки —
+               в диалоге, там же выбор ученика при совпадениях. #}
+            <div id="modal"></div>
+        </div>
+    </main>
+
+    <!-- Нижний таб-бар (мобилка) -->
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/tutor/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/tutor/bookings" class="bottom-bar__item">
+            <i data-lucide="calendar-check"></i><span>Брони</span>
+        </a>
+        <a href="/tutor/tasks" class="bottom-bar__item">
+            <i data-lucide="square-check-big"></i><span>Задачи</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
+{% endblock %}

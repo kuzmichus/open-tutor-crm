@@ -27,14 +27,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.constraints import sql_int_in
 from app.database import Base
 from app.lesson.models.lesson import LESSON_DURATIONS
-
-
-def _sql_int_in(column: str, values: tuple[int, ...]) -> str:
-    """`column IN (30, 35)` — числовой список для CHECK-ограничения."""
-    joined = ", ".join(str(value) for value in values)
-    return f"{column} IN ({joined})"
 
 
 class Slot(Base):
@@ -52,7 +47,7 @@ class Slot(Base):
     __tablename__ = "slots"
     __table_args__ = (
         CheckConstraint(
-            _sql_int_in("duration_min", LESSON_DURATIONS),
+            sql_int_in("duration_min", LESSON_DURATIONS),
             name="ck_slots_duration",
         ),
         UniqueConstraint("tutor_id", "starts_at", name="uq_slots_tutor_start"),

@@ -8,6 +8,8 @@ HTTP-клиент проходит тот же путь, что и браузе�
 
 from sqlalchemy import select
 
+import pytest
+
 from app.database import SessionLocal
 from app.finance.models.account_operation import AccountOperation
 from app.student.models.student import Student
@@ -171,12 +173,22 @@ def test_recalculate_activates(
     assert _charges(student) == 1
 
 
-def test_archived_stays_archived(
-    client, tutor_factory, student_factory, lesson_factory
+@pytest.mark.parametrize(
+    "status",
+    [
+        pytest.param("archived", id="archived"),
+        pytest.param("active", id="active"),
+    ],
+)
+def test_existing_status_is_kept(
+    status, client, tutor_factory, student_factory, lesson_factory
 ):
-    """Списание у архивного ученика не возвращает его в «Активные»."""
-    owner = _owner(client, tutor_factory, email="auto-act-archive@example.com")
-    student = student_factory(tutor_id=owner, status="archived")
+    """Уже определённый статус ученика проведение урока не меняет.
+
+    Меняется только «новый» → «активный»; списание при этом создаётся.
+    """
+    owner = _owner(client, tutor_factory, email=f"auto-act-{status}@example.com")
+    student = student_factory(tutor_id=owner, status=status)
     lesson = lesson_factory(student_id=student, status="planned", price=None)
 
     response = client.post(
@@ -185,23 +197,5 @@ def test_archived_stays_archived(
         headers=HTMX,
     )
     assert response.status_code == 200
-    assert _status(student) == "archived"
-    assert _charges(student) == 1  # списание создано, статус не тронут
-
-
-def test_active_stays_active(
-    client, tutor_factory, student_factory, lesson_factory
-):
-    """Повторное проведение урока у «активного» ничего не меняет и не падает."""
-    owner = _owner(client, tutor_factory, email="auto-act-twice@example.com")
-    student = student_factory(tutor_id=owner, status="active")
-    lesson = lesson_factory(student_id=student, status="planned", price=None)
-
-    response = client.post(
-        f"/tutor/lessons/{lesson}",
-        data=_update_form(student, status="completed", price="1200"),
-        headers=HTMX,
-    )
-    assert response.status_code == 200
-    assert _status(student) == "active"
+    assert _status(student) == status
     assert _charges(student) == 1

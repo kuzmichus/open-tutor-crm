@@ -6,6 +6,8 @@ from app.student.views import (
     access_form,
     access_save,
     archive_student,
+    cabinet_invite,
+    contact_cabinet_invite,
     card,
     create_student,
     edit_student,
@@ -13,6 +15,7 @@ from app.student.views import (
     lessons_modal,
     list_partial,
     lookup_contact,
+    messengers,
     new_student,
     report_modal,
     update_student,
@@ -33,6 +36,16 @@ router.include_router(lessons_modal.router)
 router.include_router(report_modal.router)
 router.include_router(access_form.router)
 router.include_router(access_save.router)
+# Блок приглашений в мессенджеры: пути `/tutor/students/{id}/messengers`
+# длиннее маршрутов карточки и с ними не конфликтуют.
+router.include_router(messengers.router)
+# Блок «Личный кабинет»: приглашение по ссылке —
+# `/tutor/students/{id}/cabinet/invite`, тоже длиннее маршрутов карточки.
+router.include_router(cabinet_invite.router)
+# Бейдж «Личный кабинет» на миникарточке контакта: приглашение родителя —
+# `/tutor/contacts/{id}/cabinet/invite`. Префикса `/tutor/contacts` до
+# этого не было, пересекаться не с чем.
+router.include_router(contact_cabinet_invite.router)
 router.include_router(edit_student.router)
 router.include_router(update_student.router)
 router.include_router(archive_student.router)

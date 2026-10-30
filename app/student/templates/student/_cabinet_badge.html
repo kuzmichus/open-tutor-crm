@@ -1,0 +1,67 @@
+{# Бейдж «Личный кабинет» на миникарточке контакта (change parent-cabinet).
+
+   Три состояния (спека): вход не привязан / активна одноразовая ссылка /
+   вход привязан. Вход и активная ссылка не исключают друг друга — ссылку
+   держат для сброса пароля, поэтому показываются и то, и другое.
+
+   Партиал рендерится из двух мест: строки контакта (`_contact_row.html`
+   через `{% with %}` + include) и HTMX-ответа роута
+   `POST /tutor/contacts/{contact_id}/cabinet/invite` — разметка одна,
+   ответ действия не может «чуть-чуть» отличаться от первоначального вида.
+
+   Действие обновляет ТОЛЬКО бейдж (`hx-target` на сам бейдж, `outerHTML`),
+   не строку: замена строки затёрла бы несохранённые правки раскрытой
+   формы контакта (спека «Правки формы не теряются»). Кнопка —
+   `type="button"` без no-JS-фолбэка (design D3): `formaction` отправлял
+   бы всю форму ученика на маршрут приглашения.
+
+   Ссылка дублируется открытым текстом: в буфер её кладёт Alpine-фабрика
+   `contactCabinetBadge` (students.js) — читается свойство `href` якоря,
+   браузер сам разворачивает относительный адрес в абсолютный.
+
+   Контекст: badge_contact_id, badge {has_access, email, has_invite, token}. #}
+<div class="contact-cabinet" id="contact-cabinet-{{ badge_contact_id }}"
+     x-data="contactCabinetBadge()">
+    <span class="contact-cabinet__title">Личный кабинет</span>
+
+    {% if badge.has_access %}
+    <p class="contact-cabinet__access">
+        <i data-lucide="circle-check" aria-hidden="true"></i>
+        <span>Вход привязан{% if badge.email %}: {{ badge.email }}{% endif %}</span>
+    </p>
+    {% else %}
+    <p class="contact-cabinet__note">
+        Пригласите родителя — по ссылке он сам задаст email и пароль.
+    </p>
+    {% endif %}
+
+    {% if badge.has_invite %}
+    <p class="contact-cabinet__term">Отправьте эту ссылку родителю. Она действует 7 дней.</p>
+    {# Адрес относительный в `href` и полный в тексте: видно целиком,
+       даже если буфер обмена недоступен. #}
+    <a class="contact-cabinet__link" data-cabinet-link
+       href="/parent/invite/{{ badge.token }}" target="_blank" rel="noopener">
+        {{ request.base_url }}parent/invite/{{ badge.token }}
+    </a>
+    <span class="contact-cabinet__statuses">
+        <button class="btn btn--ghost btn--sm" type="button" @click="copy()">
+            <i data-lucide="copy" aria-hidden="true"></i>
+            Скопировать ссылку
+        </button>
+        <span class="contact-cabinet__status" x-show="copied" x-cloak>
+            Ссылка скопирована в буфер обмена.
+        </span>
+        <span class="contact-cabinet__status contact-cabinet__status--warn" x-show="copyFailed" x-cloak>
+            Не удалось скопировать автоматически — выделите ссылку и скопируйте вручную.
+        </span>
+    </span>
+    {% endif %}
+
+    <div class="contact-cabinet__actions">
+        <button class="btn btn--ghost btn--sm" type="button"
+                hx-post="/tutor/contacts/{{ badge_contact_id }}/cabinet/invite"
+                hx-target="#contact-cabinet-{{ badge_contact_id }}" hx-swap="outerHTML">
+            {{ "Перевыпустить ссылку" if badge.has_invite else "Создать приглашение" }}
+        </button>
+    </div>
+</div>

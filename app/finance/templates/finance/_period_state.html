@@ -1,0 +1,27 @@
+{# Скрытые поля периода: состояние страницы, которое форма периода отправляет
+   вместе с `period`.
+
+   При клике по вкладке htmx подменяет секцию операций, а форма периода
+   остаётся в DOM. Её скрытые поля приезжают в том же ответе (`hx-swap-oob` —
+   включается флагом `oob`): иначе следующая смена периода отправила бы
+   старую вкладку, потеряла горизонт «Аналитики», месяц «Прогноза» или чип
+   фильтра «Все операций».
+
+   Контекст: tab, kind, analytics (или None), forecast (или None), oob. #}
+<div id="finance-period-state"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
+    <input type="hidden" name="tab" value="{{ tab }}">
+    {# Чип фильтра — состояние вкладки «Все операций»: смена периода его
+       не сбрасывает. На остальных вкладках фильтра нет. #}
+    {% if tab == "all" and kind != "all" %}
+    <input type="hidden" name="kind" value="{{ kind }}">
+    {% endif %}
+    {# Горизонт «Аналитики» переживает смену периода сводки:
+       пилюли 6/12 мес — состояние вкладки, селектор — общий. #}
+    {% if tab == "analytics" %}
+    <input type="hidden" name="months" value="{{ analytics.months }}">
+    {% endif %}
+    {# Месяц «Прогноза» — тоже состояние вкладки. #}
+    {% if tab == "forecast" and forecast %}
+    <input type="hidden" name="month" value="{{ forecast.month.key }}">
+    {% endif %}
+</div>

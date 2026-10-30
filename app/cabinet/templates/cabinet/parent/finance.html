@@ -1,0 +1,87 @@
+{# Общая вкладка «Финансы» кабинета родителя (change parent-cabinet).
+
+   Блоки по каждому привязанному ребёнку: баланс, сумма пополнений и
+   история операций — плюс общий итог (сумма балансов). Данные видны
+   независимо от роли плательщика (решение владельца, design D8):
+   плательщик — роль для расчётов, а не разграничение видимости.
+
+   Деньги и подписи операций — хелперы модуля финансов (`money`,
+   `signed_money`, `operation_kind_label`, `operation_datetime`), регистр
+   дат — в зоне репетитора, как во всей CRM.
+
+   Контекст: contact, children, blocks (список ChildFinance), total. #}
+{% extends "base.html" %}
+{% block title %}Финансы — Open Tutor CRM{% endblock %}
+
+{% block body %}
+{% set active_page = 'finance' %}
+{% include "cabinet/parent/_sidebar.html" %}
+
+<!-- Мобильная шапка -->
+<header class="mobile-header">
+    <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+        <i data-lucide="menu"></i>
+    </button>
+    <span class="sidebar__brand">Кабинет родителя</span>
+</header>
+
+<main class="main">
+    <div class="main__container">
+        <div class="page-header">
+            <div>
+                <h1>Финансы</h1>
+                <p>Балансы и история операций по детям</p>
+            </div>
+        </div>
+
+        {# Общий итог: сумма балансов всех привязанных детей. #}
+        <section class="card parent-finance__total">
+            <span class="parent-finance__total-label">Общий баланс по детям</span>
+            <span class="parent-finance__total-value">{{ money(total) }}</span>
+        </section>
+
+        {% for block in blocks %}
+        <section class="card parent-finance__child">
+            <h2 class="parent-finance__name">{{ student_full_name(block.student) }}</h2>
+
+            <div class="parent-finance__cards">
+                <div class="parent-finance__metric">
+                    <span class="parent-finance__metric-label">Баланс</span>
+                    <span class="parent-finance__metric-value">{{ money(block.balance) }}</span>
+                </div>
+                <div class="parent-finance__metric">
+                    <span class="parent-finance__metric-label">Пополнения</span>
+                    <span class="parent-finance__metric-value">{{ money(block.payments_total) }}</span>
+                </div>
+            </div>
+
+            {% if block.history %}
+            <table class="cabinet-table">
+                <caption class="sr-only">
+                    История операций {{ student_full_name(block.student) }}: дата, операция, сумма
+                </caption>
+                <thead>
+                <tr>
+                    <th scope="col">Дата</th>
+                    <th scope="col">Операция</th>
+                    <th scope="col">Сумма</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for operation in block.history %}
+                <tr>
+                    <td class="cabinet-table__date">{{ operation_datetime(operation.occurred_at, tutor) }}</td>
+                    <td class="cabinet-table__type">{{ operation_kind_label(operation) }}</td>
+                    <td class="cabinet-table__time">{{ signed_money(operation) }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="cabinet-empty">Операций пока нет.</p>
+            {% endif %}
+        </section>
+        {% endfor %}
+    </div>
+</main>
+{% endblock %}

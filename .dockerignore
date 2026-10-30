@@ -1,0 +1,25 @@
+# Контекст сборки держим минимальным: COPY перечисляет пути явно, но лишнее
+# в контексте замедляет сборку, а секреты не должны попасть в образ ни при
+# каком будущем `COPY . .`.
+.git
+.idea
+.impeccable
+.opencode
+.venv
+.coverage
+.pytest_cache
+.ruff_cache
+__pycache__
+**/__pycache__
+*.pyc
+
+# Секреты (.env) и dev-база (tutor.db) в образ не едут: контейнер работает
+# со своей базой на томе /data.
+.env
+*.db
+
+# В рантайме не нужны.
+tests/
+openspec/
+Dockerfile
+.dockerignore

@@ -18,6 +18,11 @@ REMINDER_OFFSET_LABELS = {
 # Дефолтное время дневной сводки («список уроков на день»).
 DEFAULT_DIGEST_TIME = "09:00"
 
+# Дефолтные границы рабочего дня для сетки календаря («ЧЧ:ММ»): до первого
+# сохранения сетка выглядит как раньше — 6:00–23:00.
+DEFAULT_WORKDAY_START = "06:00"
+DEFAULT_WORKDAY_END = "23:00"
+
 # Дефолтные даты окончания четвертей (ММ-ДД): пресеты серии уроков
 # подставляют ближайшую будущую дату. Год не хранится — он вычисляется
 # в момент использования.
@@ -42,6 +47,8 @@ DEFAULTS = {
     "notify_birthday": True,
     "reminder_offsets": [60],
     "digest_time": DEFAULT_DIGEST_TIME,
+    "workday_start": DEFAULT_WORKDAY_START,
+    "workday_end": DEFAULT_WORKDAY_END,
     "low_balance_threshold": DEFAULT_LOW_BALANCE_THRESHOLD,
     "default_lesson_duration": DEFAULT_LESSON_DURATION,
     "default_lesson_price": None,
@@ -120,6 +127,16 @@ class TutorSettings(Base):
     # Время отправки дневной сводки, «ЧЧ:ММ» (настенное время зоны педагога).
     digest_time: Mapped[str] = mapped_column(
         String(5), nullable=False, default=DEFAULTS["digest_time"]
+    )
+
+    # Рабочее время — границы сетки календаря, «ЧЧ:ММ» (целые часы; дизайн
+    # D2: нецелые часы ломали бы геометрию часовой строки). Валидируется
+    # формой вкладки «Календарь».
+    workday_start: Mapped[str] = mapped_column(
+        String(5), nullable=False, default=DEFAULTS["workday_start"]
+    )
+    workday_end: Mapped[str] = mapped_column(
+        String(5), nullable=False, default=DEFAULTS["workday_end"]
     )
 
     # Порог «низкого баланса»: уведомление при уходе баланса ниже суммы.

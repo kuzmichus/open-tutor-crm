@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Задачи — Open Tutor CRM{% endblock %}
+
+{# Клиентское состояние формы задачи (`taskForm`) и подтверждение
+   удаления в меню карточки. Скрипт идёт до alpine.min.js: подписка на
+   `alpine:init` должна сработать раньше обхода DOM (правило AGENTS.md). #}
+{% block head %}
+    <script src="/static/tasks.js" defer></script>
+{% endblock %}
+
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            {% include "_notice_banner.html" %}
+
+            <a class="back-link" href="/tutor/">
+                <i data-lucide="arrow-left"></i>
+                Назад
+            </a>
+
+            <div class="page-header page-header--row">
+                <div>
+                    <h1>Задачи</h1>
+                    <p>Планирование дел</p>
+                </div>
+                <div class="tasks-toolbar">
+                    {# Вид — ссылки с query-параметром, а не клиентский класс:
+                       оба вида считает сервер, и страница работает без JS.
+                       Фильтр по ученику переносится в ссылку, чтобы не
+                       сбрасываться при переключении вида. #}
+                    <div class="view-toggle" role="group" aria-label="Вид задач">
+                        <a class="btn btn--outline btn--icon view-toggle__btn{% if view == 'board' %} is-active{% endif %}"
+                           href="/tutor/tasks?view=board{% if student_id %}&student={{ student_id }}{% endif %}"
+                           aria-label="Доска по этапам">
+                            <i data-lucide="layout-grid"></i>
+                        </a>
+                        <a class="btn btn--outline btn--icon view-toggle__btn{% if view == 'list' %} is-active{% endif %}"
+                           href="/tutor/tasks?view=list{% if student_id %}&student={{ student_id }}{% endif %}"
+                           aria-label="Список по срокам">
+                            <i data-lucide="list"></i>
+                        </a>
+                    </div>
+
+                    {# Фильтр по ученику — обычная GET-форма: выбор сразу
+                       отправляет её (Alpine, как в меню карточки группы), и
+                       адрес после выбора остаётся правдой. Ссылки вида тогда
+                       сохраняют фильтр, а «назад» возвращает прежний; обновление
+                       по `task-saved` берёт вид и фильтр из того же адреса. #}
+                    <form id="tasks-filters"
+                          class="filters"
+                          role="search"
+                          action="/tutor/tasks"
+                          method="get"
+                          x-data
+                          @change="$el.submit()">
+                        <input type="hidden" name="view" value="{{ view }}">
+                        <label class="sr-only" for="tasks-student">Ученик</label>
+                        <select class="input filters__status" id="tasks-student" name="student">
+                            <option value="" {% if not student_id %}selected{% endif %}>Все ученики</option>
+                            {% for option in student_options %}
+                            <option value="{{ option.id }}" {% if student_id == option.id %}selected{% endif %}>{{ option.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+
+                    <button class="btn btn--primary" type="button"
+                            hx-get="/tutor/tasks/new"
+                            hx-target="#modal"
+                            hx-swap="innerHTML">
+                        <i data-lucide="plus"></i>
+                        Новая задача
+                    </button>
+                </div>
+            </div>
+
+            {# Доска и список живут в партиале: событие `task-saved` шлют
+               сохранение, удаление и смена этапа, и контейнер перерисовывается
+               с сервера — порядок карточек считается там же.
+
+               Вид и фильтр подставляются в адрес на сервере: после события
+               перезапрос идёт на тот же URL, что открыт сейчас. #}
+            <div id="tasks-content"
+                 hx-get="/tutor/tasks/list?view={{ view }}{% if student_id %}&student={{ student_id }}{% endif %}"
+                 hx-trigger="task-saved from:body"
+                 hx-swap="innerHTML">
+                {% include "task/_content.html" %}
+            </div>
+
+            {# Сюда htmx вставляет диалог задачи. #}
+            <div id="modal"></div>
+        </div>
+    </main>
+
+    <!-- Нижний таб-бар (мобилка) -->
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/tutor/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/tutor/bookings" class="bottom-bar__item">
+            <i data-lucide="calendar-check"></i><span>Брони</span>
+        </a>
+        <a href="/tutor/tasks" class="bottom-bar__item">
+            <i data-lucide="square-check-big"></i><span>Задачи</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
+{% endblock %}

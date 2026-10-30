@@ -1,0 +1,25 @@
+{% extends "cabinet/base.html" %}
+{% block cabinet_title %}Вход{% endblock %}
+
+{% block cabinet_content %}
+<section class="cabinet__card">
+    <h1 class="cabinet__title">Вход в кабинет</h1>
+
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+    <form method="post" action="/student/login" class="cabinet__form">
+        <div class="field">
+            <label class="label" for="cabinet-identifier">Логин или email</label>
+            <input class="input" id="cabinet-identifier" type="text" name="identifier"
+                   required autofocus autocomplete="username"
+                   placeholder="petya или petya@example.com">
+        </div>
+        <div class="field">
+            <label class="label" for="cabinet-password">Пароль</label>
+            <input class="input" id="cabinet-password" type="password" name="password"
+                   required autocomplete="current-password">
+        </div>
+        <button class="btn btn--primary btn--block" type="submit">Войти</button>
+    </form>
+</section>
+{% endblock %}

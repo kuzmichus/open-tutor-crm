@@ -13,6 +13,8 @@ from app.finance.views import (
     card_summary,
     expense_create,
     expense_new,
+    forecast_csv,
+    forecast_pin,
     group_panel,
     income_create,
     income_new,
@@ -27,6 +29,7 @@ from app.finance.views import (
     refund_create,
     refund_new,
     summary,
+    tab,
 )
 
 router = APIRouter()
@@ -37,6 +40,14 @@ router.include_router(panel.router)
 router.include_router(index.router)
 router.include_router(summary.router)
 router.include_router(operations.router)
+# Содержимое вкладки: htmx подменяет секцию операций, не перезагружая
+# страницу. Путь параметрический (`/tabs/{tab}`) и объявлен после
+# статических `/summary` и `/operations` — конфликтов с ними нет.
+router.include_router(tab.router)
+# Вкладка «Прогноз на месяц»: выгрузка CSV и фиксация снимка. Пути
+# статические (`/forecast.csv`, `/forecast/pin`) — до параметрических.
+router.include_router(forecast_csv.router)
+router.include_router(forecast_pin.router)
 # Диалог «Доход» со страницы финансов: `/tutor/payments/new` — статический
 # путь, он обязан идти до `/tutor/payments/{payment_id}`.
 router.include_router(income_new.router)

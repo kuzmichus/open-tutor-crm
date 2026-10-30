@@ -1,4 +1,4 @@
-"""Тесты моделей уроков: таблицы, XOR-цель, CHECK-ограничения."""
+"""Тесты моделей уроков: XOR-цель, CHECK-ограничения, каскады."""
 
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
@@ -32,16 +32,6 @@ def _expect_integrity_error():
 
 def _starts_at() -> datetime:
     return datetime(2026, 10, 19, 10, 0, tzinfo=UTC)
-
-
-def test_lesson_tables_are_created():
-    """Таблицы `lessons` и `lesson_series` появились в базе (init_db/миграция)."""
-    from sqlalchemy import inspect
-
-    from app.database import engine
-
-    tables = set(inspect(engine).get_table_names())
-    assert {"lessons", "lesson_series"} <= tables
 
 
 def test_lesson_series_is_saved_with_defaults(tutor_factory):

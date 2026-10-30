@@ -17,7 +17,8 @@
 FastAPI не знают.
 """
 
-from fastapi.responses import HTMLResponse
+from fastapi import Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 def dialog_closed(event: str = "slot-saved") -> HTMLResponse:
     """Пустой ответ «диалог закрыт»: событие для страницы, без подмены DOM."""
@@ -25,3 +26,28 @@ def dialog_closed(event: str = "slot-saved") -> HTMLResponse:
         content="",
         headers={"HX-Trigger": event, "HX-Reswap": "none"},
     )
+
+
+def is_htmx(request: Request) -> bool:
+    """True, если запрос пришёл от htmx (не полная навигация браузера).
+
+    Заголовок `HX-Request` htmx шлёт с каждым xhr-запросом; у обычной
+    отправки формы без JS его нет — по этому признаку вьюха выбирает
+    между пустым телом с событием и 303-редиректом.
+    """
+    return request.headers.get("HX-Request") == "true"
+
+
+def saved_response(
+    request: Request, event: str, redirect_url: str
+) -> HTMLResponse | RedirectResponse:
+    """Успешный ответ на сохранение: событие для htmx, редирект для без-JS.
+
+    htmx получает пустое тело и `HX-Trigger`: слушатель на странице
+    перезапрашивает свой контейнер, DOM обновляется с сервера. Запрос без
+    `HX-Request` — форма работает и с отключённым JS — получает 303 на
+    страницу списка, иначе браузер повис бы на пустом ответе POST.
+    """
+    if not is_htmx(request):
+        return RedirectResponse(url=redirect_url, status_code=303)
+    return HTMLResponse(content="", headers={"HX-Trigger": event})

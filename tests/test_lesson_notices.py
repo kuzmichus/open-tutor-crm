@@ -6,7 +6,10 @@
 UTC): баннер живёт окном «закончился, но ещё не отмечен».
 """
 
-from datetime import UTC, datetime, timedelta
+import re
+from datetime import timedelta
+
+import pytest
 
 from app.database import SessionLocal
 from app.lesson.models.lesson import Lesson
@@ -74,33 +77,83 @@ def test_shows_unmarked_lesson(client, tutor_factory, student_factory, lesson_fa
     assert f"noticeBanner('{lesson_id}')" in html
 
 
-def test_future_planned_not_shown(client, tutor_factory, student_factory, lesson_factory):
-    """Будущий урок — не напоминание: партиал отвечает пустым телом."""
-    tutor_id = _login(client, tutor_factory, "notices-future@example.com")
+@pytest.mark.parametrize(
+    "lesson",
+    [
+        pytest.param(
+            {"status": "planned", "starts_at": utcnow() + timedelta(days=1)},
+            id="future-planned",
+        ),
+        pytest.param(
+            {"status": "completed", "starts_at": utcnow() - timedelta(days=3)},
+            id="completed",
+        ),
+    ],
+)
+def test_lesson_outside_window_not_shown(
+    lesson, client, tutor_factory, student_factory, lesson_factory
+):
+    """Будущий урок и уже отмеченный в напоминание не попадают."""
+    tutor_id = _login(client, tutor_factory, f"notices-{lesson['status']}@example.com")
     student_id = student_factory(tutor_id=tutor_id)
-    lesson_factory(
-        student_id=student_id,
-        status="planned",
-        starts_at=utcnow() + timedelta(days=1),
-    )
+    lesson_factory(student_id=student_id, **lesson)
 
     response = client.get("/tutor/notices")
+
     assert response.status_code == 200
     assert response.text == ""
 
+def test_dismiss_key_follows_lesson_composition(
+    client, tutor_factory, student_factory, lesson_factory
+):
+    """Ключ закрытия баннера — состав уроков, а не «скрыть навсегда».
 
-def test_completed_not_shown(client, tutor_factory, student_factory, lesson_factory):
-    """Проведённый урок в баннер не попадает, даже если давно в прошлом."""
-    tutor_id = _login(client, tutor_factory, "notices-done@example.com")
-    student_id = student_factory(tutor_id=tutor_id)
-    lesson_factory(
-        student_id=student_id,
-        status="completed",
-        starts_at=utcnow() - timedelta(days=3),
+    Аудит спрашивал, осознанно ли баннер закрывается насовсем: он
+    предупреждает о списании денег, и потерять его молча нельзя. Ответ в
+    коде: ключ — id не отмеченных уроков (design D2 change'а
+    unmarked-lessons). Пока состав тот же, плашка скрыта; появился новый
+    не отмеченный урок — ключ другой, и напоминание возвращается. Здесь
+    проверяется именно это свойство ключа, а не работа localStorage:
+    клиентская часть (notices.js) сравнивает строки, и её контракт —
+    уникальность ключа по составу.
+    """
+    tutor_id = _login(client, tutor_factory, "notices-key@example.com")
+    first_student = student_factory(tutor_id=tutor_id, first_name="Первый")
+    first_id = lesson_factory(
+        student_id=first_student,
+        status="planned",
+        starts_at=utcnow() - timedelta(hours=2),
     )
 
-    response = client.get("/tutor/notices")
-    assert response.text == ""
+    def key_of(html: str) -> str:
+        match = re.search(r"noticeBanner\('([^']*)'\)", html)
+        assert match, "в баннере нет ключа закрытия"
+        return match.group(1)
+
+    one = key_of(client.get("/tutor/notices").text)
+    assert one == first_id
+
+    # Тот же состав — тот же ключ: закрытая плашка остаётся закрытой,
+    # повторный опрос htmx её не «оживляет».
+    assert key_of(client.get("/tutor/notices").text) == one
+
+    # Новый не отмеченный урок — ключ другой, напоминание возвращается.
+    second_student = student_factory(tutor_id=tutor_id, first_name="Второй")
+    lesson_factory(
+        student_id=second_student,
+        status="planned",
+        starts_at=utcnow() - timedelta(hours=1),
+    )
+    two = key_of(client.get("/tutor/notices").text)
+    assert two != one
+    assert first_id in two
+
+    # Уроки отмечены — сервер не рендерит баннер, ключа нет вовсе.
+    with SessionLocal() as db:
+        for lesson in db.query(Lesson).filter(Lesson.status == "planned"):
+            lesson.status = "completed"
+        db.commit()
+    assert "noticeBanner(" not in client.get("/tutor/notices").text
 
 
 def test_plural_form_for_two(client, tutor_factory, student_factory, lesson_factory):

@@ -1,0 +1,80 @@
+{# Блок «Личный кабинет» на вкладке «Настроек» формы ученика.
+
+   Три состояния (спека student-cabinet): вход не привязан / активна
+   одноразовая ссылка / вход привязан. Вход и активная ссылка не
+   исключают друг друга — вход могли завести вручную при живой ссылке,
+   поэтому показываются и идентификаторы, и ссылка. У нового (несохранённого)
+   ученика блока нет: форма получает `cabinet = None` (form_context).
+
+   Кнопка приглашения живёт ВНУТРИ формы «Настроек», а вложенные `<form>`
+   браузер выбрасывает (см. ловушку в `_form.html`), поэтому действие
+   держится на самой кнопке: `hx-post` для htmx и `formaction` +
+   `formmethod` на той же кнопке — тот же маршрут для отправки
+   родительской формы без JS (паттерн `_invites_block.html`).
+
+   Ссылка дублируется открытым текстом: в буфер её кладёт Alpine-фабрика
+   `studentCabinet` (students.js) — читается свойство `href` якоря,
+   браузер сам разворачивает относительный адрес в абсолютный; ни одной
+   строки ссылки в JS.
+
+   Контекст: student, cabinet {has_access, email, login, has_invite, token}. #}
+<div id="student-cabinet" x-data="studentCabinet()">
+    <fieldset class="form-section">
+        <legend class="form-section__title">Личный кабинет</legend>
+        <p class="card__desc">
+            Пригласите ученика в личный кабинет — по ссылке он сам задаст email и пароль.
+        </p>
+
+        {% if cabinet.has_access %}
+        <div class="cabinet-access">
+            <i class="cabinet-access__icon" data-lucide="circle-check" aria-hidden="true"></i>
+            <div class="cabinet-access__main">
+                <span class="cabinet-access__title">Вход привязан</span>
+                <span class="cabinet-access__desc">
+                    {# Идентификаторы входа: email из приглашения и/или логин из
+                       ручной модалки. У входа, созданного по приглашению, логин
+                       равен email — дублировать его не нужно. #}
+                    {% if cabinet.email %}Email: {{ cabinet.email }}{% endif %}
+                    {% if cabinet.login and cabinet.login != cabinet.email %}
+                        {% if cabinet.email %} · {% endif %}Логин: {{ cabinet.login }}
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        {% else %}
+        <p class="cabinet-note">
+            К карточке ученика {{ student_full_name(student) }} пока не привязан ни один вход.
+        </p>
+        {% endif %}
+
+        {% if cabinet.has_invite %}
+        <p class="cabinet-note">Отправьте эту ссылку ученику. Она действует 7 дней.</p>
+        {# Адрес относительный в `href` и полный в тексте: видно целиком,
+           даже если буфер обмена недоступен. #}
+        <a class="invite-link" data-cabinet-link href="/invite/{{ cabinet.token }}"
+           target="_blank" rel="noopener">{{ request.base_url }}invite/{{ cabinet.token }}</a>
+        <div class="cabinet-actions">
+            <button class="btn btn--ghost btn--sm" type="button" @click="copy()">
+                <i data-lucide="copy" aria-hidden="true"></i>
+                Скопировать ссылку
+            </button>
+        </div>
+        <span class="invite-status" x-show="copied" x-cloak>
+            Ссылка скопирована в буфер обмена.
+        </span>
+        <span class="invite-status invite-status--warn" x-show="copyFailed" x-cloak>
+            Не удалось скопировать автоматически — выделите ссылку и скопируйте вручную.
+        </span>
+        {% endif %}
+
+        <div class="cabinet-actions">
+            <button class="btn btn--primary btn--sm" type="submit"
+                    formmethod="post"
+                    formaction="/tutor/students/{{ student.id }}/cabinet/invite"
+                    hx-post="/tutor/students/{{ student.id }}/cabinet/invite"
+                    hx-target="#student-cabinet" hx-swap="outerHTML">
+                {{ "Перевыпустить ссылку" if cabinet.has_invite else "Создать приглашение" }}
+            </button>
+        </div>
+    </fieldset>
+</div>

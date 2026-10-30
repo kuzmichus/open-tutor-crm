@@ -8,6 +8,7 @@
 from fastapi import APIRouter
 
 from app.lesson.views import (
+    complete_selected,
     create,
     create_group,
     create_student,
@@ -27,6 +28,9 @@ router = APIRouter()
 
 router.include_router(index.router)
 router.include_router(list_partial.router)
+# Массовая отметка — статический путь `/complete-selected`, обязательно до
+# `POST /{lesson_id}`, иначе параметрический маршрут принял бы его за id.
+router.include_router(complete_selected.router)
 router.include_router(lookup_student.router)
 router.include_router(lookup_group.router)
 router.include_router(create_student.router)

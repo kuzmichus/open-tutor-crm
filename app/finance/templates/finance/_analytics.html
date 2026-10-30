@@ -1,0 +1,105 @@
+{# Вкладка «Аналитика»: график месяцев и пирог категорий (по референсу).
+
+   Горизонт (6/12 мес) — пилюли-ссылки с query-параметром: работает без JS,
+   состояние видно в адресе; период сводки сохраняется в ссылке, чтобы
+   уход с вкладки и возврат не сбрасывали селектор. Пилюля, как и вкладка,
+   грузится htmx: она живёт внутри секции операций, и переход по ссылке
+   перезагружал бы всю страницу (та же причина, что у вкладок). Геометрию
+   SVG считает сервис (`analytics.py`) — шаблон только печатает готовые
+   координаты, ни одной денежной формулы или расчёта долей здесь нет.
+
+   Контекст: period (key), analytics (months, months_options, months_labels,
+   series_labels, bar_chart | None, pie_chart | None). #}
+<section class="fin-analytics" aria-label="Аналитика">
+    <div class="fin-analytics__pills" role="group" aria-label="Горизонт графиков">
+        {% for option in analytics.months_options %}
+        <a class="fin-pill{% if analytics.months == option %} fin-pill--active{% endif %}"
+           href="/tutor/finance?period={{ period.key }}&tab=analytics&months={{ option }}"
+           hx-get="/tutor/finance/tabs/analytics?period={{ period.key }}&months={{ option }}"
+           hx-target="#finance-operations"
+           hx-swap="outerHTML"
+           {% if analytics.months == option %}aria-current="page"{% endif %}>
+            {{ analytics.months_labels[option] }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <section class="card fin-chart" aria-label="Доходы и расходы по месяцам">
+        <header class="fin-chart__head">
+            <h2 class="fin-chart__title">Доходы и расходы по месяцам</h2>
+            <ul class="fin-chart__legend" aria-label="Ряды графика">
+                {% for key, label in analytics.series_labels.items() %}
+                <li class="fin-chart__legend-item">
+                    <span class="fin-chart__dot fin-chart__dot--{{ key }}" aria-hidden="true"></span>
+                    {{ label }}
+                </li>
+                {% endfor %}
+            </ul>
+        </header>
+
+        {% if analytics.bar_chart %}
+        <svg class="fin-chart__svg" role="img"
+             aria-label="Столбчатая диаграмма: доход, заработано за уроки и расходы по месяцам"
+             viewBox="0 0 {{ analytics.bar_chart.width }} {{ analytics.bar_chart.height }}">
+            {% for line in analytics.bar_chart.gridlines %}
+            <line class="fin-grid" x1="{{ analytics.bar_chart.pad_left }}" y1="{{ line.y }}"
+                  x2="{{ analytics.bar_chart.plot_right }}" y2="{{ line.y }}"/>
+            <text class="fin-tick" x="{{ analytics.bar_chart.pad_left - 8 }}"
+                  y="{{ line.y + 4 }}">{{ line.label }}</text>
+            {% endfor %}
+            <line class="fin-axis" x1="{{ analytics.bar_chart.pad_left }}" y1="{{ analytics.bar_chart.baseline }}"
+                  x2="{{ analytics.bar_chart.plot_right }}" y2="{{ analytics.bar_chart.baseline }}"/>
+
+            {% for group in analytics.bar_chart.groups %}
+            <text class="fin-month" x="{{ group.x }}"
+                  y="{{ analytics.bar_chart.baseline + 18 }}">{{ group.label }}</text>
+            {% for bar in group.bars %}
+            <rect class="fin-bar fin-bar--{{ bar.series }}" x="{{ bar.x }}" y="{{ bar.y }}"
+                  width="{{ bar.width }}" height="{{ bar.height }}" rx="3"/>
+            {% endfor %}
+            {% endfor %}
+        </svg>
+        {% else %}
+        <div class="fin-chart__empty">
+            <i data-lucide="chart-column" aria-hidden="true"></i>
+            <p>За выбранный период операций нет</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="card fin-chart" aria-label="Расходы по категориям">
+        <header class="fin-chart__head">
+            <h2 class="fin-chart__title">Расходы по категориям</h2>
+        </header>
+
+        {% if analytics.pie_chart %}
+        <svg class="fin-chart__svg fin-chart__svg--pie" role="img"
+             aria-label="Круговая диаграмма: доли категорий расходов"
+             viewBox="0 0 {{ analytics.pie_chart.size }} {{ analytics.pie_chart.size }}">
+            {% for slice in analytics.pie_chart.slices %}
+            <path class="fin-slice fin-slice--{{ slice.color_index }}" d="{{ slice.d }}"/>
+            {% if slice.show_label %}
+            <text class="fin-pie-label" x="{{ slice.label_x }}" y="{{ slice.label_y + 4 }}"
+                  text-anchor="{{ slice.anchor }}">{{ slice.percent }}%</text>
+            {% endif %}
+            {% endfor %}
+        </svg>
+        <ul class="fin-cat-legend" aria-label="Категории расходов">
+            {% for row in analytics.pie_chart.legend %}
+            <li class="fin-cat-legend__item">
+                <span class="fin-cat-legend__dot fin-cat-legend__dot--{{ row.color_index }}"
+                      aria-hidden="true"></span>
+                <span class="fin-cat-legend__name">{{ row.label }}</span>
+                <span class="fin-cat-legend__percent">{{ row.percent }}%</span>
+                <span class="fin-cat-legend__amount">{{ row.amount }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="fin-chart__empty">
+            <i data-lucide="chart-pie" aria-hidden="true"></i>
+            <p>Расходов за выбранный период нет</p>
+        </div>
+        {% endif %}
+    </section>
+</section>

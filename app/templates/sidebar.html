@@ -8,7 +8,7 @@
   Переменные:
       active_page — ключ активного пункта (calendar, home, bookings, tasks,
                     students, mailings, groups, lessons, finance, stats,
-                    changelog, feedback, settings). По умолчанию ''.
+                    settings). По умолчанию ''.
       user_name   — имя пользователя (по умолчанию 'Сергей').
       user_role   — роль пользователя (по умолчанию 'Владелец').
 
@@ -21,8 +21,17 @@
 {% set _user_name = user_name | default('Сергей') %}
 {% set _user_role = user_role | default('Владелец') %}
 
-{# Микро-макрос пункта меню #}
-{% macro nav_link(key, href, icon, label, external=False) %}
+{# Микро-макрос пункта меню.
+
+   `badge_url` — необязательный адрес партиалa со счётчиком: внутри пункта
+   рисуется контейнер `span.nav-item__badge`, который htmx наполняет при
+   загрузке страницы, перечитывает каждые 30 секунд (состояние «просрочено»
+   и новая заявка приходят без событий у педагога) и по событию
+   `badge_trigger` — действия с сущностью обновляют счётчик мгновенно
+   (кроны: `slot-saved` у броней, `task-saved` у задач).
+   `badge_title` — подпись кружка для подсказки. #}
+{% macro nav_link(key, href, icon, label, external=False, badge_url=None,
+                  badge_trigger='slot-saved', badge_title='Необработанных заявок') %}
     <a href="{{ href }}"
        class="nav-item{% if _active == key %} nav-item--active{% endif %}"
        title="{{ label }}"
@@ -30,6 +39,14 @@
        {% if external %}target="_blank" rel="noopener noreferrer"{% endif %}>
         <i data-lucide="{{ icon }}"></i>
         <span>{{ label }}</span>
+        {% if badge_url %}
+        <span class="nav-item__badge"
+              id="nav-badge-{{ key }}"
+              title="{{ badge_title }}"
+              hx-get="{{ badge_url }}"
+              hx-trigger="load, every 30s, {{ badge_trigger }} from:body"
+              hx-swap="innerHTML"></span>
+        {% endif %}
     </a>
 {% endmacro %}
 
@@ -58,8 +75,12 @@
         {# Группа 1 — операционка #}
         {{ nav_link('calendar', '/tutor/calendar', 'calendar', 'Календарь') }}
         {{ nav_link('home', '/tutor/', 'layout-dashboard', 'Главная') }}
-        {{ nav_link('bookings', '/tutor/bookings', 'calendar-check', 'Брони') }}
-        {{ nav_link('tasks', '/tutor/tasks', 'square-check-big', 'Задачи') }}
+        {{ nav_link('bookings', '/tutor/bookings', 'calendar-check', 'Брони',
+                    badge_url='/tutor/bookings/count') }}
+        {{ nav_link('tasks', '/tutor/tasks', 'square-check-big', 'Задачи',
+                    badge_url='/tutor/tasks/count',
+                    badge_trigger='task-saved',
+                    badge_title='Просроченных задач') }}
 
         <hr class="nav-divider">
 
@@ -77,17 +98,20 @@
 
         {{ nav_link('finance', '/tutor/finance', 'credit-card', 'Финансы') }}
         {{ nav_link('stats', '/tutor/stats', 'chart-column', 'Статистика') }}
-
-        <hr class="nav-divider">
-
-        {# Группа 5 — сервисное #}
-        {{ nav_link('changelog', '/tutor/changelog', 'sparkles', 'Что нового') }}
-        {{ nav_link('feedback', 'https://t.me/opentutorcrm', 'message-circle', 'Обратная связь', external=True) }}
     </nav>
 
-    <!-- Нижний блок сайдбара -->
+    {# Нижний блок — сервисное, за чем не заходят каждый день: настройки и
+       обратная связь. Раньше они стояли в основном меню, разбавляя навигацию
+       пунктами, которые не относятся к работе с учениками (UI-аудит).
+
+       Пункт «Что нового» удалён совсем: маршрута `/tutor/changelog` в проекте
+       нет и не было, ссылка вела на 404. Вернётся страница — вернётся и пункт;
+       тест `tests/test_sidebar.py` следит, чтобы внутренние ссылки меню
+       открывались, а не отдавали 404. #}
     <div class="sidebar__section">
         {{ nav_link('settings', '/tutor/settings', 'settings', 'Настройки') }}
+        {{ nav_link('feedback', 'https://t.me/opentutorcrm', 'message-circle',
+                    'Обратная связь', external=True) }}
     </div>
 
     <!-- Футер сайдбара: тема и пользователь -->

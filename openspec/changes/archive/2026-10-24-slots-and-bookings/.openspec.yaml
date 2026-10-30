@@ -1,7 +1,0 @@
-schema: spec-driven
-created: 2026-10-22
-# Change выводит из эксплуатации capability `slot-booking`: демо-слоты и
-# демо-бронь в DOM заменены хранимыми окнами (`slot-management`), бронями
-# (`booking-management`) и публичной страницей (`public-booking`). Все
-# требования `slot-booking` удалены, поэтому main-spec удаляется целиком.
-retire_capabilities: true

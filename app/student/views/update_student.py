@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
+from app.common.responses import is_htmx
 from app.database import get_db
 from app.student.services.access import get_owned_student, require_tutor_id
 from app.student.services.form_context import form_context
@@ -21,10 +22,6 @@ from app.tutor.models.tutor import Tutor
 from app.tutor.services.clock import as_utc, utcnow
 
 router = APIRouter()
-
-
-def _is_htmx(request: Request) -> bool:
-    return request.headers.get("HX-Request") == "true"
 
 
 @router.post("/tutor/students/{student_id}", response_class=HTMLResponse)
@@ -59,7 +56,7 @@ async def update_student_view(
         )
         return templates.TemplateResponse(request, "student/_form.html", context)
 
-    if not _is_htmx(request):
+    if not is_htmx(request):
         return RedirectResponse(url="/tutor/students", status_code=303)
 
     if from_card:

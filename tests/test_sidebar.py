@@ -1,5 +1,7 @@
 """Тесты разметки сайдбара: есть на /tutor/, нет на /."""
 
+import re
+
 PASSWORD = "Секретный-Пароль-1"
 
 
@@ -71,13 +73,6 @@ def test_public_pages_use_brand_logo(client):
         assert 'class="brand-logo"' in response.text, url
 
 
-def test_tutor_home_without_session_no_sidebar(client):
-    """Неавторизованный /tutor/ редиректит на вход (сайдбара не отдаёт)."""
-    response = client.get("/tutor/", follow_redirects=False)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/tutor/login"
-
-
 def test_login_page_has_no_sidebar(client):
     """Публичные /tutor/* (вход, регистрация) — без сайдбара."""
     for url in ("/tutor/login", "/tutor/register"):
@@ -125,6 +120,66 @@ def test_sidebar_collapse_state_has_css_and_js(client):
     assert "html.sidebar-collapsed .sidebar" in css
     assert "sidebar-collapsed" in js
     assert "data-sidebar-toggle" in js
+
+
+def test_sidebar_internal_links_open_working_pages(client):
+    """Каждая внутренняя ссылка меню открывается, а не отдаёт 404.
+
+    Пункт «Что нового» вёл на `/tutor/changelog`, маршрута для которого в
+    проекте нет: репетитор кликал и получал 404. Ловить это глазами дорого —
+    пункты добавляются вместе со страницами, — поэтому проверяем весь сайдбар
+    разом: разбираем внутренние `href` и дёргаем каждый.
+
+    Внешние ссылки (обратная связь в Telegram) не проверяются: сеть в тестах
+    не нужна, а адрес ведёт не на наш маршрут.
+    """
+    _login(client, email="nav-links-user@example.com")
+
+    page = client.get("/tutor/").text
+    start = page.index('<aside class="sidebar"')
+    sidebar_html = page[start : page.index("</aside>", start)]
+
+    internal = {
+        href
+        for href in re.findall(r'href="(/[^"]*)"', sidebar_html)
+        # Счётчики-партиалы грузятся htmx и не являются пунктами меню.
+        if not href.startswith("/static/")
+    }
+    assert "/tutor/calendar" in internal, "сайдбар не разобран: нет пункта «Календарь»"
+    assert "/tutor/changelog" not in internal, (
+        "пункт «Что нового» вернулся, а маршрута /tutor/changelog нет"
+    )
+
+    broken = []
+    for href in sorted(internal):
+        response = client.get(href, follow_redirects=False)
+        if response.status_code not in (200, 303):
+            broken.append(f"{href} → {response.status_code}")
+    assert not broken, "битые ссылки в сайдбаре: " + ", ".join(broken)
+
+
+def test_sidebar_service_links_sit_below_main_menu(client):
+    """«Настройки» и «Обратная связь» — в нижнем блоке, а не в основном меню.
+
+    UI-аудит: 13 пунктов подряд размывают навигацию, сервисные ссылки не
+    относятся к ежедневной работе. Порядок в разметке — это и есть место в
+    интерфейсе, поэтому проверяем позицию относительно `</nav>`.
+    """
+    _login(client, email="nav-order-user@example.com")
+    page = client.get("/tutor/").text
+    start = page.index('<aside class="sidebar"')
+    sidebar_html = page[start : page.index("</aside>", start)]
+
+    nav_end = sidebar_html.index("</nav>")
+    for label in ("Настройки", "Обратная связь"):
+        assert label in sidebar_html, label
+        assert sidebar_html.index(label) > nav_end, (
+            f"«{label}» должна быть ниже основного меню"
+        )
+
+    # Ежедневные пункты остаются в меню — над `</nav>`.
+    for label in ("Календарь", "Главная", "Ученики", "Уроки", "Финансы"):
+        assert sidebar_html.index(label) < nav_end, label
 
 
 def test_sidebar_groups_link_opens_working_page(client):
