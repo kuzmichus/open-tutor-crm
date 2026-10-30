@@ -7,7 +7,10 @@
 
 from sqlalchemy.orm import Session
 
+from app.cabinet.services.contact_invites import badge_contexts
+from app.cabinet.services.invites import invite_context
 from app.common.services.timezones import timezone_options_json
+from app.messenger.services.student_invites import invites_context
 from app.student.models.student import Student, STUDENT_STATUSES
 from app.student.services.presentation import (
     contact_row,
@@ -70,6 +73,21 @@ def form_context(
         contact_rows = [contact_row(item["link"], item["contact"]) for item in links]
         contact_rows_open = False
 
+    # Бейдж «Личный кабинет» на миникарточке сохранённого контакта
+    # (change parent-cabinet): состояние входа и приглашения приходит
+    # пачкой одним-двумя запросами (без N+1 на строку). У строки без
+    # `contact_id` (новый, ещё не сохранённый контакт) бейджа нет —
+    # в шаблоне строка без `cabinet_badge` его не рендерит.
+    badge_map = badge_contexts(
+        db,
+        tutor_id,
+        [row["contact_id"] for row in contact_rows if row.get("contact_id")],
+    )
+    for row in contact_rows:
+        row["cabinet_badge"] = (
+            badge_map.get(row["contact_id"]) if row.get("contact_id") else None
+        )
+
     if student is None:
         action = "/tutor/students"
         title = "Новый ученик"
@@ -107,6 +125,23 @@ def form_context(
         "statuses": STUDENT_STATUSES,
         # Справочник часовых зон (IANA) для селекта с поиском.
         "timezone_options_json": timezone_options_json(),
+        # Блок «Приглашение в мессенджеры» вкладки «Настройки»: есть
+        # только у сохранённого ученика — приглашать некого, пока
+        # карточка не сохранена. Рендер сетенезависим.
+        "invites_block": (
+            invites_context(db, tutor_id, student.id)
+            if student is not None
+            else None
+        ),
+        # Блок «Личный кабинет» вкладки «Настройки»: состояние входа и
+        # приглашение. Тоже только у сохранённого ученика; сервис живёт
+        # в `cabinet`, партиал — здесь, рядом с формой (D5 change'а
+        # student-cabinet-access). Рендер сетенезависим.
+        "cabinet": (
+            invite_context(db, tutor_id, student.id)
+            if student is not None
+            else None
+        ),
     }
 
 

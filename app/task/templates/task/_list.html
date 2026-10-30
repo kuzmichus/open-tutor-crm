@@ -1,0 +1,31 @@
+{# Список задач по срокам (спека task-management).
+
+   Контекст: `groups` — [{key, label, count, rows, empty}]. Блоки собирает
+   `task/services/board.py`: «Сегодня» (срок сегодня и просроченные),
+   «Предстоящие», «Без срока» (только если не пуст) и «Завершено»
+   (последняя завершённая сверху).
+
+   Карточка — тот же партиал `task/_card.html`, что на доске: вид меняет
+   раскладку, но не состав данных и не действия. #}
+<div class="task-list">
+    {% for group in groups %}
+    <section class="task-group" aria-labelledby="task-group-{{ group.key }}">
+        <header class="task-group__head">
+            <h2 class="task-group__title" id="task-group-{{ group.key }}">
+                {{ group.label }}
+            </h2>
+            <span class="task-group__count">{{ group.count }}</span>
+        </header>
+
+        <div class="task-group__body">
+            {% for row in group.rows %}
+                {% include "task/_card.html" %}
+            {% endfor %}
+
+            {% if not group.rows %}
+            <p class="task-group__empty">{{ group.empty }}</p>
+            {% endif %}
+        </div>
+    </section>
+    {% endfor %}
+</div>

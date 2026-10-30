@@ -4,6 +4,111 @@
    Секции: tokens → base → components → utilities.
    ========================================================================== */
 
+/* --------------------------------------------------------------------------
+   Шрифты: локальные файлы вместо CDN (правило AGENTS.md п. 8).
+
+   Кабинет работает на своём сервере и не должен зависеть от доступности
+   fonts.googleapis.com: недоступный CDN — это подмена гарнитуры на
+   системную и лишний внешний запрос на каждой странице. Файлы вендорные,
+   как `htmx.min.js`/`alpine.min.js`.
+
+   Каждый файл — вариативный (`wght 100–900`), поэтому `font-weight`
+   объявлен диапазоном: один файл закрывает все начертания из макета
+   (400/500/600/700) вместо четырёх копий.
+
+   `unicode-range` разделяет подмножества: браузер скачивает кириллицу
+   и латиницу отдельно и только те, что реально встретились на странице.
+   `latin-ext` нужен для знака рубля (U+20BD) — он не входит в `latin`. */
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/geist-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/geist-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+                 U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F,
+                 U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF,
+                 U+FFFD;
+}
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/geist-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+                 U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+                 U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+                 U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/geist-mono-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/geist-mono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+                 U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F,
+                 U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF,
+                 U+FFFD;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/geist-mono-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+                 U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+                 U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+                 U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Lexend";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/lexend-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+                 U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F,
+                 U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF,
+                 U+FFFD;
+}
+
+@font-face {
+  font-family: "Lexend";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/lexend-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+                 U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+                 U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+                 U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 @layer tokens {
   /* --------------------------------------------------------------------------
      Токены (light — база)
@@ -20,19 +125,33 @@
     --popover: #FFFFFF;                 /* поповеры, дропдауны */
     --popover-foreground: #17171B;
     --muted: #EFEFEC;                   /* второй фон: chips, tablist */
-    --muted-foreground: #71717A;        /* вторичный текст */
+    /* Вторичный текст: заголовки таблиц, подписи, неактивные табы.
+       Значение подобрано под фон `--muted` (самый тёмный из светлых):
+       #71717A давал там 4.19:1 — ниже AA для мелкого текста. */
+    --muted-foreground: #63636B;        /* вторичный текст (5.17:1 на --muted) */
     --accent: #EFEFEC;                  /* hover-фон ghost-кнопок */
     --accent-foreground: #17171B;
-    --brand: #A85B34;                   /* тёплый терракотовый акцент */
+    /* Тёплый терракотовый акцент. Затемнён против исходного #A85B34:
+       он же служит цветом ТЕКСТА (ссылки, суммы, аватар на --brand-soft)
+       и там давал 4.26:1 — ниже AA. #9E5330 читается на всех светлых
+       фонах системы и остаётся тем же тоном. */
+    --brand: #9E5330;                   /* 5.62:1 на белом, 4.80:1 на --brand-soft */
     --brand-dark: #8E4A28;              /* hover тёмный */
     --brand-soft: #F6EBE4;              /* мягкий фон акцента */
+    /* Подпись на заливке --brand. Отдельный токен, а не белый литерал:
+       в тёмной теме бренд светлее (#C97A4F), и белый на нём даёт 3.29:1 —
+       ниже AA. Тёмная тема переопределяет токен на чернильный (5.44:1). */
+    --brand-foreground: #FFFFFF;        /* 5.62:1 на --brand */
     --primary: #1F1F24;                 /* primary-кнопки, лого */
     --primary-foreground: #FFFFFF;
-    --secondary: #EFEFEC;               /* chips */
     --secondary-foreground: #3F3F46;    /* not specified — chosen: тёплый тёмно-серый */
-    --destructive: #DE3B3D;
+    /* Семантика денег и ошибок. Оба токена несут смысл цветом, поэтому
+       обязаны проходить AA и как текст (суммы, метки), и как заливка
+       кнопки с белой подписью. Исходные #DE3B3D / #1E8E5A давали 4.38 и
+       4.14 — ниже нормы. */
+    --destructive: #C62F31;             /* 5.45:1 на белом */
     --destructive-foreground: #FFFFFF;  /* not specified — chosen: белый */
-    --success: #1E8E5A;                 /* подтверждение сохранения (ДЗ) */
+    --success: #16794C;                 /* 5.42:1 на белом */
     --success-foreground: #FFFFFF;      /* not specified — chosen: белый */
     --overlay: rgba(23, 23, 27, 0.45);  /* not specified — chosen: тёмный veil для off-canvas */
 
@@ -45,7 +164,7 @@
     /* Границы, фокус */
     --border: #E4E3DF;
     --input: #E4E3DF;
-    --ring: #A85B34;
+    --ring: #9E5330;                    /* = --brand: кольцо фокуса того же тона */
 
     /* Сайдбар */
     --sidebar: #F7F7F5;
@@ -53,8 +172,6 @@
     --sidebar-accent: #EFEFEC;
     --sidebar-accent-foreground: #17171B;
     --sidebar-border: #E4E3DF;
-    --sidebar-primary: #1F1F24;
-    --sidebar-primary-foreground: #FFFFFF;
 
     /* Статусы уроков */
     --status-cancelled: #F8DDDB;        /* отменён */
@@ -77,6 +194,26 @@
     --stat-purple: #E8DFF6;
     --stat-purple-fg: #5B3A8E;
 
+    /* Графики аналитики финансов: заливки рядов и палитра категорий трат.
+       Отдельные токены, а не --success/--destructive: яркость подбиралась
+       под заливки диаграмм по референсу, а не под семантику кнопок и сумм.
+       Индексы категорий закреплены за списком EXPENSE_CATEGORIES модели
+       (analytics.CATEGORY_COLOR_INDEX); средняя светлота читается и в тёмной
+       теме, поэтому переопределений там нет. */
+    --chart-income: #16A34A;
+    --chart-earned: #8B5CF6;
+    --chart-expense: #EF4444;
+    --chart-cat-1: #A85B34;
+    --chart-cat-2: #3A7CA5;
+    --chart-cat-3: #1E8E5A;
+    --chart-cat-4: #DE3B3D;
+    --chart-cat-5: #5B3A8E;
+    --chart-cat-6: #C77D1E;
+    --chart-cat-7: #0F766E;
+    --chart-cat-8: #B0367C;
+    --chart-cat-9: #64748B;
+    --chart-cat-10: #8AA61D;
+
     /* Карточка слота (спека slot-booking): собственный цвет, не цвета учеников */
     --cal-slot-accent: #3A7CA5;
 
@@ -84,6 +221,10 @@
     --font-sans: "Geist", system-ui, Arial, sans-serif;
     --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
     --font-display: "Lexend", "Geist", system-ui, sans-serif;
+    /* Веса: без этих определений `font-weight: var(--font-medium)`
+       молча не работает (токен использовался, но не был задан). */
+    --font-medium: 500;
+    --font-semibold: 600;
 
     /* Размеры текста: 12 / 14 / 16 / 20 / 24 / 30 / 36 */
     --text-xs: 0.75rem;    /* 12 */
@@ -92,18 +233,22 @@
     --text-lg: 1.25rem;    /* 20 */
     --text-xl: 1.5rem;     /* 24 */
     --text-2xl: 1.875rem;  /* 30 */
-    --text-3xl: 2.25rem;   /* 36 */
 
     /* Геометрия */
     --space: 0.25rem;                 /* базовая сетка 4px */
-    --radius: 0.875rem;               /* 14px — базовый радиус */
     --radius-sm: 0.5rem;              /* 8px — nav-item, кнопки малые */
     --radius-md: 0.75rem;             /* 12px — кнопки, инпуты */
     --radius-lg: 1.125rem;            /* 18px — карточки */
     --radius-full: 9999px;            /* пилюли, аватары */
 
-    /* Тени */
+    /* Тени. Литералы rgb(...) жили прямо в правилах карточек брони и меню
+       задач — три разных оттенка одного и того же тона. Токены держат их
+       рядом и дают тёмной теме переопределить: на тёмном фоне тень
+       невидима, её заменяет рамка. */
     --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-soft: 0 1px 2px rgba(23, 23, 27, 0.04);
+    --shadow-hover: 0 1px 3px rgba(23, 23, 27, 0.06);
+    --shadow-popover: 0 8px 24px rgba(23, 23, 27, 0.12);
 
     /* Анимации */
     --duration-fast: 150ms;
@@ -143,9 +288,11 @@
     --brand: #C97A4F;                 /* осветлённый терракот для контраста */
     --brand-dark: #A85B34;
     --brand-soft: #2A1D16;
+    /* На осветлённом бренде белая подпись даёт 3.29:1 — ниже AA.
+       Чернильный цвет читается на том же фоне с 5.44:1. */
+    --brand-foreground: #17171A;      /* 5.44:1 на --brand */
     --primary: #EDEDEF;               /* инверсная primary-кнопка */
     --primary-foreground: #17171A;
-    --secondary: #232327;
     --secondary-foreground: #D4D4D8;
     --destructive: #F2555A;
     --destructive-foreground: #17171A;
@@ -167,8 +314,6 @@
     --sidebar-accent: #232327;
     --sidebar-accent-foreground: #EDEDEF;
     --sidebar-border: #26262B;
-    --sidebar-primary: #EDEDEF;
-    --sidebar-primary-foreground: #17171A;
 
     /* Статусы: приглушённая пастель — 16% от светлых тонов, светлый текст */
     --status-cancelled: rgba(248, 221, 219, 0.16);
@@ -193,6 +338,11 @@
     --cal-slot-accent: #7FB3D4;         /* слот: осветлённый стальной для контраста */
 
     --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.05); /* тени почти не видны — компенсируем границей */
+    /* На тёмном фоне мягкая тень не читается: её роль берёт рамка,
+       поэтому все три «светлых» оттенка становятся тонким контуром. */
+    --shadow-soft: 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.07);
+    --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.5);
 
     --scrollbar-thumb: #3A3A40;
     --scrollbar-thumb-hover: #4A4A52;
@@ -286,12 +436,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Крупные заголовки — tracking-tight */
-  .display {
-    font-family: var(--font-display);
-    letter-spacing: -0.01em;
-  }
-
   /* Тонкий скроллбар */
   ::-webkit-scrollbar {
     width: 6px;
@@ -373,6 +517,27 @@
     flex: 1;
     overflow-y: auto;
     padding: calc(var(--space) * 2);
+  }
+
+  /* Секция ребёнка в сайдбаре кабинета родителя (change parent-cabinet):
+     имя-заголовок и две его страницы. Классы навигации — те же `.nav-item`. */
+  .parent-nav__section {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    margin-bottom: calc(var(--space) * 2);
+  }
+
+  .parent-nav__heading {
+    padding: calc(var(--space) * 2) calc(var(--space) * 3) calc(var(--space) * 1);
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: var(--font-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .sidebar__footer {
@@ -471,6 +636,30 @@
     &:hover { background: var(--sidebar-accent); }
   }
 
+  /* Кружок счётчика в сайдбаре: необработанные заявки («Брони»),
+     просроченные задачи («Задачи»). Партиал (`/tutor/<модуль>/count`)
+     наполняет контейнер; пустой (`:empty`) кружка не показывает —
+     ноль не сигнал. */
+  .nav-item__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    margin-left: auto;                  /* прижат к правому краю пункта */
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--destructive);
+    color: var(--destructive-foreground);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1;
+    overflow: visible;
+  }
+
+  .nav-item__badge:empty { display: none; }
+
   /* Нижний блок сайдбара (Настройки) */
   .sidebar__section {
     flex: none;
@@ -514,6 +703,13 @@
       & .user-row__meta,
       & .nav-divider {
         display: none;
+      }
+
+      /* Кружок счётчика остаётся видимым в полосе иконок: правило
+         `.nav-item span` выше прячет и его, поэтому здесь явное
+         исключение с бо́льшей специфичностью (пустой контейнер — без кружка). */
+      & .nav-item .nav-item__badge:not(:empty) {
+        display: inline-flex;
       }
 
       /* Иконки по центру полосы */
@@ -681,7 +877,7 @@
 
   .btn--brand {
     background: var(--brand);
-    color: #FFFFFF; /* not specified — chosen: белый текст на терракоте */
+    color: var(--brand-foreground);
 
     &:hover { background: var(--brand-dark); }
   }
@@ -935,6 +1131,176 @@
   .messenger__hint {
     color: var(--muted-foreground);
     font-size: var(--text-sm);
+  }
+
+  /* Карточка канала уведомлений (вкладка «Уведомления»): строка
+     «иконка — название — действие». Состояние красит модификатор:
+     привязан — зелёный фон, ждёт и не подключён — мягкий акцент. */
+  .channels-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  .channel-card {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--brand-soft);
+  }
+
+  .channel-card--connected {
+    background: color-mix(in srgb, var(--success) 8%, var(--background));
+    border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+  }
+
+  .channel-card--pending {
+    background: color-mix(in srgb, var(--brand) 6%, var(--background));
+  }
+
+  .channel-card__icon {
+    flex: none;
+    color: var(--brand);
+  }
+
+  .channel-card__icon--on {
+    color: var(--success);
+  }
+
+  .channel-card__main {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    min-width: 0;
+  }
+
+  .channel-card__title {
+    font-weight: 500;
+  }
+
+  .channel-card__desc {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .channel-card__link {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 1);
+    color: var(--brand);
+    font-size: var(--text-sm);
+  }
+
+  .channel-card__action {
+    flex: none;
+    margin-left: auto;
+  }
+
+  /* «Отвязать» — текстовая красная кнопка со ссылкой-иконкой */
+  .channel-card__unlink {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 1);
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--destructive);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .channel-card__unlink:hover {
+    text-decoration: underline;
+  }
+
+  /* Приглашение ученика в мессенджеры (вкладка «Настройки» карточки):
+     карточки состояний — те же `.channel-card*`, своё — только
+     оформление длинного диплинка и статуса копирования. */
+  .invite-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .invite-link {
+    align-self: flex-start;
+    max-width: 100%;
+    color: var(--brand);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    word-break: break-all;
+  }
+
+  .invite-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  .invite-status {
+    color: var(--success);
+    font-size: var(--text-sm);
+  }
+
+  .invite-status--warn {
+    color: var(--muted-foreground);
+  }
+
+  /* Блок «Личный кабинет» (вкладка «Настройки» формы ученика): плашка
+     привязанного входа — по образцу `.access-note`, заметка и строка
+     действий. Ссылка приглашения — те же `.invite-link`/`.invite-status`,
+     что у блока мессенджеров. */
+  .cabinet-access {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    font-size: var(--text-sm);
+  }
+
+  .cabinet-access__icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    margin-top: 2px;
+    color: var(--success);
+  }
+
+  .cabinet-access__main {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+  }
+
+  .cabinet-access__title {
+    font-weight: var(--font-medium);
+  }
+
+  .cabinet-access__desc {
+    color: var(--muted-foreground);
+    word-break: break-all;
+  }
+
+  .cabinet-note {
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+
+  .cabinet-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+    margin-top: calc(var(--space) * 3);
   }
 
   /* Переключатель: чекбокс со стилизованным треком. Состояние —
@@ -1251,6 +1617,15 @@
       color: var(--muted-foreground);
       cursor: not-allowed;
     }
+
+    /* Поле, которое не пропустило отправку. Ставит `form-feedback.js`,
+       когда браузер останавливает запрос: рамка держится до первой правки,
+       поэтому видно, что именно чинить, даже если подсказка браузера уже
+       погасла. */
+    &[aria-invalid="true"] {
+      border-color: var(--destructive);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 18%, transparent);
+    }
   }
 
   /* Текстовые поля: высоту задаёт `rows`, поэтому фиксированные 36px
@@ -1264,6 +1639,12 @@
   /* ==========================================================================
      Селект с поиском (combobox)
      ========================================================================== */
+  /* Корень селекта — система координат для накладного списка (фолбэк,
+     пока `dropdown.js` не перевёл список в `fixed`). */
+  .combobox {
+    position: relative;
+  }
+
   .combobox__control {
     position: relative;
     display: flex;
@@ -1302,11 +1683,15 @@
   }
 
   .combobox__list {
-    /* Список в потоке, а не absolute-поповер: модалка формы прокручивается
-       (`overflow-y: auto`), а абсолютный потомок не clipping-ится ею и
-       вылезал бы за нижний край экрана. В потоке список всегда виден,
-       а модалка подкручивается сама. */
-    margin: calc(var(--space) * 2) 0 0;
+    /* Накладной список: раскрытие не сдвигает соседние поля, а накрывает
+       их. В рабочем режиме `dropdown.js` ставит его `fixed` под полем —
+       абсолютный потомок обрезался бы прокручиваемым `.modal-body`.
+       `absolute` ниже — фолбэк до инициализации и без JS. */
+    position: absolute;
+    top: calc(100% + var(--space) * 2);
+    left: 0;
+    right: 0;
+    z-index: 30;
     max-height: 260px;
     overflow-y: auto;
     padding: var(--space);
@@ -1397,6 +1782,12 @@
   .chip--planned   { background: var(--muted);            color: var(--muted-foreground); }
   .chip--completed { background: var(--status-unplanned); color: var(--status-unplanned-fg); }
 
+  /* Статусы брони (спека booking-management): «Отменена» переиспользует
+     красный `.chip--cancelled` выше. */
+  .chip--pending   { background: var(--status-rescheduled); color: var(--status-rescheduled-fg); }
+  .chip--confirmed { background: var(--status-unplanned);   color: var(--status-unplanned-fg); }
+  .chip--rejected  { background: var(--status-cancelled);   color: var(--status-cancelled-fg); }
+
   /* ==========================================================================
      Уроки: чипы фильтра периода («Все / Сегодня / На этой неделе»)
      ========================================================================== */
@@ -1446,7 +1837,7 @@
   .period-chip__input:checked + .period-chip__view {
     background: var(--brand);
     border-color: transparent;
-    color: #fff;
+    color: var(--brand-foreground);
   }
 
   .period-chip__input:focus-visible + .period-chip__view {
@@ -1549,6 +1940,74 @@
     }
   }
 
+  /* Блок «Присутствие» формы группового урока (спека lesson-attendance):
+     шапка со счётчиком и быстрыми кнопками, список участников с чекбоксами,
+     у отсутствовавшего — селект причины. */
+  .attendance__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .attendance__counter {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .attendance__quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 1);
+  }
+
+  .attendance__chip {
+    padding: 0 calc(var(--space) * 2);
+    min-height: 26px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    font: inherit;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: border-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    &:hover {
+      border-color: var(--brand);
+      color: var(--brand);
+    }
+  }
+
+  .attendance__list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .attendance__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Имя участника с чекбоксом: занимает всё место слева, кликабельно
+     целиком, как остальные чекбоксы формы. */
+  .attendance__present {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .attendance__reason {
+    width: auto;
+    min-width: 180px;
+  }
+
   .rating-stars {
     display: inline-flex;
     gap: calc(var(--space) * 0.5);
@@ -1617,6 +2076,15 @@
   .form-banner__text {
     margin: 0;
     font-weight: 500;
+  }
+
+  /* Предупреждение о недоступности — не ошибка: сохранение не блокируется,
+     достаточно подтвердить. Поэтому плашка тёплая, как баннер неотмеченных
+     уроков, а не красная, как «не сохранено» (design.md D5, п. 3). */
+  .form-banner--warning {
+    border-color: var(--warning-border);
+    background: var(--warning-soft);
+    color: var(--warning-fg);
   }
 
   /* ==========================================================================
@@ -2192,12 +2660,19 @@
   }
 
   .lessons-table-wrap {
-    overflow-x: auto;
+    /* Прокручиваемая область, а не только горизонтальная лента: `thead`
+       залипает внутри неё (change lessons-table-scale). Без ограничения
+       высоты `position: sticky` у шапки не к чему прилипать — она уезжает
+       вместе со строками. */
+    overflow: auto;
+    max-height: min(70vh, 720px);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--card);
     color: var(--card-foreground);
     box-shadow: var(--shadow-card);
+    /* Фокус на области прокрутки: с клавиатуры её тоже нужно листать. */
+    scrollbar-gutter: stable;
   }
 
   .lessons-table {
@@ -2210,8 +2685,16 @@
     background: var(--muted);
   }
 
+  /* Шапка остаётся на месте при прокрутке строк. `border-collapse:
+     collapse` съедает рамку залипшей ячейки, поэтому линия низа нарисована
+     тенью — она не исчезает при скролле. */
   .lessons-table__th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
     padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    background: var(--muted);
+    box-shadow: inset 0 -1px 0 var(--border);
     text-align: left;
     font-size: var(--text-xs);
     font-weight: 600;
@@ -2219,6 +2702,81 @@
     letter-spacing: 0.04em;
     color: var(--muted-foreground);
     white-space: nowrap;
+  }
+
+  /* Заголовок-переключатель сортировки: ссылка на весь размер ячейки,
+     чтобы промах по стрелке не оставлял клик без действия.
+
+     `vertical-align: middle` обязателен: `inline-flex` по умолчанию
+     выравнивается по базовой линии, и под ней остаётся место под
+     descender — шапка вырастала с 42 до 60px на десктопе (проверено
+     в браузере). С ним высоту задаёт margin-box ссылки. */
+  .lessons-table__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space));
+    margin: calc(var(--space) * -1) calc(var(--space) * -2);
+    padding: calc(var(--space)) calc(var(--space) * 2);
+    border-radius: var(--radius-sm);
+    color: inherit;
+    text-decoration: none;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    vertical-align: middle;
+
+    &:hover {
+      background: var(--accent);
+      color: var(--foreground);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--ring);
+      outline-offset: 1px;
+    }
+  }
+
+  .lessons-table__sort--active {
+    color: var(--foreground);
+  }
+
+  .lessons-table__sort-icon {
+    display: inline-flex;
+
+    & [data-lucide] { width: 12px; height: 12px; }
+  }
+
+  /* Колонка выбора: узкая и без лишнего отступа. */
+  .lessons-table__th--check,
+  .lessons-table__cell--check {
+    width: 1%;
+    padding-right: 0;
+  }
+
+  /* Чекбокс выбора строки. Обёртка — `<label>`: клик по её краю
+     переключает чекбокс, а не открывает модалку строки (фильтр триггера
+     строки смотрит на `.lessons-select-hit`).
+
+     По умолчанию цель компактная (плотность десктопа важнее): 44×44
+     включается только в мобильной раскладке — иначе шапка росла с 42 до
+     60px из-за одной ячейки выбора (проверено в браузере). */
+  .lessons-select-hit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .lessons-select {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+
+    &:disabled { cursor: default; }
+  }
+
+  .lessons-select-hit:has(.lessons-select:disabled) {
+    cursor: default;
   }
 
   .lessons-table__th--status {
@@ -2277,6 +2835,59 @@
     .lessons-table__cell {
       padding: calc(var(--space) * 2) calc(var(--space) * 3);
     }
+  }
+
+  /* Панель массовой отметки: действие и подпись под таблицей.
+     Кнопка выключена, пока ничего не выбрано, — подпись объясняет, что
+     делать (change lessons-table-scale). */
+  .lessons-bulk {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+  }
+
+  .lessons-bulk__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+  }
+
+  .lessons-bulk__hint {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Пагинация: своя секция, а не общий класс статистики — таблица уроков
+     живёт в другом модуле, и общий класс связал бы их правки. */
+  .lessons-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .lessons-pagination__nav {
+    display: flex;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Счётчик страниц: цифры моноширинные, иначе «страница 9 из 10» дёргает
+     соседнюю кнопку при перелистывании. */
+  .lessons-pagination__info {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lessons-pagination__ghost {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 calc(var(--space) * 3);
+    color: var(--muted-foreground);
+    opacity: 0.6;
   }
 
   .student-card {
@@ -3428,6 +4039,75 @@
     gap: calc(var(--space) * 2);
   }
 
+  /* Бейдж «Личный кабинет» на миникарточке контакта (change parent-cabinet):
+     состояние входа и кнопка приглашения. Живёт в раскрытой форме строки
+     и заменяется htmx-ответом целиком — остальная форма не перерисовывается. */
+  .contact-cabinet {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    font-size: var(--text-sm);
+  }
+
+  .contact-cabinet__title {
+    font-weight: var(--font-medium);
+  }
+
+  .contact-cabinet__access {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    color: var(--success);
+    word-break: break-all;
+  }
+
+  .contact-cabinet__note {
+    margin: 0;
+    color: var(--muted-foreground);
+    line-height: 1.5;
+  }
+
+  .contact-cabinet__term {
+    margin: 0;
+    color: var(--muted-foreground);
+  }
+
+  .contact-cabinet__link {
+    align-self: flex-start;
+    max-width: 100%;
+    color: var(--brand);
+    font-family: var(--font-mono);
+    word-break: break-all;
+  }
+
+  .contact-cabinet__statuses {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  .contact-cabinet__status {
+    color: var(--success);
+  }
+
+  .contact-cabinet__status--warn {
+    color: var(--muted-foreground);
+  }
+
+  .contact-cabinet__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+    margin-top: calc(var(--space) * 1);
+  }
+
   /* Поле выбора человека (ученика или контакта) — общий виджет:
      `_person_picker.html` + `picker.js`. Внешний вид одинаков в форме
      ученика и в форме группы. */
@@ -3437,6 +4117,33 @@
     flex-direction: column;
     gap: calc(var(--space) * 2);
     grid-column: 1 / -1;
+  }
+
+  /* Селект цели урока — тот же виджет, но со своим именем блока: варианты
+     списка приходят с сервера (htmx), и общий `person-picker` не должен
+     отвечать за их разметку. */
+  .lesson-target {
+    position: relative;
+  }
+
+  /* Контейнер вариантов подменяется htmx целиком: пока ответа нет, он
+     пуст, но место не схлопывается — иначе список «прыгал» бы по высоте. */
+  .lesson-target__options {
+    display: block;
+    min-height: 0;
+  }
+
+  /* Список в форме урока раскрывается над нижними полями (модалка
+     прокручивается), поэтому высоту ограничивает он сам, а не форма. */
+  .lesson-target__list {
+    max-height: 260px;
+  }
+
+  /* Мини-форма создания цели внутри селекта — общий `group-mini`, только
+     без внутренней рамки: она стоит внутри поля, а не рядом с ним. */
+  .lesson-target__mini {
+    margin-top: calc(var(--space) * 2);
+    background: var(--card);
   }
 
   .contact-suggestion {
@@ -3985,9 +4692,11 @@
   }
 
   /* Просроченный урок: запланирован, но время прошло (design.md D5) —
-     акцент остаётся цветом цели, красной становится только рамка. */
+     акцент остаётся цветом цели, красной становится только рамка.
+     Цвет — токен `--destructive`, а не литерал: в тёмной теме он
+     осветлён, иначе рамка терялась бы на тёмной карточке. */
   .cal-event--overdue {
-    border-color: color-mix(in srgb, #ef4444 55%, transparent);
+    border-color: color-mix(in srgb, var(--destructive) 55%, transparent);
   }
 
   /* Карточка в процессе перетаскивания: transform двигает calendar.js;
@@ -4629,6 +5338,18 @@
     color: var(--muted-foreground);
   }
 
+  /* Комментарий заявителя: свободный текст из публичной формы, поэтому
+     перенос строк сохраняется и шрифт не моно — это не реквизит. */
+  .slot-booking__comment {
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+
   .slot-booking__status {
     font-size: var(--text-sm);
     color: var(--muted-foreground);
@@ -4657,109 +5378,107 @@
      ========================================================================== */
 
   /* Страница без сайдбара и навигации CRM: ученик приходит по ссылке из
-     мессенджера и не должен видеть интерфейс кабинета. */
+     мессенджера и не должен видеть интерфейс кабинета. Фон — мягкий
+     голубой градиент из макета, контент — узкая колонка по центру. */
   .public-page {
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
     justify-content: center;
-    padding: calc(var(--space) * 4);
-    background: var(--surface);
+    padding: calc(var(--space) * 6) calc(var(--space) * 4);
+    background:
+      radial-gradient(
+        120% 80% at 50% 0%,
+        color-mix(in srgb, var(--status-regular) 55%, var(--card)) 0%,
+        var(--surface) 60%
+      );
   }
 
-  .public-card {
+  .public-shell {
     width: 100%;
-    max-width: 44rem;
+    max-width: 72rem;
     display: flex;
     flex-direction: column;
-    gap: calc(var(--space) * 4);
-    padding: calc(var(--space) * 6);
-    height: fit-content;
+    gap: calc(var(--space) * 5);
   }
 
-  .public-card__header {
+  /* Шапка: заголовок по центру и подпись педагога — как на макете. */
+  .public-head {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: calc(var(--space) / 2);
+    text-align: center;
   }
 
-  .public-card__brand {
+  .public-head__title {
     font-family: var(--font-display);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--brand);
-    letter-spacing: -0.01em;
-  }
-
-  .public-card__title {
-    font-family: var(--font-display);
-    font-size: var(--text-xl);
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
     font-weight: 700;
     letter-spacing: -0.02em;
     color: var(--foreground);
   }
 
-  .public-card__tutor {
+  .public-head__tutor {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Карточка «Как записаться»: три шага, по центру, до выбора окна. */
+  .public-steps {
+    width: 100%;
+    max-width: 34rem;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 4) calc(var(--space) * 5);
+  }
+
+  .public-steps__title {
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--foreground);
   }
 
-  .public-card__subject {
-    font-size: var(--text-sm);
-    color: var(--muted-foreground);
-  }
-
-  /* Подпись о часовом поясе: предупреждение, а не украшение — поэтому
-     рамка, а не мелкий серый текст (спека public-booking). */
-  .public-card__zone {
-    padding: calc(var(--space) * 2) calc(var(--space) * 3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--muted);
-    font-size: var(--text-sm);
-    color: var(--muted-foreground);
-  }
-
-  .public-card__notice {
+  .public-steps__list {
     margin: 0;
-  }
-
-  .public-card__errors {
-    margin: 0;
-  }
-
-  .public-card__empty {
-    padding: calc(var(--space) * 4) 0;
-    text-align: center;
-    color: var(--muted-foreground);
-  }
-
-  .public-card__footer {
-    padding-top: calc(var(--space) * 3);
-    border-top: 1px solid var(--border);
+    padding-left: calc(var(--space) * 5);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) / 2);
     font-size: var(--text-sm);
     color: var(--muted-foreground);
   }
 
-  /* Переключение недели: те же стрелки, что у календаря, но без кнопок
-     управления — ученику доступен только просмотр. */
+  .public-steps__item {
+    line-height: 1.5;
+  }
+
+  /* Календарь недели: карточка с навигацией, баннером пояса и сеткой. */
+  .public-calendar {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 4);
+  }
+
+  /* Переключение недель: стрелки по краям, подпись диапазона по центру. */
   .public-week {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: calc(var(--space) * 2);
-    padding-bottom: calc(var(--space) * 2);
-    border-bottom: 1px solid var(--border);
+    justify-content: center;
+    gap: calc(var(--space) * 3);
   }
 
   .public-week__nav {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2rem;
-    height: 2rem;
+    width: 1.75rem;
+    height: 1.75rem;
     border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    border-radius: 50%;
     color: var(--muted-foreground);
     text-decoration: none;
   }
@@ -4771,79 +5490,281 @@
 
   .public-week__label {
     font-size: var(--text-sm);
-    font-weight: 500;
+    font-weight: 600;
     color: var(--foreground);
+    white-space: nowrap;
+  }
+
+  /* Баннер о поясе: предупреждение, а не украшение — поэтому тёплая плашка
+     с рамкой (токены warning из дизайн-системы, спека public-booking). */
+  .public-zone {
+    margin: 0;
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border: 1px solid var(--warning-border);
+    border-left-width: 3px;
+    border-radius: var(--radius-md);
+    background: var(--warning-soft);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--warning-fg);
+  }
+
+  .public-calendar__empty {
+    padding: calc(var(--space) * 6) 0;
+    text-align: center;
+    color: var(--muted-foreground);
+  }
+
+  /* Сетка недели: семь равных столбцов. На узком экране сетка прокручивается
+     по горизонтали, а не ломается на две строки — иначе дни перемешиваются
+     и выбор времени становится нечитаемым. */
+  .public-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(6.5rem, 1fr));
+    gap: calc(var(--space) * 2);
+    overflow-x: auto;
+    padding-bottom: calc(var(--space) * 2);
   }
 
   .public-day {
     display: flex;
     flex-direction: column;
     gap: calc(var(--space) * 2);
+    min-width: 0;
   }
 
-  .public-day__title {
-    font-size: var(--text-sm);
+  .public-day__head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: calc(var(--space) * 2) calc(var(--space) / 2);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: var(--muted);
+    text-align: center;
+  }
+
+  .public-day__weekday {
+    font-size: var(--text-xs);
     font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .public-day__date {
+    font-size: var(--text-xs);
     color: var(--muted-foreground);
   }
 
-  .public-slots {
+  .public-day__body {
     display: flex;
     flex-direction: column;
     gap: calc(var(--space) * 2);
-    list-style: none;
-    margin: 0;
-    padding: 0;
+    min-height: 8rem;
   }
 
-  .public-slot {
-    border: 1px solid var(--border);
+  /* День без окон: подпись вместо пустоты, чтобы столбец не «проваливался». */
+  .public-day__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(var(--space) * 2);
     border-radius: var(--radius-md);
-    background: var(--card);
+    background: var(--status-cancelled);
+    font-size: var(--text-xs);
+    color: var(--status-cancelled-fg);
+    text-align: center;
   }
 
-  /* Форма одного окна: время и длительность слева, поля и кнопка — ниже.
-     Одна форма на окно, потому что вложенные <form> в HTML запрещены. */
-  .public-slot__form {
+  /* Карточка окна: время, конец и состояние. Общая база, состояние — модификатор. */
+  .public-slot {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--space) * 2);
-    padding: calc(var(--space) * 3);
+    align-items: center;
+    gap: 2px;
+    padding: calc(var(--space) * 2) calc(var(--space) / 2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    text-align: center;
+    text-decoration: none;
   }
 
   .public-slot__time {
     font-family: var(--font-mono);
-    font-size: var(--text-base);
+    font-size: var(--text-sm);
     font-weight: 600;
-    color: var(--cal-slot-accent);
+    line-height: 1.2;
   }
 
-  .public-slot__duration {
+  .public-slot__end {
+    font-size: var(--text-xs);
+    opacity: 0.75;
+  }
+
+  .public-slot__state {
+    margin-top: 2px;
+    font-size: var(--text-xs);
+  }
+
+  /* Свободное окно: зелёная карточка, кликабельная целиком (design D2). */
+  .public-slot--free {
+    background: color-mix(in srgb, var(--success) 10%, var(--card));
+    border-color: color-mix(in srgb, var(--success) 25%, var(--card));
+    color: var(--success);
+    cursor: pointer;
+  }
+
+  .public-slot--free:hover {
+    background: color-mix(in srgb, var(--success) 18%, var(--card));
+  }
+
+  .public-slot--free:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Занятое окно: красная карточка без ссылки и без курсора-указателя.
+     Кем занято — не показывается, поэтому подпись одна на все случаи. */
+  .public-slot--busy {
+    background: var(--status-cancelled);
+    color: var(--status-cancelled-fg);
+  }
+
+  /* Выбранное окно: синий акцент, как в макете. */
+  .public-slot--selected {
+    background: var(--status-regular);
+    border-color: color-mix(in srgb, var(--status-regular-fg) 30%, var(--card));
+    color: var(--status-regular-fg);
+  }
+
+  .public-slot--selected:hover {
+    background: var(--status-regular);
+  }
+
+  /* Карточка формы заявки: одна на страницу, под сеткой. */
+  .public-form {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 5);
+  }
+
+  .public-form__title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .public-form__title i {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: var(--muted-foreground);
+  }
+
+  .public-form__selected {
     font-size: var(--text-sm);
     color: var(--muted-foreground);
   }
 
-  .public-slot__fields {
-    display: grid;
-    gap: calc(var(--space) * 2);
+  /* Плашка ошибок над сеткой: причина отказа видна и тогда, когда
+     выбранного окна в сетке уже нет (окно заняли между выбором и отправкой). */
+  .public-alert {
+    margin: 0;
   }
 
-  .public-slot__field {
+  .public-form__form {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+  }
+
+  .public-form__row {
+    display: grid;
+    gap: calc(var(--space) * 3);
+  }
+
+  .public-form__field {
     display: flex;
     flex-direction: column;
     gap: calc(var(--space) / 2);
   }
 
-  .public-slot__submit {
-    align-self: flex-start;
+  .public-form__submit {
+    width: 100%;
   }
 
-  /* На широком экране поля встают в две колонки: форма окна остаётся
-     компактной, а кнопка — на своём месте. */
+  /* На широком экране имя и телефон встают в две колонки. */
   @media (min-width: 640px) {
-    .public-slot__fields {
+    .public-form__row {
       grid-template-columns: 1fr 1fr;
     }
+  }
+
+  /* Экран успеха: одна карточка по центру, без сетки и формы (design D3). */
+  .public-success {
+    width: 100%;
+    max-width: 32rem;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 8) calc(var(--space) * 6);
+    text-align: center;
+  }
+
+  .public-success__check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--success) 14%, var(--card));
+    color: var(--success);
+  }
+
+  .public-success__check i {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .public-success__title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--foreground);
+  }
+
+  .public-success__text {
+    color: var(--muted-foreground);
+  }
+
+  .public-success__zone {
+    font-size: var(--text-xs);
+    color: var(--warning-fg);
+  }
+
+  .public-success__time {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) / 2);
+    padding: calc(var(--space) * 3);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+  }
+
+  .public-success__time-label {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .public-success__time-value {
+    font-size: var(--text-base);
+    color: var(--foreground);
   }
 
   /* ==========================================================================
@@ -5451,18 +6372,33 @@
     max-width: 260px;
   }
 
+  /* Сводка — два яруса, а не восемь карточек одного веса. Главные
+     (доход, чистая прибыль, долги) крупнее: это ответ на вопрос, с которым
+     открывают «Финансы». Расшифровка (возвраты, чистый доход, расходы,
+     заработано, переплата) мельче, но на месте — иерархия без скрытия
+     данных, поэтому обновление блока по htmx ничего не сбрасывает. */
   .fin-kpis {
     display: grid;
     grid-template-columns: 1fr;
     gap: calc(var(--space) * 4);
-    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .fin-kpis--lead {
+    margin-bottom: calc(var(--space) * 4);
 
     @media (min-width: 640px) {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
     }
+  }
+
+  /* Компактный ярус на мобиле — две колонки: пять карточек в столбик
+     растягивали сводку на лишний экран, а числа здесь короткие. */
+  .fin-kpis--secondary {
+    grid-template-columns: repeat(2, 1fr);
+    margin-bottom: calc(var(--space) * 5);
 
     @media (min-width: 1024px) {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
     }
   }
 
@@ -5470,6 +6406,25 @@
     display: flex;
     flex-direction: column;
     gap: calc(var(--space) * 2);
+  }
+
+  .fin-kpi--lead .fin-kpi__value {
+    font-size: var(--text-2xl);
+  }
+
+  /* Компактная карточка: меньше воздуха и мельче число — вес карточки
+     показывает её роль в сводке, а не важность данных. */
+  .fin-kpi--compact {
+    gap: calc(var(--space) * 1);
+    padding: calc(var(--space) * 4);
+  }
+
+  .fin-kpi--compact .fin-kpi__value {
+    font-size: var(--text-lg);
+  }
+
+  .fin-kpi--compact .fin-kpi__sub {
+    line-height: 1.4;
   }
 
   .fin-kpi__head {
@@ -5621,19 +6576,112 @@
     min-width: 0;
   }
 
+  /* Вкладки и кнопка «Добавить» в одну строку: кнопка прижата вправо,
+     на узких экранах переносится под вкладки, а не сжимает их. */
+  .fin-operations__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    flex-wrap: wrap;
+    margin-bottom: calc(var(--space) * 3);
+  }
+
   /* Пять вкладок сегмента переносятся на узких экранах, а не сжимаются
      в нечитаемые пилюли. */
   .fin-operations__tabs {
     display: flex;
     flex-wrap: wrap;
-    margin-bottom: calc(var(--space) * 3);
   }
 
-  /* Таблица операций: дата/тип/статус прячутся на телефоне — сумма и
-     заголовок важнее, широкий скролл на мобильном хуже неполной строки. */
+  /* Кнопке «Добавить» не нужен отступ слева: gap головы держит дистанцию
+     до вкладок, а сам класс остаётся точкой расширения под стили кнопки. */
+  .fin-operations__add {
+    flex-shrink: 0;
+  }
+
   .fin-ops {
     padding: calc(var(--space) * 2) calc(var(--space) * 4);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
   }
+
+  /* Чипсы фильтра «Все операций» над таблицей: ссылка, как вкладки —
+     состояние видно в адресе. Активный — тёмный, как у пилюль горизонта. */
+  .fin-ops__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-ops__chip {
+    display: inline-flex;
+    align-items: center;
+    padding: calc(var(--space) * 1) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--card);
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      background var(--duration-fast) var(--ease),
+      color var(--duration-fast) var(--ease);
+  }
+
+  .fin-ops__chip:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  .fin-ops__chip--active,
+  .fin-ops__chip--active:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  /* Карточки итогов ленты: строка из четырёх значений над таблицей,
+     на телефоне — сетка 2×2, чтобы цифры не сжимались в строку. */
+  .fin-ops__totals {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--space) * 2);
+  }
+
+  @media (min-width: 768px) {
+    .fin-ops__totals {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .fin-ops__total {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+  }
+
+  .fin-ops__total-label {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-ops__total-value {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .fin-ops__total-value--green { color: var(--success); }
+
+  .fin-ops__total-value--red { color: var(--destructive); }
 
   .fin-ops__table {
     width: 100%;
@@ -5650,13 +6698,13 @@
     white-space: nowrap;
   }
 
-  /* Дата/тип/статус прячутся на телефоне: заголовок и сумма важнее,
+  /* Дата/тип прячутся на телефоне: описание и сумма важнее,
      горизонтальный скролл таблицы хуже неполной строки. */
   @media (max-width: 639px) {
+    .fin-ops__th--date,
     .fin-ops__th--type,
-    .fin-ops__th--status,
-    .fin-ops__cell--type,
-    .fin-ops__cell--status {
+    .fin-ops__cell--date,
+    .fin-ops__cell--type {
       display: none;
     }
   }
@@ -5678,7 +6726,7 @@
     border-bottom: 0;
   }
 
-  .fin-ops__cell--title {
+  .fin-ops__cell--desc {
     display: flex;
     align-items: flex-start;
     gap: calc(var(--space) * 2);
@@ -5744,11 +6792,6 @@
     text-decoration: line-through;
   }
 
-  .fin-ops__status--neutral {
-    background: var(--muted);
-    color: var(--muted-foreground);
-  }
-
   .fin-ops__amount--green { color: var(--success); }
 
   .fin-ops__amount--red { color: var(--destructive); }
@@ -5768,30 +6811,494 @@
     & [data-lucide] { width: 28px; height: 28px; }
   }
 
-  /* Заглушка вкладок «Аналитика»/«Прогноз на месяц»: разделы заявлены
-     референсом, данных пока нет. */
-  .fin-ops-stub {
+  /* ==========================================================================
+     Вкладка «Аналитика»: пилюли горизонта (6/12 мес) и карточки графиков.
+     Вся геометрия SVG приходит с сервера (services/analytics.py) — здесь
+     только заливки, подписи осей и раскладка карточек.
+     ========================================================================== */
+
+  .fin-analytics {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: calc(var(--space) * 2);
-    padding: calc(var(--space) * 10) calc(var(--space) * 4);
-    color: var(--muted-foreground);
-
-    & [data-lucide] { width: 32px; height: 32px; }
+    gap: calc(var(--space) * 3);
   }
 
-  .fin-ops-stub__title {
+  .fin-analytics__pills {
+    display: flex;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Пилюля горизонта — ссылка, а не кнопка: состояние видно в адресе
+     (паттерн вкладок). Активная — тёмная, как primary-кнопка референса. */
+  .fin-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 76px;
+    padding: calc(var(--space) * 1.5) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--card);
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    transition:
+      background var(--duration-fast) var(--ease),
+      color var(--duration-fast) var(--ease);
+  }
+
+  .fin-pill:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  .fin-pill--active,
+  .fin-pill--active:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  /* Карточка графика: заголовок и легенда в одну строку, график ниже. */
+  .fin-chart {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 4);
+  }
+
+  .fin-chart__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-chart__title {
     margin: 0;
     font-size: var(--text-base);
     font-weight: 600;
     color: var(--foreground);
   }
 
-  .fin-ops-stub__note {
+  .fin-chart__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2) calc(var(--space) * 4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-chart__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 1.5);
+  }
+
+  .fin-chart__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  .fin-chart__dot--income { background: var(--chart-income); }
+  .fin-chart__dot--earned { background: var(--chart-earned); }
+  .fin-chart__dot--expenses { background: var(--chart-expense); }
+
+  /* viewBox + width:100% растягивают серверный SVG без пересчёта
+     координат; пирог ограничен — большой круг растягивал бы карточку. */
+  .fin-chart__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .fin-chart__svg--pie {
+    max-width: 280px;
+    margin-inline: auto;
+  }
+
+  .fin-chart__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 8) calc(var(--space) * 4);
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+
+    & p { margin: 0; }
+
+    & [data-lucide] { width: 28px; height: 28px; }
+  }
+
+  /* Ось столбчатого графика: сетка пунктиром, база — сплошной, подписи
+     приглушённые — ось не спорит с данными (как на референсе). */
+  .fin-grid {
+    stroke: var(--border);
+    stroke-dasharray: 4 4;
+  }
+
+  .fin-axis {
+    stroke: var(--border);
+  }
+
+  .fin-tick {
+    fill: var(--muted-foreground);
+    font-size: 11px;
+    text-anchor: end;
+  }
+
+  .fin-month {
+    fill: var(--muted-foreground);
+    font-size: 11px;
+    text-anchor: middle;
+  }
+
+  .fin-bar--income { fill: var(--chart-income); }
+  .fin-bar--earned { fill: var(--chart-earned); }
+  .fin-bar--expenses { fill: var(--chart-expense); }
+
+  /* Пирог категорий: сектора с белой разделительной каймой, проценты —
+     снаружи кольца (координаты и показ подписей решает сервис). */
+  .fin-slice {
+    stroke: var(--card);
+    stroke-width: 2;
+  }
+
+  .fin-slice--1 { fill: var(--chart-cat-1); }
+  .fin-slice--2 { fill: var(--chart-cat-2); }
+  .fin-slice--3 { fill: var(--chart-cat-3); }
+  .fin-slice--4 { fill: var(--chart-cat-4); }
+  .fin-slice--5 { fill: var(--chart-cat-5); }
+  .fin-slice--6 { fill: var(--chart-cat-6); }
+  .fin-slice--7 { fill: var(--chart-cat-7); }
+  .fin-slice--8 { fill: var(--chart-cat-8); }
+  .fin-slice--9 { fill: var(--chart-cat-9); }
+  .fin-slice--10 { fill: var(--chart-cat-10); }
+
+  .fin-pie-label {
+    fill: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* Легенда категорий под пирогом: колонки резиновые — от узкой карточки
+     до широкого экрана список сам выбирает число колонок. */
+  .fin-cat-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: calc(var(--space) * 2) calc(var(--space) * 4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .fin-cat-legend__item {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    min-width: 0;
+  }
+
+  .fin-cat-legend__dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  .fin-cat-legend__dot--1 { background: var(--chart-cat-1); }
+  .fin-cat-legend__dot--2 { background: var(--chart-cat-2); }
+  .fin-cat-legend__dot--3 { background: var(--chart-cat-3); }
+  .fin-cat-legend__dot--4 { background: var(--chart-cat-4); }
+  .fin-cat-legend__dot--5 { background: var(--chart-cat-5); }
+  .fin-cat-legend__dot--6 { background: var(--chart-cat-6); }
+  .fin-cat-legend__dot--7 { background: var(--chart-cat-7); }
+  .fin-cat-legend__dot--8 { background: var(--chart-cat-8); }
+  .fin-cat-legend__dot--9 { background: var(--chart-cat-9); }
+  .fin-cat-legend__dot--10 { background: var(--chart-cat-10); }
+
+  .fin-cat-legend__name {
+    color: var(--foreground);
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .fin-cat-legend__percent {
+    margin-left: auto;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-cat-legend__amount {
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  /* ==========================================================================
+     Вкладка «Прогноз на месяц»: месяц и действия, сетка карточек-метрик,
+     блок предупреждений, расшифровки и карточка зафиксированного снимка.
+     Числа приходят готовыми из services/forecast.py — здесь только вид.
+     ========================================================================== */
+
+  .fin-forecast {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+  }
+
+  /* Панель вкладки: слева селектор месяца, справа «Скачать CSV» и
+     «Зафиксировать прогноз» — как на референсе. */
+  .fin-forecast__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2) calc(var(--space) * 4);
+  }
+
+  .fin-forecast__month {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+  }
+
+  .fin-forecast__select {
+    width: auto;
+    min-width: 200px;
+  }
+
+  .fin-forecast__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+
+    & form { margin: 0; }
+  }
+
+  /* Карточки-метрики: две колонки на широком экране, одна на телефоне.
+     Сетка, а не flex-wrap: карточки выравниваются по строкам. */
+  .fin-forecast__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 3);
+
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .fin-metric {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 4);
+  }
+
+  .fin-metric__label {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 1.5);
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  /* Подсказка «ⓘ» — иконка с title и скрытым текстом для скринридера:
+     пояснение не занимает места в карточке. */
+  .fin-metric__hint {
+    display: inline-flex;
+    color: var(--muted-foreground);
+    cursor: help;
+
+    & [data-lucide] { width: 14px; height: 14px; }
+  }
+
+  .fin-metric__value {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--foreground);
+  }
+
+  .fin-metric__note {
+    margin: 0;
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+
+  /* «Не в расписании» — ожидание, а не состоявшиеся деньги: значение
+     приглушено, чтобы не читалось как факт. */
+  .fin-metric--unscheduled .fin-metric__value {
+    color: var(--muted-foreground);
+  }
+
+  /* Блок предупреждений: мягкая жёлтая плашка из токенов баннера. */
+  .fin-warning {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius-lg);
+    background: var(--warning-soft);
+    color: var(--warning-fg);
+  }
+
+  .fin-warning__title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+
+    & [data-lucide] { width: 16px; height: 16px; }
+  }
+
+  .fin-warning__list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1.5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+
+  .fin-warning__item {
+    margin: 0;
+  }
+
+  /* Расшифровки: «Не в расписании» и «По ученикам — календарь». */
+  .fin-forecast__detail {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 4);
+  }
+
+  .fin-forecast__detail-title {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-forecast__rows {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .fin-forecast__row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 2) 0;
+    border-bottom: 1px solid var(--border);
+
+    &:last-child { border-bottom: none; }
+  }
+
+  .fin-forecast__row-main {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 0.5);
+    min-width: 0;
+  }
+
+  .fin-forecast__row-name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+    overflow-wrap: anywhere;
+  }
+
+  .fin-forecast__row-detail {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-forecast__row-amount {
+    flex: none;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+    white-space: nowrap;
+  }
+
+  /* Карточка «Прогноз vs факт»: снимок прогноза и отклонение факта. */
+  .fin-snapshot {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 4);
+  }
+
+  .fin-snapshot__head {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+  }
+
+  .fin-snapshot__title {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-snapshot__meta {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-snapshot__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: calc(var(--space) * 2);
     margin: 0;
     font-size: var(--text-sm);
   }
+
+  .fin-snapshot__label {
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .fin-snapshot__value {
+    color: var(--muted-foreground);
+  }
+
+  /* Бейдж отклонения: цвет говорит, в какую сторону факт ушёл от прогноза. */
+  .fin-snapshot__badge {
+    margin-left: calc(var(--space) * 1);
+    font-weight: 600;
+  }
+
+  .fin-snapshot__badge--below { color: var(--destructive); }
+  .fin-snapshot__badge--above { color: var(--success); }
+  .fin-snapshot__badge--inrange { color: var(--muted-foreground); }
 
   /* Карточка «Балансы учеников»: должники и переплатчики с суммами сторон.
      Список ограничен по высоте: при десятках учеников карточка не должна
@@ -5883,7 +7390,1489 @@
     font-size: var(--text-sm);
     color: var(--muted-foreground);
   }
+
+  /* ==========================================================================
+     Брони и заявки (спека booking-management, страница /tutor/bookings)
+     ========================================================================== */
+  .bookings-pending,
+  .bookings-history {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 8);
+  }
+
+  .bookings-title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .bookings-title [data-lucide] {
+    width: 20px;
+    height: 20px;
+    color: var(--muted-foreground);
+  }
+
+  .bookings-title__count {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 calc(var(--space) * 2);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+
+  .bookings-empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Карточка ожидающей заявки: тёплый акцент слева отделяет «ждёт решения»
+     от остального интерфейса; действия прижаты вправо. */
+  .booking-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 4);
+    padding: calc(var(--space) * 5) calc(var(--space) * 5)
+             calc(var(--space) * 5) calc(var(--space) * 5 + 3px);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--brand);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .booking-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    min-width: 0;
+  }
+
+  .booking-card__time {
+    margin: 0 0 calc(var(--space) * 2);
+    font-size: var(--text-xl);
+    font-weight: 600;
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .booking-card__details {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1.5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .booking-card__field {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    color: var(--foreground);
+  }
+
+  .booking-card__field [data-lucide] {
+    width: 16px;
+    height: 16px;
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+  }
+
+  .booking-card__actions {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Строка истории: чип статуса, кто и когда, справа — дата решения. */
+  .booking-history__row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3) calc(var(--space) * 2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .booking-history__row:last-of-type {
+    border-bottom: none;
+  }
+
+  .booking-history__main {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+    min-width: 0;
+  }
+
+  .booking-history__name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .booking-history__meta {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .booking-history__cancel {
+    margin-left: auto;
+  }
+
+  .booking-history__date {
+    margin-left: auto;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  .booking-history__cancel + .booking-history__date {
+    margin-left: 0;
+  }
+
+  /* ==========================================================================
+     Задачи (спека task-management, страница /tutor/tasks)
+     ========================================================================== */
+
+  /* Панель действий в заголовке страницы: вид, фильтр и «Новая задача». */
+  .tasks-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  .tasks-toolbar .filters {
+    width: auto;
+  }
+
+  /* Доска: четыре колонки по этапам; на телефоне — одна. */
+  .task-board {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (min-width: 1100px) {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .task-column {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+
+  .task-column__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .task-column__title {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .task-column__count {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 calc(var(--space) * 2);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .task-column__body {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Колонка под курсором при перетаскивании карточки: пунктир в
+     фирменном тоне — видно, куда упадёт карточка. */
+  .task-column__body--drop {
+    outline: 2px dashed color-mix(in srgb, var(--brand) 55%, transparent);
+    outline-offset: 2px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--brand) 6%, transparent);
+  }
+
+  /* Пустая колонка: пунктирная рамка и иконка — видно, что доска жива,
+     а не сломалась. */
+  .task-column__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--space));
+    min-height: 96px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+
+    & [data-lucide] {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  /* Список: блоки «Сегодня», «Предстоящие», «Без срока», «Завершено». */
+  .task-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 6);
+  }
+
+  .task-group {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+  }
+
+  .task-group__head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  .task-group__title {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .task-group__count {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 calc(var(--space) * 2);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .task-group__body {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .task-group__empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Карточка задачи: кликабельна целиком (открывает диалог правки). */
+  .task-card {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    color: var(--card-foreground);
+    cursor: pointer;
+    transition: border-color var(--duration-fast) var(--ease),
+                box-shadow var(--duration-fast) var(--ease);
+
+    &:hover {
+      border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
+      box-shadow: var(--shadow-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--ring);
+      outline-offset: 2px;
+    }
+  }
+
+  /* Просроченная задача: левая полоса красного тона. */
+  .task-card--overdue {
+    border-left: 3px solid var(--destructive);
+  }
+
+  /* Карточку можно схватить мышью — это перенос на другой этап. */
+  .task-card[draggable="true"] {
+    cursor: grab;
+  }
+
+  /* Тащим сейчас: приглушена, чтобы не закрывать цель переноса. */
+  .task-card--dragging {
+    opacity: 0.45;
+  }
+
+  .task-card__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .task-card__title {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+    overflow-wrap: anywhere;
+  }
+
+  .task-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .task-card__priority {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 0 calc(var(--space) * 1.5);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-weight: 500;
+  }
+
+  .task-card__priority--low {
+    background: var(--stat-green);
+    color: var(--stat-green-fg);
+  }
+
+  .task-card__priority--medium {
+    background: var(--stat-orange);
+    color: var(--stat-orange-fg);
+  }
+
+  .task-card__priority--high {
+    background: var(--status-cancelled);
+    color: var(--status-cancelled-fg);
+  }
+
+  .task-card__due,
+  .task-card__students {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space));
+    min-width: 0;
+
+    & [data-lucide] {
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+    }
+  }
+
+  .task-card__due--overdue {
+    color: var(--destructive);
+    font-weight: 500;
+  }
+
+  .task-card__students {
+    overflow-wrap: anywhere;
+  }
+
+  /* Меню «⋯» карточки: кнопка, список и опасный пункт (паттерн
+     `.group-card__menu`). */
+  .task-card__menu {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .task-card__menu-list {
+    position: absolute;
+    top: calc(100% + var(--space));
+    right: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    min-width: 168px;
+    padding: calc(var(--space));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: var(--shadow-popover);
+  }
+
+  .task-card__menu-item {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    font: inherit;
+    font-size: var(--text-sm);
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover { background: var(--accent); }
+
+    & [data-lucide] {
+      width: 15px;
+      height: 15px;
+      color: var(--muted-foreground);
+    }
+  }
+
+  .task-card__menu-item--danger {
+    color: var(--destructive);
+
+    & [data-lucide] { color: currentColor; }
+  }
+
+  /* Диалог задачи: «Приоритет» и «Срок» в одну строку, на узком — столбиком. */
+  .task-form__row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 3);
+
+    @media (min-width: 480px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* Блок учеников в форме — на всю ширину секции. */
+  .form-section--tasks {
+    grid-column: 1 / -1;
+  }
+
+  .task-students {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    grid-column: 1 / -1;
+  }
+
+  .task-students__empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .task-students__list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1.5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .task-students__row {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 1.5) calc(var(--space) * 2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+
+  .task-students__name {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  /* ==========================================================================
+     Тап-таргеты на мобиле (WCAG 2.5.5 — цель 44×44)
+     ==========================================================================
+     Палец крупнее курсора: 36px-кнопки и 32px-пилюли на телефоне — это
+     промах, а промах по крестику баннера вместо «Открыть» закрывает
+     напоминание о списании. На десктопе плотность важнее размера цели,
+     поэтому поднимаем только в мобильной раскладке — по той же границе
+     (1023.98px), по которой сайдбар уезжает в off-canvas. */
+  @media (max-width: 1023.98px) {
+    /* `.btn--icon` и `.btn--sm` задают фиксированные 32px, но `min-*`
+       сильнее конкретной ширины/высоты: цель растёт до квадрата. */
+    .btn,
+    .btn--sm,
+    .tab,
+    .group-card__menu-item,
+    .task-card__menu-item {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* Пункты сайдбара: 40px хватало курсору, но палец в off-canvas меню
+       попадает между пунктами и открывает соседний раздел. */
+    .nav-item {
+      min-height: 44px;
+    }
+
+    /* Строка пользователя в футере сайдбара — тоже цель: тап по аватару
+       ведёт в профиль, промах — на «Выйти» рядом. */
+    .user-row {
+      min-height: 44px;
+    }
+
+    /* Селекты и текстовые вводы — тот же палец; `textarea.input` не
+       трогаем: его высоту задает `rows`, а правило специфичнее. */
+    .input:not(textarea) {
+      height: 44px;
+    }
+
+    .back-link {
+      min-height: 44px;
+    }
+
+    /* Заголовок-сортировка: 26px высоты — промах по стрелке. Ссылка
+       растягивается по ячейке, но не ниже 44px; отступы ячейки при этом
+       не схлопываются — шапка на мобиле выше, зато попадание верное. */
+    .lessons-table__sort {
+      min-height: 44px;
+    }
+
+    /* Чекбокс выбора строки: сам квадрат 16px, но цель пальца — 44×44.
+       На десктопе цель компактная: иначе шапка таблицы вырастала с 42 до
+       60px из-за одной ячейки выбора. */
+    .lessons-select-hit {
+      width: 44px;
+      height: 44px;
+      margin: calc(var(--space) * -1);
+    }
+
+    /* Крестик баннера: цель 44×44, но визуально плашка не растёт —
+       отрицательные отступы забирают добавленные пиксели обратно. */
+    .notice-banner__close {
+      width: 44px;
+      height: 44px;
+      margin: calc(var(--space) * -2) calc(var(--space) * -2) calc(var(--space) * -2) 0;
+    }
+
+    /* Кружок сворачивания сайдбара вылезает за край панели на 12px.
+       Скрытая панель оставляла бы на экране 11px этой цели — слепок
+       без действия; увеличиваем цель и прячем её вместе с панелью. */
+    .sidebar__toggle {
+      width: 44px;
+      height: 44px;
+      right: -22px;
+    }
+
+    .sidebar:not(.is-open) .sidebar__toggle {
+      display: none;
+    }
+  }
+
+  /* ==================================================================
+     Рассылки (/tutor/mailings): вкладки, список получателей, композер,
+     модалки шаблонов, история бота.
+     ================================================================== */
+
+  /* Вкладки-пилюли (как view-toggle задач): ссылка без JS, htmx с JS. */
+  .mailing-tabs {
+    display: inline-flex;
+    gap: calc(var(--space));
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  .mailing-tabs__item {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space));
+    min-height: 36px;
+    padding: 0 calc(var(--space) * 3);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    transition: background-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    &:hover { color: var(--foreground); }
+  }
+
+  .mailing-tabs__item--active {
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Сетка «список + композер»: на мобиле колонки в стек. */
+  .mailing-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+    align-items: start;
+
+    @media (min-width: 1024px) {
+      grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+    }
+  }
+
+  /* Корень партиала списка: сам себя перерисовывает (фильтры, отправка),
+     поэтому идёт прямой колонкой сетки формы. */
+  .mailing-recipients {
+    display: grid;
+    gap: calc(var(--space) * 4);
+    min-width: 0;
+  }
+
+  /* Фильтры получателей. */
+  .mailing-filters {
+    display: grid;
+    gap: calc(var(--space) * 3);
+  }
+
+  .mailing-filters__title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    font-size: var(--text-base);
+    font-weight: 600;
+
+    & svg { width: 18px; height: 18px; }
+  }
+
+  .mailing-filters__search { width: 100%; }
+
+  .mailing-filters__segments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  .mailing-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    color: var(--secondary-foreground);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease),
+                border-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    &:hover {
+      border-color: var(--brand);
+      color: var(--brand);
+    }
+  }
+
+  .mailing-chip--active {
+    background: var(--brand-soft);
+    border-color: var(--brand);
+    color: var(--brand);
+  }
+
+  /* Таблица получателей. */
+  .mailing-list__header {
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mailing-list__counter {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .mailing-list__empty { padding: calc(var(--space) * 6) calc(var(--space) * 4); }
+
+  .mailing-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .mailing-table th {
+    padding: calc(var(--space) * 2) calc(var(--space) * 4);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mailing-table td {
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mailing-table tbody tr:last-child td { border-bottom: 0; }
+
+  .mailing-table__check {
+    width: 44px;
+    text-align: center;
+  }
+
+  /* Ученик без каналов: строка приглушена — отправить ему всё равно некуда. */
+  .mailing-table__row--disabled {
+    color: var(--muted-foreground);
+    opacity: 0.6;
+  }
+
+  .mailing-table__name { font-weight: 500; }
+
+  .mailing-table__next {
+    margin-top: calc(var(--space));
+    font-size: var(--text-xs);
+    color: var(--success);
+  }
+
+  /* Метки каналов: подключён — акцентная, нет — глухая. */
+  .mailing-channels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space));
+  }
+
+  .mailing-channels__pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 calc(var(--space) * 2.5);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+
+  .mailing-channels__pill--on {
+    background: var(--brand-soft);
+    color: var(--brand);
+  }
+
+  /* Панель «Текст сообщения». */
+  .mailing-composer {
+    display: grid;
+    gap: calc(var(--space) * 3);
+  }
+
+  .mailing-composer__title {
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .mailing-composer__counter {
+    margin-top: calc(var(--space) * -1);
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .mailing-composer__summary {
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border-radius: var(--radius-md, 8px);
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-size: var(--text-sm);
+  }
+
+  .mailing-composer__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .mailing-composer__template { max-width: 60%; }
+
+  .mailing-composer__save {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .mailing-composer__templates { justify-self: start; }
+
+  .mailing-composer__text {
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  .mailing-composer__hint {
+    font-size: var(--text-xs);
+    line-height: 1.6;
+    color: var(--muted-foreground);
+  }
+
+  /* Кнопки-облочки подстановок под полем текста. */
+  .mailing-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space));
+    margin-top: calc(var(--space) * -1);
+  }
+
+  .mailing-tokens__btn {
+    min-height: 26px;
+    padding: 0 calc(var(--space) * 2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--secondary-foreground);
+    font-family: "Geist Mono", monospace;
+    font-size: var(--text-xs);
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease),
+                border-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+
+    &:hover {
+      border-color: var(--brand);
+      color: var(--brand);
+    }
+  }
+
+  .mailing-composer__submit { width: 100%; }
+
+  /* Модалка «Шаблоны сообщений». */
+  .mailing-templates__list {
+    display: grid;
+    gap: calc(var(--space) * 3);
+  }
+
+  .mailing-templates__item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg, 12px);
+  }
+
+  .mailing-templates__meta {
+    min-width: 0;
+  }
+
+  .mailing-templates__name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .mailing-templates__text {
+    margin-top: calc(var(--space));
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+
+  .mailing-templates__actions {
+    display: flex;
+    gap: calc(var(--space));
+    flex-shrink: 0;
+  }
+
+  .mailing-templates__delete { color: var(--destructive); }
+
+  .mailing-templates__empty {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Вкладка «История». */
+  .mailing-history { padding: 0; }
+
+  .mailing-history__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 4);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mailing-history__title {
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .mailing-history__note {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .mailing-history__scroll { overflow-x: auto; }
+
+  .mailing-history__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .mailing-history__table th {
+    padding: calc(var(--space) * 2) calc(var(--space) * 4);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mailing-history__table td {
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    vertical-align: top;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mailing-history__table tbody tr:last-child td { border-bottom: 0; }
+
+  .mailing-history__row { background: none; }
+
+  .mailing-history__date {
+    white-space: nowrap;
+    color: var(--muted-foreground);
+  }
+
+  .mailing-history__text {
+    max-width: 420px;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+  }
+
+  .mailing-history__status {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--success);
+  }
+
+  .mailing-history__status--error { color: var(--destructive); }
+
+  .mailing-history__error {
+    margin-top: calc(var(--space));
+    font-size: var(--text-xs);
+    color: var(--destructive);
+  }
+
+  .mailing-history__empty { padding: calc(var(--space) * 6) calc(var(--space) * 4); }
 }
+
+  /* Личный кабинет ученика.
+     Страницы входа и регистрации — центрированная карточка (как auth у
+     репетитора); сам кабинет после входа построен на CRM-каркасе:
+     `cabinet/_sidebar.html` переиспользует классы `.sidebar*`/`.nav-item`,
+     контент — `.main`/`.page-header`/`.card`. Своё — только таблица
+     «Моих уроков», плашка ближайшего занятия и заглушки меню. */
+  .cabinet {
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: calc(var(--space) * 10) calc(var(--space) * 4) calc(var(--space) * 12);
+  }
+
+  .cabinet-auth__header {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 6);
+    color: var(--muted-foreground);
+  }
+
+  .cabinet__card {
+    padding: calc(var(--space) * 6) calc(var(--space) * 6) calc(var(--space) * 8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+  }
+
+  .cabinet__title {
+    margin: 0 0 calc(var(--space) * 5);
+    font-size: var(--text-xl);
+    font-weight: var(--font-semibold);
+  }
+
+  .cabinet__form {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+
+  .cabinet__hint {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  /* Ближайшее занятие: карточка с парой «подпись — дата и время». */
+  .cabinet-nearest {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .cabinet-nearest__label {
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .cabinet-nearest__when {
+    font-size: var(--text-lg);
+    font-weight: var(--font-medium);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Таблица «Моих уроков»: как таблицы CRM — компактные строки,
+     цифры табличные, тип занятия приглушён. */
+  .cabinet-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .cabinet-table th {
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: var(--font-medium);
+    color: var(--muted-foreground);
+  }
+
+  .cabinet-table td {
+    padding: calc(var(--space) * 3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cabinet-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .cabinet-table__date {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .cabinet-table__time {
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .cabinet-table__type {
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    text-align: right;
+  }
+
+  .cabinet-empty {
+    margin: calc(var(--space) * 2) 0;
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  /* ---- Кабинет родителя (change parent-cabinet): те же токены, что у
+     CRM; сайдбар переиспользует `.sidebar*`, таблицы — `.cabinet-table`. ---- */
+
+  /* Главная страница: карточки-секции по детям и общий пункт. */
+  .parent-overview {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 3);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .parent-overview__child {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+  }
+
+  .parent-overview__name {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--font-medium);
+  }
+
+  .parent-overview__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Вкладка «Финансы»: общий итог сверху и метрики по ребёнку. */
+  .parent-finance__total {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  .parent-finance__total-label {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .parent-finance__total-value {
+    font-size: var(--text-xl);
+    font-weight: var(--font-semibold);
+  }
+
+  .parent-finance__child {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  .parent-finance__name {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--font-medium);
+  }
+
+  .parent-finance__cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--space) * 3);
+  }
+
+  .parent-finance__metric {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+  }
+
+  .parent-finance__metric-label {
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .parent-finance__metric-value {
+    font-weight: var(--font-medium);
+  }
+
+  /* Вкладка «Профиль»: просмотр данных контакта (design D9). */
+  .parent-profile__list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    margin: 0 0 calc(var(--space) * 3);
+  }
+
+  .parent-profile__row {
+    display: flex;
+    align-items: baseline;
+    gap: calc(var(--space) * 3);
+  }
+
+  .parent-profile__term {
+    flex: none;
+    width: 9rem;
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+  }
+
+  .parent-profile__value {
+    margin: 0;
+    word-break: break-word;
+  }
+
+  /* Заглушка пункта меню кабинета (разделы будущих change'ов): видна,
+     но не интерактивна — без ховера и курсора ссылки. */
+  .nav-item--disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+
+  .nav-item--disabled:hover {
+    background: transparent;
+    color: var(--muted-foreground);
+  }
+
+  /* Вкладка «Домашние задания» кабинета (change cabinet-homework):
+     список карточек на нативном `<details>` — раскрытие работает и без
+     JS, chevron поворачивается на [open]. Форма ответа — HTMX-фрагмент,
+     целящийся в свою карточку; цвета только через токены темы. */
+  .hw-list {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+  }
+
+  .hw-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    color: var(--card-foreground);
+  }
+
+  /* Раскрытая карточка выделена акцентом: видно, какую работу сдают. */
+  .hw-card[open] {
+    border-color: var(--brand);
+  }
+
+  .hw-card__summary {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 4) calc(var(--space) * 5);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .hw-card__summary::-webkit-details-marker { display: none; }
+
+  .hw-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--muted-foreground);
+
+    & svg { width: 18px; height: 18px; }
+  }
+
+  .hw-card__title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--font-medium);
+  }
+
+  .hw-card__side {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    flex-shrink: 0;
+  }
+
+  .hw-card__chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--muted-foreground);
+    transition: transform var(--duration-fast) var(--ease);
+  }
+
+  .hw-card[open] .hw-card__chevron { transform: rotate(180deg); }
+
+  /* Шапка карточки без раскрытия (кабинет родителя): та же строка, что
+     у summary вкладки ученика, но без курсора и chevron — родитель
+     смотрит, а не управляет (design D7 change'а parent-cabinet). */
+  .hw-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 3);
+    padding: calc(var(--space) * 4) calc(var(--space) * 5) calc(var(--space) * 3);
+  }
+
+  .hw-card__head .hw-card__title {
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .hw-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    padding: 0 calc(var(--space) * 5) calc(var(--space) * 5);
+  }
+
+  /* Задание пишут в textarea: переносы строки — часть текста. */
+  .hw-card__assignment {
+    margin: 0;
+    white-space: pre-line;
+  }
+
+  .hw-card__due {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+
+    & svg { width: 16px; height: 16px; }
+  }
+
+  .hw-card__recording {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .hw-card__comment {
+    margin: 0;
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    font-size: var(--text-sm);
+    white-space: pre-line;
+  }
+
+  .hw-card__comment-label { font-weight: var(--font-medium); }
+
+  .hw-card__divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: calc(var(--space) * 1) 0;
+  }
+
+  .hw-card__actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: calc(var(--space) * 2);
+  }
+
+  .hw-answer {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+  }
+
+  .hw-answer--readonly {
+    gap: calc(var(--space) * 2);
+  }
+
+  .hw-answer__head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    font-weight: var(--font-medium);
+
+    & svg { width: 16px; height: 16px; color: var(--muted-foreground); }
+  }
+
+  .hw-answer__done {
+    margin: 0;
+    color: var(--success);
+    font-size: var(--text-sm);
+  }
+
+  .hw-answer__label {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .hw-answer__text {
+    margin: 0;
+    font-size: var(--text-sm);
+    white-space: pre-line;
+  }
+
+  .hw-answer__empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .hw-links {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+  }
+
+  /* Поля ссылок на всю ширину карточки, кнопка — по содержимому. */
+  .hw-links .input { width: 100%; }
+
+  .hw-links__head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    font-weight: var(--font-medium);
+
+    & svg { width: 16px; height: 16px; color: var(--muted-foreground); }
+  }
+
+  .hw-links__hint {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .hw-links__add { margin-top: calc(var(--space) * 1); }
+
+  .hw-links__list {
+    margin: 0;
+    padding-left: calc(var(--space) * 5);
+    font-size: var(--text-sm);
+    word-break: break-all;
+  }
+
+  /* Статусы ДЗ в кабинете: «Задано» — нейтральное, «Сдано» — работа
+     ушла репетитору, «Проверено» — финальное зелёное, «Не выполнено» —
+     тревожное красное. */
+  .chip--hw-assigned {
+    background: var(--muted);
+    color: var(--secondary-foreground);
+  }
+
+  .chip--hw-submitted {
+    background: var(--status-unplanned);
+    color: var(--status-unplanned-fg);
+  }
+
+  .chip--hw-checked {
+    background: var(--success);
+    color: var(--success-foreground);
+  }
+
+  .chip--hw-not-done {
+    background: var(--status-cancelled);
+    color: var(--status-cancelled-fg);
+  }
 
 @layer utilities {
   /* Утилиты — минимальный набор */

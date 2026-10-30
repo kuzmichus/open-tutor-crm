@@ -40,6 +40,7 @@ from app.finance.models.account_operation import AccountOperation
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import Lesson
+from app.lesson.models.lesson_attendance import LessonAttendance
 from app.student.services.activation import activate_on_first_charge
 from app.tutor.services.clock import as_utc
 
@@ -72,17 +73,46 @@ def group_targets(db: Session, group_id: str) -> list[tuple[str, int | None]]:
     ]
 
 
+def absent_student_ids(db: Session, lesson_id: str) -> set[str]:
+    """Ученики, отмеченные на уроке отсутствовавшими (`present = false`).
+
+    Отметки присутствовавших в множество не попадают: правило по умолчанию —
+    «нет отметок = все присутствовали» (design D2), поэтому фильтровать
+    нужно только явные неявки. Причина отметки (`ABSENCE_REASONS`) на
+    деньги не влияет — читается один столбец.
+    """
+    return set(
+        db.scalars(
+            select(LessonAttendance.student_id).where(
+                LessonAttendance.lesson_id == lesson_id,
+                LessonAttendance.present.is_(False),
+            )
+        ).all()
+    )
+
+
 def lesson_targets(db: Session, lesson: Lesson) -> list[tuple[str, int | None]]:
     """Цели урока с ценами: пусто у непроведённого урока.
 
     Непроведённый урок не списывает ничего: «Запланирован» — это ещё не
     состоявшееся занятие, а возврат в «Запланирован» должен снять списание
     (спека student-finance, «Возврат урока в „Запланирован“»).
+
+    Участник группового урока с отметкой «отсутствовал» из целей исключён
+    (design D3): `sync_lesson_charge` удаляет его списание как строку,
+    которой нет в целях, — деньги возвращаются на баланс без ручного
+    возврата. Урок без отметок целей не меняет: пересохранение старых
+    уроков не трогает деньги.
     """
     if lesson.status != COMPLETED_STATUS:
         return []
     if lesson.group_id:
-        return group_targets(db, lesson.group_id)
+        absent = absent_student_ids(db, lesson.id)
+        return [
+            (student_id, price)
+            for student_id, price in group_targets(db, lesson.group_id)
+            if student_id not in absent
+        ]
     if lesson.student_id:
         return [(lesson.student_id, lesson.price)]
     return []

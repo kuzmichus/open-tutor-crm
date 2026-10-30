@@ -627,30 +627,21 @@ def test_mass_update_does_not_touch_other_series(tutor_factory, student_factory)
 # --------------------------------------------------------------------------
 
 
-def test_format_price_completed_lesson_is_paid():
-    """«1 200 ₽ (Оплачено)» — проведённый урок с оплатой (спека)."""
-    assert (
-        format_price(1200, lesson_type="individual", status="completed")
-        == "1\u00a0200\u00a0₽ (Оплачено)"
-    )
-
-
-def test_format_price_planned_lesson_has_no_suffix():
-    assert (
-        format_price(1200, lesson_type="trial", status="planned")
-        == "1\u00a0200\u00a0₽"
-    )
-
-
-def test_format_price_group_lesson_is_dash():
-    """У группового урока в колонке стоимости — прочерк (спека)."""
-    assert format_price(1200, lesson_type="group", status="completed") == "—"
-
-
-def test_format_price_without_price_is_dash():
-    """Цена не задана — прочерк, без суффикса оплаты."""
-    assert format_price(None, lesson_type="individual", status="completed") == "—"
-
+@pytest.mark.parametrize(
+    ("price", "lesson_type", "status", "expected"),
+    [
+        pytest.param(
+            1200, "individual", "completed", "1\u00a0200\u00a0₽ (Оплачено)",
+            id="completed-paid",
+        ),
+        pytest.param(1200, "trial", "planned", "1\u00a0200\u00a0₽", id="planned"),
+        pytest.param(1200, "group", "completed", "—", id="group"),
+        pytest.param(None, "individual", "completed", "—", id="no-price"),
+    ],
+)
+def test_format_price(price, lesson_type, status, expected):
+    """Колонка стоимости: суффикс оплаты только у проведённого, иначе прочерк."""
+    assert format_price(price, lesson_type=lesson_type, status=status) == expected
 
 def test_format_target_shows_group_prefix():
     """Групповой урок — «Группа: <имя>», остальные — ученик (спека)."""

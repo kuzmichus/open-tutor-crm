@@ -63,19 +63,38 @@
           return Math.max(this.matches.length - OPTION_LIMIT, 0);
         },
 
+        /* Список — накладной поповер (`dropdown.js`): не раздвигает форму
+           и не обрезается прокручиваемым телом модалки. */
+        positionList: function () {
+          if (!this.open) return;
+          if (window.openDropdown) {
+            window.openDropdown(this.$refs.input, this.$refs.list);
+          }
+        },
+
         openList: function () {
           this.open = true;
+          var self = this;
+          this.$nextTick(function () {
+            self.positionList();
+          });
         },
 
         closeList: function () {
           this.open = false;
           this.active = -1;
+          if (window.closeDropdown) window.closeDropdown(this.$refs.list);
         },
 
         onInput: function (value) {
           this.query = value;
           this.open = true;
           this.active = -1;
+          /* Отфильтрованный список короче — высота изменилась. */
+          var self = this;
+          this.$nextTick(function () {
+            self.positionList();
+          });
         },
 
         choose: function (item) {

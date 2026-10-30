@@ -105,15 +105,29 @@ def two_tutors(tutor_factory):
 # Чужие операции: 404 вместо 403
 # --------------------------------------------------------------------------
 
+# Пары «маршрут чужой страницы → текст, который не должен утечь»: у каждой
+# страницы свой признак — имя чужого ученика или его сумма.
+_FOREIGN_GET_PAGES = [
+    pytest.param("/tutor/payments/{payment}/edit", "7\u00a0700", id="payment-edit"),
+    pytest.param("/tutor/payments/{payment}/refund/new", "7\u00a0700", id="refund-dialog"),
+    pytest.param("/tutor/students/{student}/payments/new", "Борис", id="payment-new"),
+    pytest.param("/tutor/students/{student}/payments/panel", "7\u00a0700", id="panel"),
+    pytest.param("/tutor/students/{student}/invoice", "Борис", id="invoice"),
+    pytest.param("/tutor/students/{student}/edit?tab=payments", "7\u00a0700", id="student-edit"),
+]
 
-def test_foreign_payment_edit_dialog_is_404(two_tutors):
-    """Правка чужого платежа отвечает как несуществующая."""
-    response = two_tutors["client_a"].get(
-        f"/tutor/payments/{two_tutors['payment_b']}/edit", follow_redirects=False
+@pytest.mark.parametrize(("path", "foreign_text"), _FOREIGN_GET_PAGES)
+def test_foreign_finance_page_is_404(path, foreign_text, two_tutors):
+    """Страница чужого ученика отвечает как несуществующая и не отдаёт данные."""
+    url = path.format(
+        payment=two_tutors["payment_b"], student=two_tutors["student_b"]
     )
 
+    response = two_tutors["client_a"].get(url, follow_redirects=False)
+
     assert response.status_code == 404
-    assert "7\u00a0700" not in response.text
+    assert foreign_text not in response.text
+
 
 
 def test_foreign_payment_update_is_404(two_tutors):
@@ -137,16 +151,6 @@ def test_foreign_payment_update_is_404(two_tutors):
         assert balance(db, two_tutors["student_b"]) == 7700
 
 
-def test_foreign_refund_dialog_is_404(two_tutors):
-    """Диалог возврата по чужому платежу — 404."""
-    response = two_tutors["client_a"].get(
-        f"/tutor/payments/{two_tutors['payment_b']}/refund/new",
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 404
-
-
 def test_foreign_refund_create_is_404(two_tutors):
     """Возврат по чужому платежу не создаёт операции."""
     response = two_tutors["client_a"].post(
@@ -165,17 +169,6 @@ def test_foreign_refund_create_is_404(two_tutors):
             == 0
         )
         assert balance(db, two_tutors["student_b"]) == 7700
-
-
-def test_foreign_payment_new_dialog_is_404(two_tutors):
-    """Диалог нового платежа чужому ученику — 404."""
-    response = two_tutors["client_a"].get(
-        f"/tutor/students/{two_tutors['student_b']}/payments/new",
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 404
-    assert "Борис" not in response.text
 
 
 def test_foreign_payment_create_is_404(two_tutors):
@@ -198,17 +191,6 @@ def test_foreign_payment_create_is_404(two_tutors):
         assert balance(db, two_tutors["student_b"]) == 7700
 
 
-def test_foreign_panel_is_404(two_tutors):
-    """Панель платежей чужого ученика — 404."""
-    response = two_tutors["client_a"].get(
-        f"/tutor/students/{two_tutors['student_b']}/payments/panel",
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 404
-    assert "7\u00a0700" not in response.text
-
-
 def test_foreign_recalculate_is_404(two_tutors):
     """Пересчёт чужого ученика не добавляет списаний."""
     response = two_tutors["client_a"].post(
@@ -225,27 +207,6 @@ def test_foreign_recalculate_is_404(two_tutors):
             .count()
             == 0
         )
-
-
-def test_foreign_invoice_is_404(two_tutors):
-    """Счёт за период чужому ученику — 404."""
-    response = two_tutors["client_a"].get(
-        f"/tutor/students/{two_tutors['student_b']}/invoice",
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 404
-    assert "Борис" not in response.text
-
-
-def test_foreign_student_edit_is_404(two_tutors):
-    """Карточка чужого ученика (и её вкладка «Платежи») — 404."""
-    response = two_tutors["client_a"].get(
-        f"/tutor/students/{two_tutors['student_b']}/edit?tab=payments",
-        follow_redirects=False,
-    )
-
-    assert response.status_code == 404
 
 
 # --------------------------------------------------------------------------

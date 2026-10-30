@@ -9,6 +9,16 @@
    доход, расходы, заработано) и состояние на сейчас (долги, переплата) —
    подписи карточек это различают.
 
+   Восемь карточек одного веса — стена, в которой глазу не за что
+   зацепиться: репетитор открывает страницу с вопросом «сколько я
+   заработал и кто мне должен», а не «сколько было возвратов». Поэтому
+   карточки разделены на два яруса: три главные (доход за период, чистая
+   прибыль, долги учеников) крупнее, остальные пять — компактнее, тем же
+   порядком. Показываются все восемь (спека tutor-finance, «Сводка за
+   период»), меняется только вес: иерархия без скрытия данных — ни
+   переключателя, ни состояния, которое сбросилось бы при обновлении
+   блока по htmx.
+
    Контекст: period (key), summary (income, refunds, net_income, expenses,
    profit, left_for_tutor, earned, debts, overpayments, compare_note). #}
 <div class="fin-summary" id="finance-summary"
@@ -16,8 +26,11 @@
      hx-trigger="payment-saved from:body, expense-saved from:body"
      hx-swap="outerHTML">
 
-    <div class="fin-kpis">
-        <section class="card fin-kpi" aria-label="Доход за период">
+    {# Главный ярус: ответ на вопрос, с которым открывают «Финансы».
+       «Чистая прибыль», а не «Чистый доход»: прибыль учитывает расходы,
+       то есть это деньги, которые остались у репетитора. #}
+    <div class="fin-kpis fin-kpis--lead">
+        <section class="card fin-kpi fin-kpi--lead" aria-label="Доход за период">
             <div class="fin-kpi__head">
                 <span class="fin-kpi__title">Доход</span>
                 <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">
@@ -28,40 +41,7 @@
             <p class="fin-kpi__sub">Оплаченные платежи за период</p>
         </section>
 
-        <section class="card fin-kpi" aria-label="Возвраты за период">
-            <div class="fin-kpi__head">
-                <span class="fin-kpi__title">Возвраты</span>
-                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
-                    <i data-lucide="undo-2"></i>
-                </span>
-            </div>
-            <p class="fin-kpi__value fin-kpi__value--red">{{ money(summary.refunds) }}</p>
-            <p class="fin-kpi__sub">Возвращено ученикам</p>
-        </section>
-
-        <section class="card fin-kpi" aria-label="Чистый доход">
-            <div class="fin-kpi__head">
-                <span class="fin-kpi__title">Чистый доход</span>
-                <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">
-                    <i data-lucide="wallet"></i>
-                </span>
-            </div>
-            <p class="fin-kpi__value fin-kpi__value--green">{{ money(summary.net_income) }}</p>
-            <p class="fin-kpi__sub">Доход минус возвраты</p>
-        </section>
-
-        <section class="card fin-kpi" aria-label="Расходы за период">
-            <div class="fin-kpi__head">
-                <span class="fin-kpi__title">Расходы</span>
-                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
-                    <i data-lucide="arrow-up-right"></i>
-                </span>
-            </div>
-            <p class="fin-kpi__value fin-kpi__value--red">{{ money(summary.expenses) }}</p>
-            <p class="fin-kpi__sub">Траты репетитора за период</p>
-        </section>
-
-        <section class="card fin-kpi" aria-label="Чистая прибыль">
+        <section class="card fin-kpi fin-kpi--lead" aria-label="Чистая прибыль">
             <div class="fin-kpi__head">
                 <span class="fin-kpi__title">Чистая прибыль</span>
                 <span class="fin-kpi__icon fin-kpi__icon--violet" aria-hidden="true">
@@ -74,7 +54,55 @@
             <p class="fin-kpi__sub">Чистый доход минус расходы</p>
         </section>
 
-        <section class="card fin-kpi" aria-label="Заработано уроками">
+        <section class="card fin-kpi fin-kpi--lead" aria-label="Долги учеников">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Долги учеников</span>
+                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
+                    <i data-lucide="user-x"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--red">{{ balance_label(summary.debts) }}</p>
+            <p class="fin-kpi__sub">Сумма отрицательных балансов на сейчас</p>
+        </section>
+    </div>
+
+    {# Второй ярус: расшифровка и состояние счетов. Те же числа, что были
+       в общей сетке, но мельче — при ежедневной работе их читают реже. #}
+    <div class="fin-kpis fin-kpis--secondary">
+        <section class="card fin-kpi fin-kpi--compact" aria-label="Возвраты за период">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Возвраты</span>
+                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
+                    <i data-lucide="undo-2"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--red">{{ money(summary.refunds) }}</p>
+            <p class="fin-kpi__sub">Возвращено ученикам</p>
+        </section>
+
+        <section class="card fin-kpi fin-kpi--compact" aria-label="Чистый доход">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Чистый доход</span>
+                <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">
+                    <i data-lucide="wallet"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--green">{{ money(summary.net_income) }}</p>
+            <p class="fin-kpi__sub">Доход минус возвраты</p>
+        </section>
+
+        <section class="card fin-kpi fin-kpi--compact" aria-label="Расходы за период">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Расходы</span>
+                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
+                    <i data-lucide="arrow-up-right"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--red">{{ money(summary.expenses) }}</p>
+            <p class="fin-kpi__sub">Траты репетитора за период</p>
+        </section>
+
+        <section class="card fin-kpi fin-kpi--compact" aria-label="Заработано уроками">
             <div class="fin-kpi__head">
                 <span class="fin-kpi__title">Заработано (уроки)</span>
                 <span class="fin-kpi__icon fin-kpi__icon--violet" aria-hidden="true">
@@ -85,18 +113,7 @@
             <p class="fin-kpi__sub">Списания за проведённые уроки</p>
         </section>
 
-        <section class="card fin-kpi" aria-label="Долги учеников">
-            <div class="fin-kpi__head">
-                <span class="fin-kpi__title">Долги учеников</span>
-                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
-                    <i data-lucide="user-x"></i>
-                </span>
-            </div>
-            <p class="fin-kpi__value fin-kpi__value--red">{{ balance_label(summary.debts) }}</p>
-            <p class="fin-kpi__sub">Сумма отрицательных балансов на сейчас</p>
-        </section>
-
-        <section class="card fin-kpi" aria-label="Переплата учеников">
+        <section class="card fin-kpi fin-kpi--compact" aria-label="Переплата учеников">
             <div class="fin-kpi__head">
                 <span class="fin-kpi__title">Переплата</span>
                 <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">

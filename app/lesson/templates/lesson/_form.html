@@ -36,7 +36,8 @@
    family_comment), student_id, student_name, group_id, group_name,
    lesson, series_id, type_labels, durations, statuses, status_labels,
    weekdays, rating_stars, form_config, show_repeat, price_locked,
-   until_presets. #}
+   until_presets, attendance_participants, absence_reasons,
+   absence_reason_labels. #}
 {% from "lesson/_target_select.html" import target_select %}
 <div class="modal-root"
      x-data="lessonForm()"
@@ -300,6 +301,50 @@
                             {% endif %}
                         </div>
                     </fieldset>
+
+                    {# Блок «Присутствие» (спека lesson-attendance): только у
+                       существующего группового урока (сервер не рендерит его
+                       в создании и у негрупповых типов), Alpine прячет его
+                       при смене типа на негрупповой. Отметки уходят одним
+                       скрытым полем JSON — паттерн слотов (design D6). #}
+                    {% if attendance_participants %}
+                    <fieldset class="form-section attendance" x-show="type === 'group'" x-cloak>
+                        <legend class="form-section__title">Присутствие</legend>
+                        <div class="attendance__bar">
+                            <span class="attendance__counter" x-text="cameLabel()"></span>
+                            <div class="attendance__quick" role="group" aria-label="Быстрая отметка">
+                                <button class="attendance__chip" type="button" @click="allCame()">Все пришли</button>
+                                <button class="attendance__chip" type="button" @click="noneCame()">Никто не пришёл</button>
+                            </div>
+                        </div>
+                        <div class="attendance__list">
+                            <template x-for="member in attendance" :key="member.student_id">
+                                <div class="attendance__row">
+                                    <label class="checkbox attendance__present">
+                                        <input type="checkbox" x-model="member.present"
+                                               @change="onPresentChange(member)">
+                                        <span x-text="member.name"></span>
+                                    </label>
+                                    {# Причина — только у отсутствовавшего: выбор
+                                       сбрасывается чекбоксом (lessons.js). #}
+                                    <select class="input attendance__reason"
+                                            x-show="!member.present" x-cloak
+                                            x-model="member.reason"
+                                            :aria-label="'Причина неявки: ' + member.name">
+                                        {% for value in absence_reasons %}
+                                        <option value="{{ value }}">{{ absence_reason_labels[value] }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </template>
+                        </div>
+                        <p class="form-hint">
+                            У отсутствовавших списание за урок снимается, а деньги
+                            возвращаются на баланс автоматически.
+                        </p>
+                        <input type="hidden" name="attendance" :value="attendanceValue()">
+                    </fieldset>
+                    {% endif %}
 
                     {% if lesson %}
                     <fieldset class="form-section">

@@ -1,0 +1,63 @@
+{# Страница кабинета родителя `/parent` (change parent-cabinet).
+
+   CRM-каркас с сайдбаром — тот же, что у кабинета репетитора и кабинета
+   ученика (решение владельца: «дизайн как в кабинете репетитора»).
+   Сайдбар несёт навигацию по детям; основная страница дублирует её
+   карточками-секциями — кабинет открывают с телефона, и ссылки «Мои
+   уроки» / «Домашние задания» должны быть на виду без раскрытия меню.
+
+   Контекст: contact, children (список учеников — активные и архивные). #}
+{% extends "base.html" %}
+{% block title %}Кабинет родителя — Open Tutor CRM{% endblock %}
+
+{% block body %}
+{% set active_page = 'index' %}
+{% include "cabinet/parent/_sidebar.html" %}
+
+<!-- Мобильная шапка -->
+<header class="mobile-header">
+    <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+        <i data-lucide="menu"></i>
+    </button>
+    <span class="sidebar__brand">Кабинет родителя</span>
+</header>
+
+<main class="main">
+    <div class="main__container">
+        <div class="page-header">
+            <div>
+                <h1>Кабинет родителя</h1>
+                <p>Занятия, домашние задания и финансы ваших детей</p>
+            </div>
+        </div>
+
+        {% if children %}
+        <div class="parent-overview">
+            {% for child in children %}
+            <section class="card parent-overview__child">
+                <h2 class="parent-overview__name">{{ student_full_name(child) }}</h2>
+                <div class="parent-overview__links">
+                    <a class="btn btn--ghost btn--sm" href="/parent/students/{{ child.id }}">Мои уроки</a>
+                    <a class="btn btn--ghost btn--sm" href="/parent/students/{{ child.id }}/homework">Домашние задания</a>
+                </div>
+            </section>
+            {% endfor %}
+
+            <section class="card parent-overview__child">
+                <h2 class="parent-overview__name">Общее</h2>
+                <div class="parent-overview__links">
+                    <a class="btn btn--ghost btn--sm" href="/parent/finance">Финансы</a>
+                    <a class="btn btn--ghost btn--sm" href="/parent/profile">Профиль</a>
+                </div>
+            </section>
+        </div>
+        {% else %}
+        <div class="card">
+            <p class="cabinet-empty">
+                Ученики пока не привязаны к вашему профилю. Общие разделы — «Финансы» и «Профиль» — доступны в меню.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</main>
+{% endblock %}

@@ -71,6 +71,7 @@ def request_booking(
         slot_id=slot.id,
         name=params.name,
         contact=params.contact,
+        comment=params.comment,
         status="pending",
     )
     db.add(booking)

@@ -1,0 +1,25 @@
+{# Каркас страниц входа и регистрации кабинетов.
+
+   Вход и регистрация — поверхности «до входа», они без сайдбара — так же,
+   как страницы входа репетитора (auth-раскладка). Сам кабинет после входа
+   построен на CRM-каркасе с сайдбаром: см. `lessons.html` и
+   `cabinet/_sidebar.html` (решение владельца 2026-10-30).
+
+   Наследует общий `base.html` — тот оставляет блок `body` пустым.
+   Страницы переопределяют `cabinet_title` и `cabinet_content`. Блок
+   `cabinet_brand` подставляет имя поверхности в шапку: кабинет родителя
+   (`cabinet/parent/`) наследует тот же каркас и переопределяет его. #}
+{% extends "base.html" %}
+{% block title %}{% block cabinet_title %}Кабинет ученика{% endblock %} — Open Tutor CRM{% endblock %}
+
+{% block body %}
+<main class="cabinet">
+    <header class="cabinet-auth__header">
+        <span class="sidebar__logo" aria-hidden="true">
+            {% include "_logo.html" %}
+        </span>
+        <span class="sidebar__brand">{% block cabinet_brand %}Кабинет ученика{% endblock %}</span>
+    </header>
+    {% block cabinet_content %}{% endblock %}
+</main>
+{% endblock %}

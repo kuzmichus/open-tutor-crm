@@ -31,10 +31,12 @@ from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import local_day_bounds, to_local, today_local
 from app.finance.services.balance import balance
+from app.finance.services.charges import COMPLETED_STATUS
 from app.finance.services.presentation import money
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import Lesson
+from app.lesson.models.lesson_attendance import LessonAttendance
 
 # Подписи занятия в счёте: у урока нет предмета, поэтому строка называется
 # «Урок»; для группового важно, что он групповой (цена — за человека).
@@ -110,6 +112,10 @@ def priced_lessons(
 
     Статус урока не важен: счёт за будущий месяц состоит из
     «Запланированных», за прошедший — из того, что было (design D13).
+    Проведённый групповой урок, на котором ученик отмечен отсутствовавшим,
+    из строк исключён (design D5): по правилу посещаемости списание у него
+    не создаётся, и счёт не должен требовать оплату за несостоявшееся
+    занятие. Плановые уроки и уроки без отметок ведутся как раньше.
     """
     start_at, _ = local_day_bounds(start, tutor)
     _, end_at = local_day_bounds(end, tutor)
@@ -131,10 +137,22 @@ def priced_lessons(
         select(Lesson, Group, GroupMember.price_override)
         .join(GroupMember, GroupMember.group_id == Lesson.group_id)
         .join(Group, Group.id == Lesson.group_id)
+        .outerjoin(
+            LessonAttendance,
+            (LessonAttendance.lesson_id == Lesson.id)
+            & (LessonAttendance.student_id == GroupMember.student_id)
+            & LessonAttendance.present.is_(False)
+            # Исключение — только для «Проведён»: отметка на плановом уроке
+            # (блок доступен при любом статусе) счёт не выкидывает.
+            & (Lesson.status == COMPLETED_STATUS),
+        )
         .where(
             GroupMember.student_id == student_id,
             Lesson.starts_at >= start_at,
             Lesson.starts_at < end_at,
+            # Строки с найденной отметкой отсутствия выпадают; у уроков без
+            # отметок outerjoin даёт NULL — они остаются.
+            LessonAttendance.id.is_(None),
         )
     ).all()
     for lesson, group, price_override in group_rows:

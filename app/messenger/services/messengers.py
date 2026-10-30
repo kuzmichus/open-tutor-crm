@@ -42,3 +42,18 @@ MESSENGER_PLACEHOLDERS = {
 def token_key(messenger: str) -> str:
     """Имя KV-параметра с токеном мессенджера (`telegram_token`)."""
     return f"{messenger}_token"
+
+
+# Глубокие ссылки бота для привязки канала: `{bot}` — ник бота, `{code}` —
+# одноразовый код. Лимит payload у Telegram — 64 символа, у MAX — 128.
+MESSENGER_LINK_TEMPLATES = {
+    "telegram": "https://t.me/{bot}?start={code}",
+    "max": "https://max.ru/{bot}?start={code}",
+}
+
+# Иконки карточек каналов (lucide) — метаданные закрытого списка рядом
+# с подписями, шаблон литералов по именам мессенджеров не пишет.
+MESSENGER_ICONS = {
+    "telegram": "send",
+    "max": "message-circle",
+}

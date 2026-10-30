@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.messenger.services.connections import is_messenger_connected
 from app.messenger.services.errors import SendError
+from app.messenger.services.history import log_send
 from app.messenger.services.logging_sender import LoggingSender
 from app.messenger.services.messengers import MESSENGER_LABELS, MESSENGERS, token_key
 from app.messenger.services.registry import get_sender_class
@@ -52,8 +53,14 @@ def send_message(
     config = get_param(db, tutor_id, token_key(messenger))
 
     sender = LoggingSender(RetrySender(sender_class()), messenger=label)
+    recipient = recipient.strip()
+    text = text.strip()
     try:
-        sender.send(config, recipient.strip(), text.strip())
+        sender.send(config, recipient, text)
     except SendError as exc:
+        # Реальная попытка была — журнал фиксирует и сбой (после ретраев),
+        # чтобы история показывала недошедшие сообщения с причиной.
+        log_send(db, tutor_id, messenger, recipient, text, [str(exc)])
         return [str(exc)]
+    log_send(db, tutor_id, messenger, recipient, text, [])
     return []

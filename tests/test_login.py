@@ -1,5 +1,7 @@
 """Тесты входа репетитора (`/tutor/login`)."""
 
+import pytest
+
 from app.database import SessionLocal
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.password_hasher import PasswordHasher
@@ -58,27 +60,28 @@ def test_session_cookie_is_httponly(client):
     assert "samesite=lax" in joined
 
 
-def test_wrong_password_rejected(client):
+@pytest.mark.parametrize(
+    "credentials",
+    [
+        pytest.param(
+            {"email": "login-user@example.com", "password": "неверный"},
+            id="wrong-password",
+        ),
+        pytest.param(
+            {"email": "nikto@example.com", "password": PASSWORD},
+            id="unknown-email",
+        ),
+    ],
+)
+def test_bad_credentials_rejected(credentials, client):
+    """Неверный пароль и неизвестный email не пускают и не выдают cookie."""
     _register(client)
-    response = client.post(
-        "/tutor/login",
-        data={"email": "login-user@example.com", "password": "неверный"},
-    )
+
+    response = client.post("/tutor/login", data=credentials)
+
     assert response.status_code == 200
     assert "Неверный email или пароль" in response.text
     assert COOKIE_NAME not in response.cookies
-
-
-def test_unknown_email_rejected(client):
-    _register(client)
-    response = client.post(
-        "/tutor/login",
-        data={"email": "nikto@example.com", "password": PASSWORD},
-    )
-    assert response.status_code == 200
-    assert "Неверный email или пароль" in response.text
-    assert COOKIE_NAME not in response.cookies
-
 
 def test_error_message_identical_for_both_reasons(client):
     """Неизвестный email и неверный пароль дают одинаковое сообщение."""

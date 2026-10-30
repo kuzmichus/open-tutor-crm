@@ -1,0 +1,100 @@
+{# Карточка задачи на доске (и строка списка — общий макет «компактная
+   карточка», спека task-management).
+
+   Контекст строки (`board._row`): `task`, `students`, `student_names`,
+   `stage_label`, `priority_label`, `due`, `overdue`.
+
+   Клик по карточке открывает диалог правки (`hx-get .../edit` в `#modal`).
+   Меню «⋯» — собственное Alpine-состояние (`x-data`), клик по нему не
+   всплывает до карточки, поэтому диалог не открывается.
+
+   Карточку можно перетащить мышью в другую колонку доски: перехват
+   drag-and-drop живёт в `tasks.js`. Клик без перетаскивания по-прежнему
+   открывает диалог (браузер не шлёт click после состоявшегося drag), а
+   на тач-экранах HTML5 DnD не срабатывает — этап там меняют через меню.
+
+   Кнопки меню отправляют POST на смену этапа или удаление; ответ —
+   пустое тело с `task-saved`, и контейнер доски перезапрашивает партиал.
+
+   `.self` у `keydown.enter` обязателен: Enter на кнопке меню всплывает до
+   карточки, и без него открывался бы ещё и диалог правки. #}
+<article class="task-card{% if row.overdue %} task-card--overdue{% endif %}"
+         id="task-card-{{ row.task.id }}"
+         data-task-id="{{ row.task.id }}"
+         draggable="true"
+         hx-get="/tutor/tasks/{{ row.task.id }}/edit"
+         hx-target="#modal"
+         hx-swap="innerHTML"
+         tabindex="0"
+         role="button"
+         x-data
+         @keydown.enter.self="$el.click()"
+         aria-label="Открыть задачу: {{ row.task.title }}">
+    <div class="task-card__top">
+        <h3 class="task-card__title">{{ row.task.title }}</h3>
+
+        <div class="task-card__menu" x-data="{ open: false, confirming: false }"
+             @click.outside="open = false; confirming = false">
+            <button class="btn btn--ghost btn--icon btn--sm" type="button"
+                    @click.stop="open = !open; if (!open) confirming = false"
+                    :aria-expanded="open ? 'true' : 'false'"
+                    aria-haspopup="menu"
+                    aria-label="Действия с задачей">
+                <i data-lucide="ellipsis"></i>
+            </button>
+
+            <div class="task-card__menu-list" role="menu" x-show="open" x-cloak>
+                {# Пункты «перевести на этап»: все этапы, кроме текущего.
+                   Список приходит из сервиса (`stage_choices`) — шаблон
+                   закрытый перечень этапов не повторяет. #}
+                {% for stage in stage_choices %}
+                {% if stage.value != row.task.stage %}
+                <button class="task-card__menu-item" type="button" role="menuitem"
+                        hx-post="/tutor/tasks/{{ row.task.id }}/stage"
+                        hx-vals='{"stage": "{{ stage.value }}"}'
+                        hx-swap="none"
+                        @click.stop="open = false">
+                    <i data-lucide="circle"></i>
+                    {{ stage.label }}
+                </button>
+                {% endif %}
+                {% endfor %}
+
+                <button class="task-card__menu-item task-card__menu-item--danger"
+                        type="button" role="menuitem"
+                        x-show="!confirming"
+                        @click.stop="confirming = true">
+                    <i data-lucide="trash-2"></i>
+                    Удалить
+                </button>
+                <button class="task-card__menu-item task-card__menu-item--danger"
+                        type="button" role="menuitem"
+                        x-show="confirming" x-cloak
+                        hx-post="/tutor/tasks/{{ row.task.id }}/delete"
+                        hx-swap="none"
+                        @click.stop="open = false; confirming = false">
+                    <i data-lucide="trash-2"></i>
+                    Точно удалить?
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="task-card__meta">
+        <span class="task-card__priority task-card__priority--{{ row.task.priority }}">
+            {{ row.priority_label }}
+        </span>
+        {% if row.due %}
+        <span class="task-card__due{% if row.overdue %} task-card__due--overdue{% endif %}">
+            <i data-lucide="calendar"></i>
+            {{ row.due }}
+        </span>
+        {% endif %}
+        {% if row.student_names %}
+        <span class="task-card__students">
+            <i data-lucide="users"></i>
+            {{ row.student_names }}
+        </span>
+        {% endif %}
+    </div>
+</article>

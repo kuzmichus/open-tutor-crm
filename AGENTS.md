@@ -37,9 +37,11 @@ app/
 ├── group/                  # группы и состав групп
 ├── lesson/                 # уроки и серии уроков
 ├── homework/               # домашние задания урока (вкладка урока)
+├── task/                   # задачи: канбан по этапам и список по срокам
 └── calendar/               # недельный календарь (моделей нет — только views/services)
 alembic/                    # миграции БД
 openspec/                   # спецификации (specs/) и активные change'и (changes/)
+scripts/                    # сборка ассетов: build_icons.py, vendor/ (исходники)
 tests/                      # pytest-тесты
 ```
 
@@ -116,7 +118,7 @@ app/<module>/
   Форма ДЗ возвращает **свою панель** (`outerHTML`), а не пустое тело.
 - Без `HX-Request` POST отвечает 303-редиректом на страницу — форма работает и без JS.
 - Клиентское состояние — Alpine-фабрики в `app/static/*.js` (`students.js`, `groups.js`,
-  `lessons.js`, `calendar.js`, `picker.js`, `combobox.js`). Скрипты подключаются
+  `lessons.js`, `calendar.js`, `tasks.js`, `picker.js`, `combobox.js`). Скрипты подключаются
   **до** `alpine.min.js` (подписка на `alpine:init` должна случиться раньше обхода DOM)
   и точечно — через `{% block head %}` конкретной страницы.
 - Серверные подписи и форматирование — в `<модуль>/services/presentation.py`
@@ -134,7 +136,13 @@ app/<module>/
   это проверяют тесты `tests/test_css_styles.py`.
 - `app/static/dist/app.css` — мёртвый Tailwind-артефакт, на него **никто не ссылается**.
   Не подключайте его и не переносите оттуда правила.
-- Вендорные файлы (`htmx.min.js`, `alpine.min.js`, `lucide.min.js`) коммитятся как есть.
+- Вендорные файлы (`htmx.min.js`, `alpine.min.js`) коммитятся как есть.
+- **Иконки — не полный Lucide, а собранный набор** `app/static/icons.js`
+  (~23 КБ вместо 444 КБ). Полный бандл лежит в `scripts/vendor/lucide.min.js` как
+  источник данных и браузеру не отдаётся. Добавили иконку в разметку или в Python —
+  пересоберите набор: `uv run python scripts/build_icons.py`. Свежесть файла,
+  полноту набора и его вес проверяет `tests/test_icons_bundle.py`, поэтому
+  забытая пересборка не доедет до пользователя молча.
 
 ## База данных и миграции
 
@@ -196,6 +204,7 @@ uv run pytest -q tests/test_lesson_create.py   # один файл
 uv run alembic upgrade head               # применить миграции
 uv run alembic revision --autogenerate -m "..."   # новая миграция
 uv run alembic heads                      # текущая голова схемы
+uv run python scripts/build_icons.py      # пересобрать набор иконок (после новой иконки)
 uv run uvicorn main:app --host 0.0.0.0 --port 8000  # запуск сервера
 ```
 

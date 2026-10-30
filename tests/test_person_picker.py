@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 
 from app.database import SessionLocal
-from app.student.models.student import Student
 
 PASSWORD = "Секретный-Пароль-1"
 
@@ -183,11 +182,25 @@ def test_group_picker_excludes_current_members(owner, client, student_factory):
         group_id = group.id
 
     html = client.get(f"/tutor/groups/{group_id}/edit").text
-    start = html.index("data-options=")
+
+    # Контейнер состава, а не первое `data-options` на странице.
+    start = html.index('class="span-2 group-members"')
     raw = html[start : html.index(">", start)]
     assert "Свободный" in raw
     assert "Мария" not in raw
     assert free_id in raw
+
+def _picker_options(html: str, x_data: str) -> str:
+    """`data-options` именно нужного пикера, а не первого на странице.
+
+    На странице ученика раньше пикера контактов стоит combobox часового
+    пояса — он тоже несёт `data-options`. Поиск от `x-data` пикера
+    привязывает проверку к её виджету.
+    """
+    anchor = html.index(f'x-data="{x_data}"')
+    start = html.index('data-options="', anchor) + len('data-options="')
+    return html[start : html.index('"', start)]
+
 
 def test_contact_picker_excludes_linked_contacts(client, owner, student_factory):
     """Общий виджет не ломает правило контактов: привязанные не предлагаются."""
@@ -205,9 +218,8 @@ def test_contact_picker_excludes_linked_contacts(client, owner, student_factory)
         db.commit()
 
     html = client.get(f"/tutor/students/{student_id}/edit").text
-    start = html.index("data-options=")
-    options = html[start + len('data-options="'):]
-    options = options[: options.index('"')]
+
+    options = _picker_options(html, "contactAdd()")
     assert "Мама Ольга" not in options
 
 def test_picker_escapes_modal_close_and_selects_by_enter():

@@ -1,23 +1,25 @@
-"""Доступные для записи окна недели на публичной странице (design.md D8).
+"""Публичные окна недели для страницы записи (design.md D8, D1).
 
 Выборка — один `SELECT` окон недели плюс два словаря по ним (состояния
 занятости и покрытие недоступности): на число окон запросов не растёт, тот
 же приём, что у календаря (`slot/services/busy.py`).
 
-Что отсеивается и почему:
+Что попадает в сетку:
 
-- **приватное окно** — педагог не публиковал его ученику;
-- **прошедшее окно** — записаться в прошлое нельзя;
-- **занятое уроком или активной бронью** — время уже занято;
-- **день из отметки недоступности** — педагог в отпуске/болеет.
+- **публичное окно** — педагог его опубликовал;
+- **прошедшее окно** — отбрасывается: записаться в прошлое нельзя, и
+  карточка «прошло» ничего не добавляет к выбору;
+- **день из отметки недоступности** — отбрасывается целиком: педагог в
+  отпуске/болеет, даже если окна в нём уже стояли.
 
-Всё это считается существующими сервисами (`slot_states`,
+Занятое окно (урок или активная бронь) **показывается**, но карточкой
+«Занято»: сетка без него выглядела бы пустой и не объясняла бы, почему
+время недоступно. Кем именно занято — не раскрывается: в разметку попадают
+только время и состояние (design D1).
+
+Всё считается существующими сервисами (`slot_states`,
 `coverage_for_week`), а не повторной формулой: публичная страница и
 календарь обязаны понимать «свободно» одинаково.
-
-В разметку попадают только дата, время и длительность. Ни имён учеников,
-ни заметок, ни контактов — это требование спеки public-booking, и его
-проверяет тест на отсутствие подстрок.
 """
 
 from dataclasses import dataclass
@@ -27,26 +29,39 @@ from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import to_local
 from app.slot.models.slot import Slot
-from app.slot.services.busy import SLOT_FREE, slot_states
+from app.slot.services.busy import (
+    SLOT_BOOKED,
+    SLOT_FREE,
+    SLOT_LESSON,
+    SLOT_PENDING,
+    slot_states,
+)
 from app.slot.services.slots import week_slots
 from app.unavailability.services.marks import coverage_for_week, week_days
 
+# Состояние карточки окна на публичной странице. Отдельный закрытый список,
+# а не переиспользование `slot_states`: ученику нужны только два состояния,
+# а «прошло» и «приватно» до карточки не доходят вовсе.
+PUBLIC_FREE = "free"
+PUBLIC_BUSY = "busy"
+
 @dataclass(frozen=True)
 class PublicSlot:
-    """Свободное окно в виде, пригодном для показа ученику.
+    """Окно в сетке: время педагога и состояние для выбора.
 
     `day`/`start`/`end` — настенное время педагога: ученик видит его в
-    зоне педагога, о чём страница предупреждает подписью (design D8).
+    зоне педагога, о чём страница предупреждает баннером (design D6).
     """
 
     slot: Slot
     day: date
     start: str
     end: str
+    state: str
 
     @property
     def id(self) -> str:
-        """id окна — то, что уходит в форму заявки."""
+        """id окна — то, что уходит в ссылку выбора и форму заявки."""
         return self.slot.id
 
     @property
@@ -54,7 +69,24 @@ class PublicSlot:
         """Длительность окна в минутах (для подписи рядом с интервалом)."""
         return self.slot.duration_min
 
-def _public_slot(slot: Slot, tutor) -> PublicSlot:
+    @property
+    def is_free(self) -> bool:
+        """Можно ли выбрать это окно (только свободное)."""
+        return self.state == PUBLIC_FREE
+
+@dataclass(frozen=True)
+class PublicDay:
+    """Столбец сетки: дата и её окна (возможно, пустой)."""
+
+    day: date
+    slots: tuple[PublicSlot, ...]
+
+    @property
+    def is_empty(self) -> bool:
+        """Нет ни одного окна — день показывает подпись «нет мест»."""
+        return not self.slots
+
+def _public_slot(slot: Slot, tutor, state: str) -> PublicSlot:
     """Окно в настенном времени педагога: дата и интервал «10:00 – 10:40»."""
     start = to_local(slot.starts_at, tutor)
     finish = start + timedelta(minutes=slot.duration_min or 0)
@@ -63,56 +95,75 @@ def _public_slot(slot: Slot, tutor) -> PublicSlot:
         day=start.date(),
         start=start.strftime("%H:%M"),
         end=finish.strftime("%H:%M"),
+        state=state,
     )
 
-def free_slots(
+def public_week(
     db: Session,
     tutor_id: str,
     monday: date,
     tutor,
     *,
     now: datetime,
-) -> list[PublicSlot]:
-    """Свободные публичные окна недели `monday`, по времени начала.
+) -> list[PublicDay]:
+    """Сетка недели `monday`: семь дней, в каждом — публичные окна.
 
-    Недоступный день отсекается целиком: даже если окно в нём уже стояло
-    (педагог отметил отпуск после создания пачки), ученику оно не
-    показывается — спека slot-management, «Отпуск не удаляет окна».
+    Дни без окон остаются в списке пустыми: сетка всегда семиколоночная,
+    иначе «нет мест» некуда поставить. Прошедшие окна и окна недоступных
+    дней не показываются вовсе — их карточка ничего не объясняет.
     """
     slots = week_slots(db, tutor_id, monday, tutor)
-    if not slots:
-        return []
-
     coverage = coverage_for_week(db, tutor_id, monday)
-    states = slot_states(db, tutor_id, slots, now)
+    states = slot_states(db, tutor_id, slots, now) if slots else {}
 
-    free: list[PublicSlot] = []
+    grouped: dict[date, list[PublicSlot]] = {day: [] for day in week_days(monday)}
     for slot in slots:
         if not slot.is_public:
             continue
-        if states.get(slot.id) != SLOT_FREE:
+        state = states.get(slot.id, SLOT_FREE)
+        # `slot_states` отдаёт `past` для прошедших окон; в публичной сетке
+        # они не нужны — записаться в прошлое нельзя.
+        if state not in (SLOT_FREE, SLOT_PENDING, SLOT_BOOKED, SLOT_LESSON):
             continue
-        shown = _public_slot(slot, tutor)
+        shown = _public_slot(
+            slot,
+            tutor,
+            PUBLIC_FREE if state == SLOT_FREE else PUBLIC_BUSY,
+        )
         if shown.day in coverage:
             continue
-        free.append(shown)
-    return free
+        # Окно, попавшее в чужую неделю из-за часового пояса, не должно
+        # создавать лишний столбец: `week_days` уже задаёт семь дат.
+        if shown.day not in grouped:
+            continue
+        grouped[shown.day].append(shown)
 
-def slots_by_day(slots: list[PublicSlot]) -> list[tuple[date, list[PublicSlot]]]:
-    """Группировка по дням для шаблона: [(дата, окна)] в порядке недели.
+    return [
+        PublicDay(day=day, slots=tuple(items))
+        for day, items in sorted(grouped.items())
+    ]
 
-    Дни без свободных окон в список не попадают — шаблон показывает только
-    то, что можно выбрать.
+def selected_slot(
+    days: list[PublicDay], slot_id: str | None
+) -> PublicSlot | None:
+    """Выбранное свободное окно из сетки; чужое/занятое/кривое — None.
+
+    `slot_id` приходит из адреса, поэтому доверять ему нельзя: выбор
+    засчитывается только если окно реально есть в отрисованной сетке и
+    свободно (design D2).
     """
-    grouped: dict[date, list[PublicSlot]] = {}
-    for slot in slots:
-        grouped.setdefault(slot.day, []).append(slot)
-    return sorted(grouped.items(), key=lambda item: item[0])
+    if not slot_id:
+        return None
+    for day in days:
+        for item in day.slots:
+            if item.id == slot_id and item.is_free:
+                return item
+    return None
 
 def unavailable_reason(coverage: dict, monday: date) -> str | None:
     """Причина недоступности, если вся неделя отмечена; иначе None.
 
-    Нужна, чтобы вместо пустого списка окон объяснить, почему их нет:
+    Нужна, чтобы вместо пустой сетки объяснить, почему окон нет:
     «Педагог недоступен: Отпуск» (спека public-booking, «Неделя в
     отпуске»).
     """

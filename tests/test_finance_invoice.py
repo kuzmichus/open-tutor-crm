@@ -92,23 +92,28 @@ def _context(owner: str, student_id: str, **kwargs) -> dict:
 # --------------------------------------------------------------------------
 
 
-def test_next_month_period_rolls_over_december(monkeypatch):
-    """В декабре период по умолчанию — январь следующего года."""
+@pytest.mark.parametrize(
+    ("today", "expected"),
+    [
+        pytest.param(
+            date(2026, 12, 31),
+            (date(2027, 1, 1), date(2027, 1, 31)),
+            id="december-rolls-to-january",
+        ),
+        pytest.param(
+            date(2026, 10, 24),
+            (date(2026, 11, 1), date(2026, 11, 30)),
+            id="full-next-month",
+        ),
+    ],
+)
+def test_next_month_period(today, expected, monkeypatch):
+    """Период по умолчанию — весь следующий месяц, с переходом через год."""
     from app.finance.services import invoice as module
 
-    monkeypatch.setattr(module, "today_local", lambda tutor: date(2026, 12, 31))
+    monkeypatch.setattr(module, "today_local", lambda tutor: today)
 
-    assert next_month_period(None) == (date(2027, 1, 1), date(2027, 1, 31))
-
-
-def test_next_month_period_is_full_next_month(monkeypatch):
-    """В октябре период — с 1 по 30 ноября (30 дней)."""
-    from app.finance.services import invoice as module
-
-    monkeypatch.setattr(module, "today_local", lambda tutor: date(2026, 10, 24))
-
-    assert next_month_period(None) == (date(2026, 11, 1), date(2026, 11, 30))
-
+    assert next_month_period(None) == expected
 
 def test_parse_period_falls_back_to_default_on_garbage():
     """Опечатка в дате не роняет диалог: показывается период по умолчанию."""

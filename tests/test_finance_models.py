@@ -1,4 +1,4 @@
-"""Тесты модели «Операция счёта»: таблица, закрытые списки, уникальность.
+"""Тесты модели «Операция счёта»: закрытые списки, уникальность, каскады.
 
 Проверяем именно БД, а не валидацию формы: инвариант должен держаться и
 при записи в обход сервисов (ручная правка, восстановление из бэкапа).
@@ -7,9 +7,9 @@
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
-from app.database import SessionLocal, engine
+from app.database import SessionLocal
 from app.finance.models.account_operation import AccountOperation
 from app.lesson.models.lesson import Lesson
 
@@ -33,12 +33,6 @@ def _lesson(student_id: str, *, price: int = 1200, status: str = "completed") ->
         session.add(lesson)
         session.commit()
         return lesson.id
-
-
-def test_account_operations_table_is_created():
-    """Таблица `account_operations` появилась в базе (init_db/миграция)."""
-    tables = set(inspect(engine).get_table_names())
-    assert "account_operations" in tables
 
 
 def test_lesson_student_unique_index_exists():

@@ -1,0 +1,16 @@
+{# Вкладки «Новое сообщение» / «История»: у каждой два адреса — `href`
+   открывает страницу целиком (без JS), `hx-get` подменяет секцию
+   без перезагрузки. #}
+<nav class="mailing-tabs" aria-label="Разделы рассылок">
+    {% for item in tabs %}
+    <a class="mailing-tabs__item{% if item.active %} mailing-tabs__item--active{% endif %}"
+       href="{{ item.href }}"
+       hx-get="{{ item.url }}"
+       hx-target="#mailings-content"
+       hx-swap="outerHTML"
+       {% if item.active %}aria-current="page"{% endif %}>
+        <i data-lucide="{{ item.icon }}"></i>
+        {{ item.label }}
+    </a>
+    {% endfor %}
+</nav>

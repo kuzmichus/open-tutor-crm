@@ -272,55 +272,10 @@
            карточка открывается сразу на счёте. Неизвестное значение
            игнорируется — вкладка по умолчанию «Общее». */
         tab: TAB_NAMES.indexOf(initialTab) === -1 ? "general" : initialTab,
-        /* Валидация браузера не может показать подсказку у поля в скрытой
-           вкладке, поэтому перед отправкой ищем первое невалидное поле
-           и переключаемся на вкладку, где оно живёт. */
-        revealInvalidField: function (event) {
-          var invalid = event.target.querySelector(":invalid");
-          if (!invalid) return;
-          var panel = invalid.closest("[data-tab-panel]");
-          if (panel) this.tab = panel.dataset.tabPanel;
-        },
-        /* Та же проблема, но для соседней формы: каждая форма вкладки
-           добирает поля другой через `hx-include`, и htmx валидирует их
-           сам. Своя форма при этом валидна (пустое имя лежит в «Общем»),
-           поэтому браузер не показывает ничего, а htmx молча останавливает
-           запрос событием `htmx:validation:halted` — со стороны это
-           выглядит как «кнопка не работает». Переключаем вкладку на первое
-           невалидное поле и повторяем подсказку, когда панель уже видна. */
-        init: function () {
-          var self = this;
-          this._onValidationHalted = function (event) {
-            var errors = (event.detail && event.detail.errors) || [];
-            var invalid = errors.length ? errors[0].elt : null;
-            if (!invalid) return;
-            var panel = invalid.closest("[data-tab-panel]");
-            if (panel && panel.dataset.tabPanel) {
-              self.tab = panel.dataset.tabPanel;
-            }
-            /* Панель показывается через x-show — эффект Alpine применится
-               в микрозадаче, поэтому подсказку просим следующим тиком. */
-            setTimeout(function () {
-              try {
-                if (typeof invalid.reportValidity === "function") {
-                  invalid.reportValidity();
-                }
-              } catch (error) {
-                /* Скрытое поле могло исчезнуть из DOM — подсказка не нужна. */
-              }
-            }, 0);
-          };
-          document.addEventListener(
-            "htmx:validation:halted",
-            this._onValidationHalted
-          );
-        },
-        destroy: function () {
-          document.removeEventListener(
-            "htmx:validation:halted",
-            this._onValidationHalted
-          );
-        },
+        /* Валидация и обратная связь — общий модуль `form-feedback.js`:
+           он раскрывает вкладку с первым невалидным полем (и своё, и
+           приехавшее через `hx-include`), показывает сводку и ставит
+           `aria-invalid`. Здесь вкладка не при чём. */
         close: function () {
           this.open = false;
         },
@@ -355,6 +310,102 @@
         removeRow: function (el) {
           var row = el.closest(".contact-row");
           if (row) row.remove();
+        },
+      };
+    });
+
+    /* Блок «Приглашение в мессенджеры» (вкладка «Настройки» формы):
+       копирование диплинка в буфер. Ссылку собирает сервер и показывает
+       фрагмент целиком; браузер только передаёт её в буфер — ни одной
+       строки ссылки в JS (тот же принцип, что у текста счёта
+       в `payments.js`).
+
+       Автокопирование включает сервер атрибутом `data-autocopy` на корне
+       блока — только в ответе «Пригласить»; опросы фрагмента приходят
+       без него и копирование не повторяют. В браузере без буфера
+       (не secure context) показывается подсказка про ручное копирование —
+       ссылка и так видна целиком. */
+    Alpine.data("studentInvites", function () {
+      return {
+        copied: "",
+        copyFailed: false,
+        init: function () {
+          var messenger = this.$root.dataset.autocopy;
+          if (messenger) this.copy(messenger);
+        },
+        copy: function (messenger) {
+          var link = this.$root.querySelector(
+            '[data-invite-link="' + messenger + '"]'
+          );
+          if (!link) return;
+          var url = link.getAttribute("href");
+          var self = this;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () {
+              self.copied = messenger;
+              self.copyFailed = false;
+            }, function () {
+              self.copyFailed = true;
+            });
+          } else {
+            self.copyFailed = true;
+          }
+        },
+      };
+    });
+
+    /* Блок «Личный кабинет» (вкладка «Настройки» формы): копирование
+       ссылки-приглашения в буфер. Читается свойство `href` якоря —
+       браузер сам разворачивает относительный адрес в абсолютный; ни
+       одной строки ссылки в JS. В браузере без буфера (не secure
+       context) показывается подсказка про ручное копирование — ссылка
+       и так видна целиком. */
+    Alpine.data("studentCabinet", function () {
+      return {
+        copied: false,
+        copyFailed: false,
+        copy: function () {
+          var link = this.$root.querySelector("[data-cabinet-link]");
+          if (!link) return;
+          var url = link.href;
+          var self = this;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () {
+              self.copied = true;
+              self.copyFailed = false;
+            }, function () {
+              self.copyFailed = true;
+            });
+          } else {
+            self.copyFailed = true;
+          }
+        },
+      };
+    });
+
+    /* Бейдж «Личный кабинет» на миникарточке контакта: то же копирование
+       ссылки-приглашения, что у блока выше. Фабрика отдельная — бейдж
+       заменяется htmx-ответом целиком (outerHTML), Alpine поднимает новое
+       дерево `x-data` само, состояние копирования начинается с чистого. */
+    Alpine.data("contactCabinetBadge", function () {
+      return {
+        copied: false,
+        copyFailed: false,
+        copy: function () {
+          var link = this.$root.querySelector("[data-cabinet-link]");
+          if (!link) return;
+          var url = link.href;
+          var self = this;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () {
+              self.copied = true;
+              self.copyFailed = false;
+            }, function () {
+              self.copyFailed = true;
+            });
+          } else {
+            self.copyFailed = true;
+          }
         },
       };
     });

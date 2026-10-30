@@ -26,6 +26,9 @@ TEMPLATE_DIRS = [
     _APP_DIR / "booking" / "templates",  # модуль booking
     _APP_DIR / "finance" / "templates",  # модуль finance
     _APP_DIR / "stats" / "templates",  # модуль stats
+    _APP_DIR / "task" / "templates",  # модуль task
+    _APP_DIR / "mailing" / "templates",  # модуль mailing
+    _APP_DIR / "cabinet" / "templates",  # модуль cabinet (личный кабинет ученика)
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
@@ -94,3 +97,27 @@ from app.stats.services.presentation import (  # noqa: E402
 )
 
 register_stats_template_helpers()
+
+# Функции отображения модуля задач (подписи этапа и приоритета, короткая
+# дата срока «26 окт.»).
+from app.task.services.presentation import (  # noqa: E402
+    register_template_helpers as register_task_template_helpers,
+)
+
+register_task_template_helpers()
+
+# Функции отображения модуля рассылок (метка мессенджера, счётчик
+# получателей, сводка доставки).
+from app.mailing.services.presentation import (  # noqa: E402
+    register_template_helpers as register_mailing_template_helpers,
+)
+
+register_mailing_template_helpers()
+
+# Функции отображения кабинета ученика (заголовок карточки ДЗ «урок
+# 30 октября 2026», срок сдачи, подпись и чип статуса ДЗ).
+from app.cabinet.services.presentation import (  # noqa: E402
+    register_template_helpers as register_cabinet_template_helpers,
+)
+
+register_cabinet_template_helpers()

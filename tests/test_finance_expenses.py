@@ -7,6 +7,7 @@
 репетитору» 500. Балансы: должник с −1 200 и переплатчик с +800.
 """
 
+import html as html_lib
 import re
 from datetime import UTC, datetime, timedelta
 
@@ -264,7 +265,7 @@ def test_summary_and_operations_refresh_on_expense_saved(client, tutor_factory):
 
 
 def test_tabs_present_on_page(client, tutor_factory):
-    """Пять вкладок по референсу; заглушки помечены как разработка."""
+    """Пять вкладок по референсу; «Аналитика» и «Прогноз» — рабочие разделы."""
     _login(client, tutor_factory)
     html = client.get("/tutor/finance").text
     for label in (
@@ -276,13 +277,19 @@ def test_tabs_present_on_page(client, tutor_factory):
     ):
         assert label in html
 
+    # Обе вкладки выросли из заглушек: аналитика — в графики
+    # (tests/test_finance_analytics.py), прогноз — в карточки
+    # (tests/test_finance_forecast.py).
     analytics = client.get("/tutor/finance?tab=analytics").text
-    assert "Раздел в разработке" in analytics
+    assert "Раздел в разработке" not in analytics
     forecast = client.get("/tutor/finance?tab=forecast").text
-    assert "Раздел в разработке" in forecast
+    assert "Раздел в разработке" not in forecast
+    assert "Итого за месяц" in forecast
 
     # Мусор в query — умолчание «Все операции» (активная вкладка).
-    fallback = client.get("/tutor/finance?tab=nonsense").text
+    # Адрес вкладки собирает сервис, и в атрибуте `&` записан как `&amp;` —
+    # так и должно быть в HTML, поэтому сущности раскрываем перед сверкой.
+    fallback = html_lib.unescape(client.get("/tutor/finance?tab=nonsense").text)
     assert re.search(
         r'class="tab tab--active"[^>]*href="/tutor/finance\?period=month&tab=all"',
         fallback,
@@ -301,27 +308,28 @@ def test_feed_all_income_expenses_tabs(client, tutor_factory, student_factory):
     _operation(other, "lesson", 1200, now)
     _expense(tutor_id, 1500, now, category="ads", comment="пост ВК")
 
-    all_html = client.get("/tutor/finance?period=all&tab=all").text
-    all_ops = _ops_section(all_html)
+    all_ops = _ops_section(client.get("/tutor/finance?period=all&tab=all").text)
     assert "Аня" in all_ops
     assert "Реклама" in all_ops  # категория расхода — заголовок строки
     assert "пост ВК" in all_ops
-    # Списание за урок — движение баланса ученика, не деньги репетитора:
-    # в ленту не попадает (но в «Балансах учеников» Борис-должник есть).
-    assert "Борис" not in all_ops
-    assert "Борис" in all_html  # карточка балансов показывает долг
-
+    # Списание за урок — обычная строка «Все операций» (change
+    # finance-all-operations): вкладка показывает все движения средств.
+    assert "Борис" in all_ops
+    assert "Урок" in all_ops
+    # На вкладках денег репетитора уроков нет — это их собственный фильтр.
     income_ops = _ops_section(
         client.get("/tutor/finance?period=all&tab=income").text
     )
     assert "Аня" in income_ops
     assert "Реклама" not in income_ops
+    assert "Борис" not in income_ops
 
     expenses_ops = _ops_section(
         client.get("/tutor/finance?period=all&tab=expenses").text
     )
     assert "Реклама" in expenses_ops
     assert "Аня" not in expenses_ops
+    assert "Борис" not in expenses_ops
 
 
 def test_feed_empty_state(client, tutor_factory):

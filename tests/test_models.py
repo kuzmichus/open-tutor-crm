@@ -156,20 +156,6 @@ def test_student_phone_is_not_unique(student_factory):
         assert session.get(Student, second_id).phone == "+7 555 000-00-00"
 
 
-def test_student_kind_rejects_unknown_value(student_factory):
-    """Признак вне `child`/`adult` отклоняется CHECK-ограничением."""
-    with SessionLocal() as session:
-        student = Student(tutor_id="ignored", first_name="Странный", kind="teen")
-        # tutor_id намеренно невалиден — проверку kind ловим отдельно.
-        session.add(student)
-        try:
-            session.commit()
-        except IntegrityError:
-            session.rollback()
-        else:
-            raise AssertionError("kind='teen' должен был упасть на CHECK")
-
-
 def test_student_kind_check_is_not_masked_by_foreign_key(tutor_factory, student_factory):
     """`kind` вне значений отклоняется и при валидном репетиторе."""
     tutor_id = tutor_factory()

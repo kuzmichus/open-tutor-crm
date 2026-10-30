@@ -1,0 +1,99 @@
+{# Список получателей: фильтры + таблица с чекбоксами.
+
+   Корень #mailing-recipients — на самом партиале, а не на обёртке
+   снаружи: партиал перерисовывает сам себя (outerHTML), и после первой
+   же подмены цель `hx-target` чипов и поиска должна остаться в DOM —
+   иначе фильтр срабатывает один раз и «умирает». Перечитывается по
+   событию `mailing-sent` (сброс выбора после отправки) и по фильтрам.
+   Поиск несёт своё значение (`name="q"`), чип подтягивает текущий поиск
+   через `hx-include`. Выбор чекбоксов живёт в Alpine-состоянии формы
+   (`selected`) и перерисовку переживает. #}
+<div class="mailing-recipients" id="mailing-recipients"
+     hx-get="/tutor/mailings/recipients?q={{ q | urlencode }}&amp;segment={{ segment }}"
+     hx-trigger="mailing-sent from:body"
+     hx-swap="outerHTML">
+<section class="card mailing-filters" aria-label="Фильтры получателей">
+    <h2 class="mailing-filters__title">
+        <i data-lucide="filter"></i>
+        Фильтры
+    </h2>
+    <input class="input mailing-filters__search" id="mailing-search"
+           type="search" name="q" value="{{ q }}"
+           placeholder="Поиск по имени, телефону..."
+           hx-get="/tutor/mailings/recipients?segment={{ segment }}"
+           hx-trigger="input changed delay:400ms"
+           hx-include="this"
+           hx-target="#mailing-recipients" hx-swap="outerHTML"
+           @keydown.enter.prevent>
+    <div class="mailing-filters__segments" role="group" aria-label="Сегменты">
+        {% for item in segments %}
+        <a class="mailing-chip{% if item.active %} mailing-chip--active{% endif %}"
+           href="/tutor/mailings?segment={{ item.key }}{% if q %}&amp;q={{ q | urlencode }}{% endif %}"
+           hx-get="/tutor/mailings/recipients?segment={{ item.key }}"
+           hx-include="#mailing-search"
+           hx-target="#mailing-recipients" hx-swap="outerHTML"
+           {% if item.active %}aria-pressed="true"{% endif %}>
+            {{ item.label }}
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card mailing-list">
+    <header class="mailing-list__header">
+        <span class="mailing-list__counter"
+              x-text="'Выбрано: ' + selected.length">Выбрано: 0</span>
+    </header>
+
+    {% if recipients %}
+    <table class="mailing-table">
+        <thead>
+        <tr>
+            <th class="mailing-table__check"><span class="sr-only">Выбор</span></th>
+            <th>Ученик</th>
+            <th>Баланс</th>
+            <th>Каналы</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for card in recipients %}
+        <tr class="mailing-table__row{% if not card.can_message %} mailing-table__row--disabled{% endif %}">
+            <td class="mailing-table__check">
+                <input type="checkbox" name="student_ids"
+                       value="{{ card.student.id }}"
+                       x-model="selected"
+                       {% if not card.can_message %}disabled title="Нет подключённых каналов"{% endif %}>
+            </td>
+            <td>
+                <div class="mailing-table__name">{{ student_full_name(card.student) }}</div>
+                {% if card.next_lesson_at %}
+                <div class="mailing-table__next">След. урок: {{ next_lesson_label(card.next_lesson_at, tutor) }}</div>
+                {% endif %}
+            </td>
+            <td>
+                <span class="money-value{% if card.balance < 0 %} money-value--debt{% elif card.balance > 0 %} money-value--positive{% endif %}">
+                    {{ balance_label(card.balance) }}
+                </span>
+            </td>
+            <td>
+                <div class="mailing-channels">
+                    {% for messenger in channels_list %}
+                    <span class="mailing-channels__pill{% if card.channels[messenger] %} mailing-channels__pill--on{% endif %}"
+                          title="{{ 'Канал подключён' if card.channels[messenger] else 'Канал не подключён' }}">
+                        {{ messenger_label(messenger) }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state mailing-list__empty">
+        <p class="empty-state__title">Никого не найдено</p>
+        <p class="empty-state__text">Измените поиск или сегмент — в списке ученики по выбранным условиям.</p>
+    </div>
+    {% endif %}
+</section>
+</div>

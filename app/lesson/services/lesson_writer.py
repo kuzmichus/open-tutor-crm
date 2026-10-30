@@ -20,11 +20,14 @@
 
 from datetime import date, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import to_local, to_utc
 from app.finance.services.charges import sync_lesson_charge
+from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import LESSON_DURATIONS, LESSON_TYPES, Lesson
+from app.lesson.models.lesson_attendance import LessonAttendance
 from app.lesson.models.lesson_series import LessonSeries
 from app.lesson.services.series_generator import generate_occurrences
 
@@ -176,6 +179,70 @@ def create_series(db: Session, data: dict, tutor) -> tuple[list[Lesson], list[st
     return lessons, []
 
 
+def _save_attendance(db: Session, lesson: Lesson, records: list[dict]) -> None:
+    """Применяет отметки присутствия формы к уроку; без коммита (design D7).
+
+    Состав фильтруется по **текущим** участникам группы: чужие и вышедшие
+    id игнорируются без ошибки — форма могла быть открыта до выхода
+    участника. Отметки тех, кто в составе есть, а в присланную форму не
+    попал, удаляются; отметки вышедших (в составе их нет) не трогаются —
+    это история (спека «Состав блока из текущих участников»).
+
+    Записи присутствовавших сохраняются с `reason=None` (инвариант CHECK):
+    «вернулся в присутствовавшие» — тоже апдейт существующей строки, а не
+    удаление, поэтому повторное сохранение не дублирует отметки.
+
+    Вызывается до `sync_lesson_charges` вьюхой: списания считаются уже по
+    обновлённым отметкам, одной транзакцией с уроком.
+    """
+    member_ids = set(
+        db.scalars(
+            select(GroupMember.student_id).where(
+                GroupMember.group_id == lesson.group_id
+            )
+        ).all()
+    )
+    submitted = {
+        record["student_id"]: record
+        for record in records
+        if record["student_id"] in member_ids
+    }
+
+    existing = {
+        mark.student_id: mark
+        for mark in db.scalars(
+            select(LessonAttendance).where(LessonAttendance.lesson_id == lesson.id)
+        ).all()
+    }
+
+    for student_id, record in submitted.items():
+        mark = existing.get(student_id)
+        present = record["present"]
+        reason = None if present else record["reason"]
+        if mark is None:
+            db.add(
+                LessonAttendance(
+                    lesson_id=lesson.id,
+                    student_id=student_id,
+                    present=present,
+                    reason=reason,
+                )
+            )
+            continue
+        mark.present = present
+        mark.reason = reason
+
+    for student_id, mark in existing.items():
+        if student_id in member_ids and student_id not in submitted:
+            db.delete(mark)
+
+    # Без `flush` отметки остались бы неподтверждёнными изменениями
+    # (сессия собирается с `autoflush=False`): `sync_lesson_charges` у
+    # вызывающей стороны не увидел бы их в `lesson_targets` и не снял
+    # списание отсутствовавшего в этой же транзакции.
+    db.flush()
+
+
 def update_lesson(db: Session, lesson: Lesson, data: dict, tutor) -> list[str]:
     """Применяет данные формы редактирования к одному уроку (без коммита).
 
@@ -208,4 +275,13 @@ def update_lesson(db: Session, lesson: Lesson, data: dict, tutor) -> list[str]:
         lesson.status = data["status"]
     lesson.rating = data.get("rating")
     lesson.family_comment = data.get("family_comment") or None
+
+    # Отметки присутствия (design D7): до sync_lesson_charges у вызывающей
+    # стороны, чтобы списания считались по обновлённым отметкам. Только у
+    # группового урока и только если поле пришло: None (создание, сохранение
+    # без JS) отметки не трогает. У негрупповых типов блок скрыт, но скрытое
+    # поле может прийти с прежним списком — отметки остаются в БД, цели
+    # не-группового урока их не читают (design D8).
+    if lesson.type == "group" and data.get("attendance") is not None:
+        _save_attendance(db, lesson, data["attendance"])
     return []

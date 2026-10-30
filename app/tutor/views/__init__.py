@@ -8,6 +8,7 @@ from app.tutor.views import (
     logout,
     profile,
     profile_calendar,
+    profile_channels,
     profile_notifications,
     profile_save,
     profile_security,
@@ -27,6 +28,7 @@ router.include_router(profile_save.router)
 router.include_router(profile_security.router)
 router.include_router(profile_notifications.router)
 router.include_router(profile_calendar.router)
+router.include_router(profile_channels.router)
 router.include_router(settings.router)
 router.include_router(settings_messengers.router)
 router.include_router(register.router)

@@ -1,45 +1,75 @@
-{# Публичная страница записи (спека public-booking, design.md D7/D8).
+{# Публичная страница записи (спека public-booking, design.md D1–D6).
 
    Единственная страница проекта без сессии и без сайдбара: ученик приходит
    по ссылке из мессенджера. Наследует `base.html` только ради токенов,
    шрифтов и локальных скриптов — навигации CRM здесь нет и быть не должно.
 
-   Что показывается: дата, время и длительность свободных публичных окон.
-   Ни имён учеников, ни заметок, ни контактов — занятые окна в выборку не
-   попадают вовсе (design D8), поэтому и раскрывать нечего.
+   Что показывается: неделя сеткой из семи дней, публичные окна с временем и
+   состоянием «Свободно»/«Занято». Кем занято окно — не раскрывается (D1),
+   приватные и прошедшие окна не показываются вовсе.
 
-   Контекст: booking_tutor, booking_monday, booking_days, booking_empty,
-   booking_unavailable, booking_timezone, booking_message, booking_errors,
-   booking_values, booking_prev, booking_next, booking_action. #}
+   Выбор окна — обычная ссылка `?start=…&slot=…`: страница перерисовывается
+   с подсвеченным окном и карточкой формы (D2). После успешной заявки
+   страница показывает экран подтверждения вместо сетки (D3).
+
+   Контекст: booking_tutor, booking_days, booking_selected,
+   booking_selected_summary, booking_week_label, booking_unavailable,
+   booking_zone_banner, booking_message, booking_errors, booking_values,
+   booking_success, booking_sent_label, booking_prev, booking_next,
+   booking_prev_label, booking_next_label, booking_action,
+   booking_slot_url, booking_monday_iso. #}
 {% extends "base.html" %}
-{% block title %}Запись на занятие — {{ booking_tutor.name }}{% endblock %}
+{% block title %}Запись на пробный урок — {{ booking_tutor.name }}{% endblock %}
 
 {% block body %}
 <main class="public-page">
-    <section class="public-card card" aria-labelledby="public-title">
-        <header class="public-card__header">
-            <p class="public-card__brand">OpenTutorCRM</p>
-            <h1 class="public-card__title" id="public-title">
-                Запись на занятие
+    <div class="public-shell">
+
+        {% if booking_success %}
+        {# Экран успеха: сетку и форму после заявки показывать незачем —
+           окно уже занято ожидающей бронью (design D3). #}
+        <section class="public-success card" aria-labelledby="public-success-title">
+            <span class="public-success__check" aria-hidden="true">
+                <i data-lucide="check"></i>
+            </span>
+            <h1 class="public-success__title" id="public-success-title">
+                Заявка отправлена!
             </h1>
-            <p class="public-card__tutor">{{ booking_tutor.name }}</p>
-            {% if booking_tutor.subject %}
-            <p class="public-card__subject">{{ booking_tutor.subject }}</p>
-            {% endif %}
+            <p class="public-success__text">{{ booking_message }}</p>
+            <p class="public-success__zone">{{ booking_zone_banner }}</p>
+            <div class="public-success__time">
+                <span class="public-success__time-label">Выбранное время:</span>
+                <strong class="public-success__time-value">{{ booking_sent_label }}</strong>
+            </div>
+        </section>
+        {% else %}
+
+        <header class="public-head">
+            <h1 class="public-head__title">Запись на пробный урок</h1>
+            <p class="public-head__tutor">
+                Преподаватель: {{ booking_tutor.name }}
+            </p>
         </header>
 
-        {# Подпись о поясе — требование спеки: ученик должен знать, в каком
-           времени указаны окна, а не догадываться (design D8). #}
-        <p class="public-card__zone">
-            Обратите внимание, время указано: {{ booking_timezone }}
-        </p>
-
-        {% if booking_message %}
-        <p class="notice public-card__notice" role="status">{{ booking_message }}</p>
+        {% if not booking_selected %}
+        {# Подсказка «как записаться» нужна только до выбора окна: после
+           выбора ученик уже в форме, и три шага отвлекают от полей. #}
+        <section class="public-steps card" aria-labelledby="public-steps-title">
+            <h2 class="public-steps__title" id="public-steps-title">Как записаться:</h2>
+            <ol class="public-steps__list">
+                <li class="public-steps__item">Выберите свободное время (зелёные ячейки)</li>
+                <li class="public-steps__item">Заполните контактные данные</li>
+                <li class="public-steps__item">Нажмите «Записаться»</li>
+            </ol>
+        </section>
         {% endif %}
 
         {% if booking_errors %}
-        <div class="error public-card__errors" role="alert">
+        {# Ошибки показываются отдельной плашкой над сеткой, а не только
+           внутри карточки формы: после неудачной отправки выбранного окна
+           может уже не быть в сетке (окно заняли, неделя сменилась), а
+           причину отказа ученик обязан увидеть. #}
+        <div class="error public-alert" role="alert">
             <ul>
                 {% for message in booking_errors %}
                 <li>{{ message }}</li>
@@ -48,84 +78,121 @@
         </div>
         {% endif %}
 
-        {# Неделя: ссылки на соседние недели и подпись текущей. #}
-        <nav class="public-week" aria-label="Выбор недели">
-            <a class="public-week__nav" href="{{ booking_prev }}"
-               aria-label="Предыдущая неделя">←</a>
-            <span class="public-week__label">
-                Неделя с {{ booking_monday.strftime('%d.%m.%Y') }}
-            </span>
-            <a class="public-week__nav" href="{{ booking_next }}"
-               aria-label="Следующая неделя">→</a>
-        </nav>
+        <section class="public-calendar card" aria-label="Свободные окна недели">
+            {# Листание недель: выбор окна при переходе сбрасывается — оно
+               относится к прошлой неделе (design D2). #}
+            <nav class="public-week" aria-label="Выбор недели">
+                <a class="public-week__nav" href="{{ booking_prev }}"
+                   aria-label="Предыдущая неделя ({{ booking_prev_label }})">←</a>
+                <span class="public-week__label">{{ booking_week_label }}</span>
+                <a class="public-week__nav" href="{{ booking_next }}"
+                   aria-label="Следующая неделя ({{ booking_next_label }})">→</a>
+            </nav>
 
-        {% if booking_unavailable %}
-        {# Вся неделя в недоступности: вместо пустого списка — причина
-           (спека public-booking, «Неделя в отпуске»). #}
-        <p class="public-card__empty">
-            Педагог недоступен: {{ booking_unavailable }}
-        </p>
-        {% elif booking_empty %}
-        <p class="public-card__empty">
-            На этой неделе свободных окон нет. Посмотрите соседнюю неделю.
-        </p>
-        {% else %}
-        {% for day, slots in booking_days %}
-        <section class="public-day" aria-labelledby="public-day-{{ day.isoformat() }}">
-            <h2 class="public-day__title" id="public-day-{{ day.isoformat() }}">
-                {{ day.strftime('%d.%m.%Y') }}
-            </h2>
-            <ul class="public-slots">
-                {% for item in slots %}
-                <li class="public-slot">
-                    {# Форма на каждое окно: вложенные <form> запрещены, а
-                       ученику нужна одна кнопка «Записаться» на окно.
-                       Скрытые поля несут окно и неделю — после отказа
-                       страница перерисовывается на той же неделе. #}
-                    <form class="public-slot__form"
-                          method="post"
-                          action="{{ booking_action }}">
-                        <input type="hidden" name="slot_id" value="{{ item.id }}">
-                        <input type="hidden" name="start"
-                               value="{{ booking_monday.isoformat() }}">
-                        <span class="public-slot__time">
-                            {{ item.start }} – {{ item.end }}
+            {# Подпись пояса — требование спеки: ученик должен знать, в каком
+               времени указаны окна, а не догадываться (design D6). #}
+            <p class="public-zone" role="note">{{ booking_zone_banner }}</p>
+
+            {% if booking_unavailable %}
+            {# Вся неделя в недоступности: вместо сетки — причина
+               (спека public-booking, «Неделя в отпуске»). #}
+            <p class="public-calendar__empty">
+                Педагог недоступен: {{ booking_unavailable }}
+            </p>
+            {% else %}
+            <div class="public-grid">
+                {% for day in booking_days %}
+                <div class="public-day">
+                    <div class="public-day__head">
+                        <span class="public-day__weekday">{{ day.weekday }}</span>
+                        <span class="public-day__date">{{ day.day_number }}</span>
+                    </div>
+                    <div class="public-day__body">
+                        {% if day.is_empty %}
+                        <span class="public-day__empty">нет мест</span>
+                        {% endif %}
+                        {% for item in day.slots %}
+                        {% if item.is_free %}
+                        {# Свободное окно — ссылка на ту же неделю с выбором:
+                           без JavaScript, страница перерисовывается сервером. #}
+                        <a class="public-slot public-slot--free{% if booking_selected and booking_selected.id == item.id %} public-slot--selected{% endif %}"
+                           href="{{ booking_slot_url }}?start={{ booking_monday_iso }}&slot={{ item.id }}">
+                            <span class="public-slot__time">{{ item.start }}</span>
+                            <span class="public-slot__end">{{ item.end }}</span>
+                            <span class="public-slot__state">
+                                {% if booking_selected and booking_selected.id == item.id %}
+                                Выбрано
+                                {% else %}
+                                Свободно
+                                {% endif %}
+                            </span>
+                        </a>
+                        {% else %}
+                        {# Занятое окно: время и состояние без имени ученика,
+                           темы урока и статуса занятия (design D1). #}
+                        <span class="public-slot public-slot--busy">
+                            <span class="public-slot__time">{{ item.start }}</span>
+                            <span class="public-slot__end">{{ item.end }}</span>
+                            <span class="public-slot__state">Занято</span>
                         </span>
-                        <span class="public-slot__duration">
-                            {{ item.duration_min }} мин
-                        </span>
-                        <div class="public-slot__fields">
-                            <label class="public-slot__field">
-                                <span class="label">Имя</span>
-                                <input class="input" type="text" name="name"
-                                       required maxlength="200"
-                                       value="{{ booking_values.name }}"
-                                       autocomplete="name">
-                            </label>
-                            <label class="public-slot__field">
-                                <span class="label">Телефон или мессенджер</span>
-                                <input class="input" type="text" name="contact"
-                                       required maxlength="64"
-                                       value="{{ booking_values.contact }}"
-                                       autocomplete="tel">
-                            </label>
-                        </div>
-                        <button class="btn btn--primary public-slot__submit"
-                                type="submit">
-                            Записаться
-                        </button>
-                    </form>
-                </li>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
                 {% endfor %}
-            </ul>
+            </div>
+            {% endif %}
         </section>
-        {% endfor %}
+
+        {% if booking_selected %}
+        <section class="public-form card" aria-labelledby="public-form-title">
+            <h2 class="public-form__title" id="public-form-title">
+                <i data-lucide="user"></i>
+                Запись на урок
+            </h2>
+
+            <p class="public-form__selected">
+                Выбрано: {{ booking_selected_summary }}
+            </p>
+
+            <form class="public-form__form" method="post" action="{{ booking_action }}">
+                <input type="hidden" name="slot_id" value="{{ booking_selected.id }}">
+                <input type="hidden" name="start" value="{{ booking_monday_iso }}">
+
+                <div class="public-form__row">
+                    <label class="public-form__field">
+                        <span class="label">Имя *</span>
+                        <input class="input" type="text" name="name"
+                               required maxlength="200"
+                               placeholder="Ваше имя"
+                               value="{{ booking_values.name }}"
+                               autocomplete="name">
+                    </label>
+                    <label class="public-form__field">
+                        <span class="label">Телефон *</span>
+                        <input class="input" type="text" name="contact"
+                               required maxlength="64"
+                               placeholder="+7 ___ ___-__-__"
+                               value="{{ booking_values.contact }}"
+                               autocomplete="tel">
+                    </label>
+                </div>
+
+                <label class="public-form__field">
+                    <span class="label">Комментарий</span>
+                    <textarea class="input" name="comment" rows="3"
+                              maxlength="500"
+                              placeholder="Что бы вы хотели обсудить?">{{ booking_values.comment }}</textarea>
+                </label>
+
+                <button class="btn btn--primary public-form__submit" type="submit">
+                    Записаться
+                </button>
+            </form>
+        </section>
         {% endif %}
 
-        <footer class="public-card__footer">
-            Заявка ждёт подтверждения педагога: он свяжется с вами по
-            указанному контакту.
-        </footer>
-    </section>
+        {% endif %}
+    </div>
 </main>
 {% endblock %}

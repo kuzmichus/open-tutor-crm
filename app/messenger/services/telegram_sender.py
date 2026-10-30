@@ -6,6 +6,7 @@ import urllib.request
 
 from app.messenger.services.errors import SendError
 from app.messenger.services.registry import register_sender
+from app.messenger.services.tls_context import api_ssl_context
 
 # Таймаут ограничен: отправка синхронная и не должна подвешивать запрос.
 _TIMEOUT_SECONDS = 10
@@ -32,7 +33,9 @@ class TelegramSender:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:
+            with urllib.request.urlopen(
+                request, timeout=_TIMEOUT_SECONDS, context=api_ssl_context()
+            ) as response:
                 body = json.loads(response.read())
         except urllib.error.HTTPError as exc:
             # Telegram описывает ошибку в теле ответа — покажем её, а не код.

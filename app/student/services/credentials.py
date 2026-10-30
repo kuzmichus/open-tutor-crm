@@ -17,6 +17,7 @@ import string
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.student.models.student import Student
 from app.student.models.student_access import (
     MIN_LOGIN_LENGTH,
     MIN_PASSWORD_LENGTH,
@@ -73,6 +74,45 @@ def get_access(db: Session, student_id: str) -> StudentAccess | None:
     return db.scalars(
         select(StudentAccess).where(StudentAccess.student_id == student_id)
     ).first()
+
+
+# Транслит для подсказки логина (D7 change'а student-cabinet-access):
+# кириллица → латиница. Карты латиницы/цифр нет намеренно — не-кириллическое
+# имя («John») даст пустой результат и поле останется пустым, вместо
+# сомнительной подсказки «джон» или passthrough латиницы.
+_CYRILLIC_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
+    "ж": "zh", "з": "z", "и": "i", "й": "i", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+    "ф": "f", "х": "h", "ц": "c", "ч": "ch", "ш": "sh", "щ": "shch",
+    "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}
+
+
+def _translit(value: str) -> str:
+    """Транслит кириллицы строчными; прочие символы отбрасываются."""
+    return "".join(_CYRILLIC_TRANSLIT.get(ch, "") for ch in value.lower())
+
+
+def suggest_login(db: Session, student: Student) -> str:
+    """Подсказка логина из имени: «Иван Петров» → `ipetrov`.
+
+    Первая буква имени + фамилия целиком; без фамилии — имя. Занятый
+    вариант получает суффикс `1`, `2`, … проверкой `login_taken`.
+    Не-транслитерируемое имя даёт пустую строку — поле остаётся пустым.
+    """
+    if student.last_name:
+        base = _translit(student.first_name[:1]) + _translit(student.last_name)
+    else:
+        base = _translit(student.first_name)
+    if not base:
+        return ""
+    candidate = base
+    suffix = 1
+    while login_taken(db, candidate, exclude_student_id=student.id):
+        candidate = f"{base}{suffix}"
+        suffix += 1
+    return candidate
 
 
 def login_taken(db: Session, login: str, *, exclude_student_id: str = "") -> bool:

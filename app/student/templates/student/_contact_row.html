@@ -6,6 +6,12 @@
    новый контакт. Для шаблона `index` — строка `__index__`, которую JS
    заменяет на число; `open=true` означает, что новая строка раскрыта сразу.
 
+   У сохранённого контакта в раскрытой форме есть бейдж «Личный кабинет»
+   (`_cabinet_badge.html`): состояние входа и кнопка приглашения. У строки
+   из инертного шаблона `contact_id` пуст — бейджа нет: приглашать некого,
+   пока контакт не сохранён (спека parent-cabinet); он появится после
+   сохранения и перезагрузки страницы.
+
    Контекст: index, row, open (по умолчанию false). #}
 {% macro contact_row(index, row, open=false) %}
 <li class="contact-row" data-contact-row
@@ -101,6 +107,17 @@
                 <span>Об отмене</span>
             </label>
         </div>
+
+        {# Бейдж «Личный кабинет»: состояние входа и кнопка приглашения.
+           Обновляется точечно (hx-target на бейдж) — правки формы выше
+           не затираются. Переменные кладутся в контекст через `{% with %}`:
+           include внутри макроса видит только контекст, не локальные
+           аргументы макроса. #}
+        {% if row.contact_id %}
+        {% with badge_contact_id = row.contact_id, badge = row.cabinet_badge %}
+        {% include "student/_cabinet_badge.html" %}
+        {% endwith %}
+        {% endif %}
 
         <div class="contact-suggestion" id="contact-suggestion-{{ index }}"></div>
     </div>

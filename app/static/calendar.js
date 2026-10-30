@@ -19,9 +19,6 @@
 (function () {
   "use strict";
 
-  /* Минуты от 6:00 — границы таймлайна (см. services/presentation.py). */
-  var GRID_START_MIN = 6 * 60;
-  var GRID_END_MIN = 23 * 60;
   var STEP_MIN = 15;               /* снап к четверти часа */
   var DRAG_THRESHOLD_PX = 5;       /* дальше — драг, ближе — обычный клик */
   /* Форма урока со страницы Уроков — единственная точка создания урока
@@ -31,6 +28,24 @@
   /* Ключ localStorage: выбранный режим раскраски переживает перезагрузку
      и листание недель (design.md D5). */
   var COLOR_STORAGE_KEY = "opentutorcrm:calendar-color";
+  /* Дефолтные границы таймлайна, минуты суток 6:00–23:00: fallback, когда
+     в разметке нет data-grid-* (см. services/presentation.py). */
+  var DEFAULT_GRID_BOUNDS = { start: 6 * 60, end: 23 * 60 };
+
+  /* Границы рабочего времени из разметки сетки (дизайн D4): сервер
+     рендерит их в data-grid-start/data-grid-end на .cal-grid, клиент
+     своих констант не держит — подсказка времени, зажим драга и зажим
+     предзаполнения следуют настройке. Атрибуты перечитываются при каждом
+     вызове: htmx-листание недель подменяет сетку целиком. */
+  function gridBounds(root) {
+    var grid = root && root.querySelector ? root.querySelector(".cal-grid") : null;
+    if (!grid) return DEFAULT_GRID_BOUNDS;
+    var start = parseInt(grid.getAttribute("data-grid-start"), 10);
+    var end = parseInt(grid.getAttribute("data-grid-end"), 10);
+    if (isNaN(start) || isNaN(end)) return DEFAULT_GRID_BOUNDS;
+    return { start: start, end: end };
+  }
+
   /* «14:00» → 840; кривое значение → null. */
   function parseClock(value) {
     var match = /^(\d{2}):(\d{2})$/.exec(String(value || ""));
@@ -38,11 +53,13 @@
     return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
   }
 
-  /* 840 → «14:00» — тот же формат, что рендерит сервер. */
+  /* 840 → «14:00» — тот же формат, что рендерит сервер. Без зажима:
+     карточка показывает фактический интервал урока (спека «Данные о
+     времени — фактический интервал»), зажим делают вызывающие код по
+     границам своей сетки. */
   function formatClock(minutes) {
-    var clamped = Math.max(GRID_START_MIN, Math.min(minutes, GRID_END_MIN));
-    var h = Math.floor(clamped / 60);
-    var m = clamped % 60;
+    var h = Math.floor(minutes / 60);
+    var m = minutes % 60;
     return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m;
   }
 
@@ -387,6 +404,10 @@
           var parts = serverNowParts();
           var minutes = parts.hours * 60 + parts.minutes;
           minutes = snapToQuarter(minutes) + STEP_MIN;   /* ближайшая будущая */
+          /* Зажим предзаполнения в рабочее время (дизайн D4): «Добавить»
+             не предлагает начало вне сетки. */
+          var bounds = gridBounds(this.$root);
+          minutes = Math.max(bounds.start, Math.min(minutes, bounds.end));
           return { date: date, time: formatClock(minutes) };
         },
 
@@ -450,7 +471,7 @@
         },
 
         /* ------------------------------------------------------------------
-           «Ссылка на окна»: копирование публичного адреса недели (design D7).
+           «Ссылка для записи»: копирование публичного адреса недели (design D7).
            ------------------------------------------------------------------ */
 
         /* Понедельник видимой недели — из первой колонки сетки. */
@@ -492,7 +513,7 @@
           return location.origin + base + (start ? "?start=" + start : "");
         },
 
-        /* Кнопка «Ссылка на окна»: копирует публичную ссылку недели.
+        /* Кнопка «Ссылка для записи»: копирует публичную ссылку недели.
            Буфер обмена доступен не всегда (http, права, старый браузер) —
            тогда ссылка показывается в поле рядом, чтобы её можно было
            скопировать вручную (спека calendar, «Буфер обмена недоступен»).
@@ -522,7 +543,7 @@
           navigator.clipboard.writeText(url).then(
             function () {
               self.linkFallback.open = false;
-              self.showToast("Ссылка на окна скопирована");
+              self.showToast("Ссылка для записи скопирована");
             },
             showFallback
           );
@@ -637,21 +658,22 @@
           /* Снап к четверти часа: начало берётся от слота под курсором
              (слот16:30 →16:30, курсор16:37 — тот же слот →16:30), а без
              слота (карточка другого урока под курсором) — геометрия дня
-             с округлением вниз до границы четверти. Затем зажим в границы
-             таймлайна. */
+             с округлением вниз до границы четверти. Затем зажим в рабочее
+             время из разметки (дизайн D4). */
+          var bounds = gridBounds(this.$root);
           var hourH = this.hourHeight();
           if (!hourH) return;
           var slot = under && under.closest && under.closest(".cal-slot");
           var slotMin = slot ? parseClock((slot.getAttribute("data-start") || "").slice(11, 16)) : null;
           var dayRect = day.getBoundingClientRect();
-          var cursorMin = GRID_START_MIN + ((event.clientY - dayRect.top) / hourH) * 60;
+          var cursorMin = bounds.start + ((event.clientY - dayRect.top) / hourH) * 60;
           var newMin =
             slotMin !== null
               ? slotMin
               : Math.floor(cursorMin / STEP_MIN) * STEP_MIN;
           newMin = Math.max(
-            GRID_START_MIN,
-            Math.min(newMin, GRID_END_MIN - drag.duration)
+            bounds.start,
+            Math.min(newMin, bounds.end - drag.duration)
           );
 
           /* Отметка недоступности: подтверждаем до любой правки DOM — при
@@ -666,7 +688,7 @@
           card.setAttribute("data-date", day.getAttribute("data-date"));
           day.appendChild(card);          /* в конец — поверх слотов */
           card.setAttribute("data-start-min", String(newMin));
-          card.style.setProperty("--top", ((newMin - GRID_START_MIN) / 60).toString());
+          card.style.setProperty("--top", ((newMin - bounds.start) / 60).toString());
           card.querySelector(".cal-event__time").textContent =
             formatClock(newMin) + " – " + formatClock(newMin + drag.duration);
           /* Подсказка содержит время — после переноса пересобираем её,

@@ -108,24 +108,35 @@ def test_general_tab_shows_summary(owner, client, student_factory):
     assert html.count("—") >= 2
 
 
-def test_general_tab_has_meeting_url_field(owner, client, student_factory):
+@pytest.mark.parametrize(
+    "expected_texts",
+    [
+        pytest.param(
+            (
+                "Постоянная ссылка на встречу",
+                'name="meeting_url"',
+                "Одна ссылка на все занятия группы",
+            ),
+            id="meeting-url-field",
+        ),
+        pytest.param(
+            ("Состав (1)", "Мария Петрова", "в группе с 14.10.2026"),
+            id="roster-with-join-dates",
+        ),
+        pytest.param(
+            ("Заметки к группе", "Ученики заметки не видят.", 'name="notes"'),
+            id="notes-field",
+        ),
+    ],
+)
+def test_general_tab_content(expected_texts, owner, client, student_factory):
+    """Вкладка «Общее»: ссылка на встречу, состав с датами и заметки."""
     group_id, _ = _group_with_member(owner, student_factory)
+
     html = client.get(f"/tutor/groups/{group_id}/edit").text
 
-    assert "Постоянная ссылка на встречу" in html
-    assert 'name="meeting_url"' in html
-    # Пояснение к полю.
-    assert "Одна ссылка на все занятия группы" in html
-
-
-def test_general_tab_shows_roster_with_join_dates(owner, client, student_factory):
-    group_id, _ = _group_with_member(owner, student_factory)
-    html = client.get(f"/tutor/groups/{group_id}/edit").text
-
-    assert "Состав (1)" in html
-    assert "Мария Петрова" in html
-    assert "в группе с 14.10.2026" in html
-
+    for text in expected_texts:
+        assert text in html
 
 def test_general_tab_upcoming_lessons_is_stub(owner, client, student_factory):
     group_id, _ = _group_with_member(owner, student_factory)
@@ -133,15 +144,6 @@ def test_general_tab_upcoming_lessons_is_stub(owner, client, student_factory):
 
     assert "Ближайшие занятия" in html
     assert "Занятия группы появятся здесь позже." in html
-
-
-def test_general_tab_has_notes_with_explanation(owner, client, student_factory):
-    group_id, _ = _group_with_member(owner, student_factory)
-    html = client.get(f"/tutor/groups/{group_id}/edit").text
-
-    assert "Заметки к группе" in html
-    assert "Ученики заметки не видят." in html
-    assert 'name="notes"' in html
 
 
 def test_general_tab_shows_empty_roster(owner, client, group_factory):

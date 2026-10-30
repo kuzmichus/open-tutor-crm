@@ -3,6 +3,11 @@
 Секция перезапрашивает себя по `payment-saved` и `expense-saved`: строки
 списка, вкладка и карточка балансов приезжают заново с сервера — в браузере
 нет ни одной денежной формулы (паттерн `finance/_summary.html`).
+
+Состояние разбирает тот же `parse_state`, что у страницы и у ручки вкладки:
+мусор в query заменяется умолчаниями одинаково, и адрес перезапроса
+(`refresh_url`) не расходится с нарисованным. Историю браузера этот ответ
+не двигает: это обновление уже открытой страницы, а не переход.
 """
 
 from fastapi import APIRouter, Depends, Request
@@ -11,9 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.finance.services.access import LoginRequired, require_tutor_id
-from app.finance.services.operations_feed import parse_finance_tab
-from app.finance.services.operations_section import operations_context
-from app.finance.services.periods import parse_finance_period
+from app.finance.services.operations_section import (
+    operations_context,
+    parse_state,
+)
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
 
@@ -31,10 +37,9 @@ def finance_operations(
     if tutor is None:
         raise LoginRequired()
 
-    period = parse_finance_period(request.query_params, tutor)
-    tab = parse_finance_tab(request.query_params)
+    state = parse_state(request.query_params, tutor)
     return templates.TemplateResponse(
         request,
         "finance/_operations.html",
-        operations_context(db, tutor, period=period, tab=tab),
+        operations_context(db, tutor, **state),
     )

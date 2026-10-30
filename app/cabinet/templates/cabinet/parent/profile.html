@@ -1,0 +1,57 @@
+{# Вкладка «Профиль» кабинета родителя (change parent-cabinet).
+
+   Данные самого контакта в режиме просмотра (design D9): ФИО, телефон,
+   email, рядом — email входа, которым родитель заходит. Редактирование
+   и смена пароля — последующий change, формы на вкладке нет.
+
+   Контекст: contact, children, access (строка ContactAccess либо None). #}
+{% extends "base.html" %}
+{% block title %}Профиль — Open Tutor CRM{% endblock %}
+
+{% block body %}
+{% set active_page = 'profile' %}
+{% include "cabinet/parent/_sidebar.html" %}
+
+<!-- Мобильная шапка -->
+<header class="mobile-header">
+    <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+        <i data-lucide="menu"></i>
+    </button>
+    <span class="sidebar__brand">Кабинет родителя</span>
+</header>
+
+<main class="main">
+    <div class="main__container">
+        <div class="page-header">
+            <div>
+                <h1>Профиль</h1>
+                <p>Данные для связи, которые видит репетитор</p>
+            </div>
+        </div>
+
+        <section class="card parent-profile">
+            <dl class="parent-profile__list">
+                <div class="parent-profile__row">
+                    <dt class="parent-profile__term">ФИО</dt>
+                    <dd class="parent-profile__value">{{ contact.full_name }}</dd>
+                </div>
+                <div class="parent-profile__row">
+                    <dt class="parent-profile__term">Телефон</dt>
+                    <dd class="parent-profile__value">{{ contact.phone or "—" }}</dd>
+                </div>
+                <div class="parent-profile__row">
+                    <dt class="parent-profile__term">Email</dt>
+                    <dd class="parent-profile__value">{{ contact.email or "—" }}</dd>
+                </div>
+                <div class="parent-profile__row">
+                    <dt class="parent-profile__term">Вход в кабинет</dt>
+                    <dd class="parent-profile__value">{{ access.email if access else "—" }}</dd>
+                </div>
+            </dl>
+            <p class="cabinet__hint">
+                Изменить данные можно через репетитора — так телефон и почта останутся согласованными.
+            </p>
+        </section>
+    </div>
+</main>
+{% endblock %}

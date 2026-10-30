@@ -15,7 +15,11 @@
 дне, а не переезжает в следующий из-за смещения UTC.
 
 Сортировка по умолчанию — «Сначала ближайшие»: по времени начала
-`starts_at` от меньшего к большему (спека lesson-management).
+`starts_at` от меньшего к большему (спека lesson-management). Кроме неё
+список умеет сортироваться по цели и статусу: колонок, по которым
+педагог ищет глазами, три, и все три должны переключаться, иначе
+«отметить прошедшие» снова превращается в прокрутку (change
+lessons-table-scale).
 """
 
 from datetime import timedelta
@@ -30,7 +34,7 @@ from app.common.services.tutor_time import (
     to_local,
 )
 from app.group.models.group import Group
-from app.lesson.models.lesson import Lesson
+from app.lesson.models.lesson import LESSON_STATUSES, Lesson
 from app.lesson.services.unmarked import is_unmarked
 from app.student.models.student import Student
 from app.tutor.services.clock import as_utc
@@ -42,6 +46,13 @@ FILTER_PERIODS = ("", "today", "week")
 # уроки, не отмеченные как проведённые (change unmarked-lessons).
 FILTER_STATUSES = ("", "unmarked")
 
+# Колонки, по которым список умеет сортироваться (change lessons-table-scale).
+# Ключ — значение query-параметра `sort`, оно же имя колонки в разметке.
+SORT_KEYS = ("date", "target", "status")
+
+# Направление сортировки; по умолчанию — по возрастанию (ближайшие сверху).
+SORT_DIRECTIONS = ("asc", "desc")
+
 
 def normalize_period(period: str) -> str:
     """Значение фильтра периода из query: неизвестное схлопывается в «Все»."""
@@ -51,6 +62,70 @@ def normalize_period(period: str) -> str:
 def normalize_status(status: str) -> str:
     """Значение селекта статуса из query: неизвестное — «Все статусы»."""
     return status if status in FILTER_STATUSES else ""
+
+
+def normalize_sort(sort: str) -> str:
+    """Колонка сортировки из query: неизвестное — «date» (ближайшие)."""
+    return sort if sort in SORT_KEYS else "date"
+
+
+def normalize_direction(direction: str) -> str:
+    """Направление из query: неизвестное — по возрастанию."""
+    return direction if direction in SORT_DIRECTIONS else "asc"
+
+
+def _target_sort_key(row: dict) -> str:
+    """Ключ сортировки по цели: имя в нижнем регистре, кириллица тоже.
+
+    Сравнивать строки в SQL через `lower()` нельзя: SQLite не понимает
+    кириллицу в `lower()` без ICU, и «Мария» с «мария» разъехались бы по
+    разным концам списка. Поэтому ключ считается в Python — там же, где
+    идёт поиск.
+    """
+    name = row["student_name"] or row["group_name"] or ""
+    return name.casefold()
+
+
+def _status_sort_key(row: dict) -> int:
+    """Ключ сортировки по статусу: порядок из закрытого списка модели.
+
+    Не по алфавиту: «Запланирован» раньше «Проведён» — это порядок
+    `LESSON_STATUSES`, то есть смысл («сначала то, что ещё не сделано»),
+    а не случайность перевода.
+    """
+    status = row["lesson"].status
+    return LESSON_STATUSES.index(status) if status in LESSON_STATUSES else len(
+        LESSON_STATUSES
+    )
+
+
+def sort_rows(rows: list[dict], sort: str, direction: str) -> list[dict]:
+    """Упорядочивает строки по выбранной колонке.
+
+    Дата — по времени начала (тот же порядок, что в SQL: сначала
+    ближайшие). Цель и статус — по ключу в Python, потому что кириллица
+    в SQLite не приводится к нижнему регистру.
+
+    Вторичный ключ — `id`: у двух уроков одного дня и одного статуса
+    иначе не определён порядок, и строки «прыгали» бы между запросами.
+    """
+    sort = normalize_sort(sort)
+    reverse = normalize_direction(direction) == "desc"
+    if sort == "target":
+        return sorted(
+            rows, key=lambda row: (_target_sort_key(row), row["lesson"].id),
+            reverse=reverse,
+        )
+    if sort == "status":
+        return sorted(
+            rows, key=lambda row: (_status_sort_key(row), row["lesson"].id),
+            reverse=reverse,
+        )
+    return sorted(
+        rows,
+        key=lambda row: (as_utc(row["lesson"].starts_at), row["lesson"].id),
+        reverse=reverse,
+    )
 
 
 def _matches_search(
@@ -71,6 +146,8 @@ def list_lessons(
     period: str = "",
     status: str = "",
     student_id: str = "",
+    sort: str = "date",
+    direction: str = "asc",
     tutor,
 ) -> list[dict]:
     """Строки списка: урок и имена цели — только уроки вошедшего репетитора.
@@ -78,6 +155,7 @@ def list_lessons(
     Строка — `{"lesson": ..., "student_name": ..., "group_name": ...}`.
     `tutor` — карточка владельца: её зона задаёт «сегодня» и границы
     «этой недели» (спека lesson-management, «Фильтры, поиск и сортировка»).
+    `sort`/`direction` — выбранный порядок; по умолчанию ближайшие сверху.
     """
     stmt = (
         select(Lesson, Student.first_name, Student.last_name, Group.name)
@@ -132,4 +210,4 @@ def list_lessons(
                 "group_name": group_name,
             }
         )
-    return rows
+    return sort_rows(rows, sort, direction)

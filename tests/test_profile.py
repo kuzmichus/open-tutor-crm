@@ -393,6 +393,76 @@ def _calendar_page(client, **params):
     return client.get("/tutor/profile", params={"tab": "calendar", **params}).text
 
 
+def test_workday_defaults_without_settings_row(client):
+    """1.1: без строки в БД `get_settings` отдаёт дефолт рабочего времени."""
+    from app.tutor.services.settings import get_settings
+
+    _login(client)
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, tutor.id) is None
+        settings = get_settings(db, tutor.id)
+
+    assert settings.workday_start == "06:00"
+    assert settings.workday_end == "23:00"
+
+
+# ---------------------------------------------------------------------------
+# Разбор рабочего времени (сервис формы вкладки «Календарь»)
+# ---------------------------------------------------------------------------
+
+
+def _calendar_values(**overrides):
+    from app.tutor.services.calendar_form import parse_calendar_form
+
+    form = {
+        "timezone": "UTC",
+        "quarter1_end": "10-25",
+        "quarter2_end": "12-25",
+        "quarter3_end": "03-20",
+        "quarter4_end": "05-25",
+        "default_lesson_duration": "60",
+        "default_lesson_price": "",
+        "workday_start": "09:00",
+        "workday_end": "18:00",
+    }
+    form.update(overrides)
+    return parse_calendar_form(form)
+
+
+def test_calendar_form_accepts_whole_hour_interval():
+    """2.1: валидный интервал целых часов разбирается в значения записи."""
+    values, errors = _calendar_values()
+    assert errors == []
+    assert values["workday_start"] == "09:00"
+    assert values["workday_end"] == "18:00"
+
+
+def test_calendar_form_rejects_broken_format():
+    """2.1: строка не «ЧЧ:ММ» — ошибка, значений записи нет."""
+    values, errors = _calendar_values(workday_start="9 утра")
+    assert values is None
+    assert any("Рабочее время" in message for message in errors)
+
+
+def test_calendar_form_rejects_non_whole_hours():
+    """2.1: минуты не 00 отбраковываются — сетка моделируется целым часом."""
+    values, errors = _calendar_values(workday_start="09:30")
+    assert values is None
+    assert any("Рабочее время" in message for message in errors)
+
+
+def test_calendar_form_rejects_reversed_interval():
+    """2.1: конец раньше начала (в т.ч. «равно») — ошибка порядка."""
+    values, errors = _calendar_values(workday_start="18:00", workday_end="09:00")
+    assert values is None
+    assert any("раньше окончания" in message for message in errors)
+
+    values, errors = _calendar_values(workday_start="09:00", workday_end="09:00")
+    assert values is None
+    assert any("раньше окончания" in message for message in errors)
+
+
 def test_calendar_defaults(client):
     _login(client)
     html = _calendar_page(client)
@@ -409,6 +479,8 @@ def test_calendar_save(client):
         "quarter2_end": "12-25",
         "quarter3_end": "03-20",
         "quarter4_end": "05-25",
+        "workday_start": "09:00",
+        "workday_end": "18:00",
         "default_lesson_duration": "90",
         "default_lesson_price": "1500",
     }
@@ -422,11 +494,30 @@ def test_calendar_save(client):
         settings = db.get(TutorSettings, tutor.id)
     assert settings.default_lesson_duration == 90
     assert settings.default_lesson_price == 1500
+    assert settings.workday_start == "09:00"
+    assert settings.workday_end == "18:00"
 
     html = _calendar_page(client)
     assert 'name="timezone"\n                           value="Europe/Samara"' in html
     assert 'name="default_lesson_duration"\n                       value="90"' in html
     assert 'name="default_lesson_price"\n                       value="1500"' in html
+    # Сохранённое рабочее время выделено в своих селектах (не перепутаны).
+    start_select = re.search(
+        r'<select class="input" id="tutor-workday-start".*?</select>', html, re.S
+    )
+    end_select = re.search(
+        r'<select class="input" id="tutor-workday-end".*?</select>', html, re.S
+    )
+    assert start_select and '<option value="09:00" selected>' in start_select.group(0)
+    assert end_select and '<option value="18:00" selected>' in end_select.group(0)
+
+
+def test_calendar_workday_defaults_shown_on_tab(client):
+    """2.2: до первого сохранения в селектах дефолт 06:00–23:00."""
+    _login(client)
+    html = _calendar_page(client)
+    assert '<option value="06:00" selected>06:00</option>' in html
+    assert '<option value="23:00" selected>23:00</option>' in html
 
 
 def test_calendar_bad_quarter_shows_error(client):
@@ -452,3 +543,46 @@ def test_calendar_bad_timezone_shows_error(client):
     _login(client)
     response = client.post("/tutor/profile/calendar", data={"timezone": "Mars/Olympus"})
     assert "Часовой пояс" in response.text
+
+
+def test_calendar_reversed_workday_shows_error(client):
+    """2.3: «18:00–09:00» — сохранения нет, ошибка порядка на вкладке."""
+    _login(client)
+    response = client.post("/tutor/profile/calendar", data={
+        "timezone": "UTC",
+        "workday_start": "18:00",
+        "workday_end": "09:00",
+    })
+    assert response.status_code == 200
+    assert "начало должно быть раньше окончания" in response.text
+    # Ошибка показывается на вкладке «Календарь».
+    assert 'name="workday_start"' in response.text
+
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, tutor.id) is None
+
+
+def test_calendar_workday_isolation(client, tutor_factory):
+    """2.3: сохранение рабочего времени не задевает настройки другого."""
+    tutor_factory(email="workday-other@example.com", password=PASSWORD)
+    _login(client, email="workday-mine@example.com", name="Мой")
+
+    response = client.post("/tutor/profile/calendar", data={
+        "timezone": "UTC",
+        "quarter1_end": "10-25",
+        "quarter2_end": "12-25",
+        "quarter3_end": "03-20",
+        "quarter4_end": "05-25",
+        "workday_start": "09:00",
+        "workday_end": "18:00",
+        "default_lesson_duration": "60",
+    }, follow_redirects=False)
+    assert response.status_code == 303
+
+    with SessionLocal() as db:
+        other = db.get(TutorSettings, _tutor_by_email("workday-other@example.com").id)
+        assert other is None  # у чужого строки настроек нет и не появилось
+        mine = db.get(TutorSettings, _tutor_by_email("workday-mine@example.com").id)
+        assert mine.workday_start == "09:00"
+        assert mine.workday_end == "18:00"

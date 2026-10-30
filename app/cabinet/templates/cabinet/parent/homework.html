@@ -1,0 +1,81 @@
+{# Вкладка ребёнка «Домашние задания» кабинета родителя (change parent-cabinet).
+
+   Только просмотр (design D7): карточки без действий — отправлять ответы
+   и менять данные родитель не может. Разметка карточки повторяет классы
+   вкладки ученика (`hw-card*` из `cabinet/_homework_card.html`), но без
+   `<details>` и формы ответа: задание видно сразу, раскрывать нечего.
+   Контекст карточки собран сервисом `cabinet/services/child_homework.py`
+   явным списком колонок: заметки педагога в данных нет в принципе —
+   скрытие гарантируется выборкой, а не условием в шаблоне.
+
+   Подписи статусов и срока — общие хелперы кабинета (presentation.py).
+   Контекст: contact, children, child (ученик вкладки), tutor, cards
+   (список ChildHomeworkCard). #}
+{% extends "base.html" %}
+{% block title %}Домашние задания — {{ student_full_name(child) }} — Open Tutor CRM{% endblock %}
+
+{% block body %}
+{% set active_page = 'homework' %}
+{% set active_student_id = child.id %}
+{% include "cabinet/parent/_sidebar.html" %}
+
+<!-- Мобильная шапка -->
+<header class="mobile-header">
+    <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+        <i data-lucide="menu"></i>
+    </button>
+    <span class="sidebar__brand">Кабинет родителя</span>
+</header>
+
+<main class="main">
+    <div class="main__container">
+        <div class="page-header">
+            <div>
+                <h1>{{ student_full_name(child) }}</h1>
+                <p>Домашние задания — только просмотр</p>
+            </div>
+        </div>
+
+        {% if cards %}
+        <div class="hw-list">
+            {% for item in cards %}
+            <article class="hw-card">
+                <div class="hw-card__head">
+                    <span class="hw-card__title">
+                        {{ lesson_date(item.lesson_starts_at, tutor) }}
+                        · {{ lesson_type_chip(item.lesson_type) }}
+                    </span>
+                    <span class="chip {{ homework_chip_class(item.status) }}">
+                        {{ homework_status_label(item.status) }}
+                    </span>
+                </div>
+
+                <div class="hw-card__body">
+                    <p class="hw-card__assignment">{{ item.assignment }}</p>
+
+                    {% if item.due_at %}
+                    <p class="hw-card__due">Срок: {{ homework_due_label(item.due_at, tutor) }}</p>
+                    {% endif %}
+                    {% if item.teacher_comment %}
+                    <p class="hw-card__comment">
+                        <span class="hw-card__comment-label">Комментарий педагога:</span>
+                        {{ item.teacher_comment }}
+                    </p>
+                    {% endif %}
+                    {% if item.recording_url %}
+                    <p class="hw-card__recording">
+                        <a href="{{ item.recording_url }}" target="_blank" rel="noopener">Запись урока</a>
+                    </p>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <p class="cabinet-empty">Домашних заданий пока нет.</p>
+        </div>
+        {% endif %}
+    </div>
+</main>
+{% endblock %}

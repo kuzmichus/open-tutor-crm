@@ -84,6 +84,9 @@ class Booking(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     contact: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Свободный комментарий ученика из публичной формы: пожелания к занятию,
+    # тема пробного урока. Пустое хранится как NULL — «комментария нет».
+    comment: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(
         String(10),
         nullable=False,

@@ -115,7 +115,7 @@ def test_calendar_full_page_renders(client):
     _login(client)
     response = client.get("/tutor/calendar?start=2026-10-12")
     assert response.status_code == 200
-    for label in ("Сегодня", "Добавить", "Ссылка на окна", "Цвет: по ученику"):
+    for label in ("Сегодня", "Добавить", "Ссылка для записи", "Цвет: по ученику"):
         assert label in response.text
     assert 'id="calendar-swap"' in response.text
     assert 'class="sidebar"' in response.text
@@ -523,7 +523,7 @@ def test_calendar_events_expose_drag_data(client, calendar_owner, student_factor
 # --------------------------------------------------------------------------
 
 def test_calendar_stub_buttons_without_broken_links(client):
-    """«Ссылка на окна» и «Цвет»: селекторы на месте, битых ссылок нет."""
+    """«Ссылка для записи» и «Цвет»: селекторы на месте, битых ссылок нет."""
     _login(client)
     response = client.get("/tutor/calendar?start=2026-10-12")
     main = re.search(r"<main class=\"main\">(.*?)</main>", response.text, re.S)
@@ -2257,7 +2257,7 @@ def test_lesson_form_ignores_unknown_duration(client, calendar_owner):
 
 
 def test_calendar_public_link_points_to_public_page(client, calendar_owner):
-    """7.5: «Ссылка на окна» копирует публичный адрес недели, а не календарь.
+    """7.5: «Ссылка для записи» копирует публичный адрес недели, а не календарь.
 
     База ссылки (`/s/<tutor_id>`) приходит с сервера в `data-public-url`
     корня, понедельник дописывает `calendar.js` из видимой сетки. Адрес
@@ -2390,3 +2390,193 @@ def test_calendar_slot_dots_and_count_include_slots(client, calendar_owner, slot
 
     assert SLOT_ACCENT in page
     assert "1 урок" in page
+
+
+# --------------------------------------------------------------------------
+# 10. Рабочее время (change 2026-10-28-calendar-working-hours): сетка из
+#     настройки репетитора, зажим карточек вне интервала, границы в разметке
+# --------------------------------------------------------------------------
+
+def _set_working_hours(tutor_id: str, start: str, end: str) -> None:
+    """Рабочее время репетитора напрямую в БД (минуя форму вкладки)."""
+    from app.database import SessionLocal
+    from app.tutor.services.settings import save_settings
+
+    with SessionLocal() as db:
+        save_settings(db, tutor_id, {"workday_start": start, "workday_end": end})
+
+
+def test_grid_rows_default_bounds():
+    """10.1: дефолтная сетка 06:00–23:00 — 17 строк, метки и четверти."""
+    from app.calendar.services.presentation import build_grid_rows
+
+    rows = build_grid_rows(6 * 60, 23 * 60)
+
+    assert len(rows) == 17
+    assert rows[0]["hour_label"] == "06:00"
+    assert rows[0]["half_label"] == "06:30"
+    assert rows[-1]["hour_label"] == "22:00"
+    assert rows[-1]["half_label"] == "22:30"
+    # Четверти первой строки: 06:00 → 06:15 … 06:45 → 07:00.
+    assert [q["start_label"] for q in rows[0]["quarters"]] == [
+        "06:00", "06:15", "06:30", "06:45",
+    ]
+    assert rows[0]["quarters"][0]["end_label"] == "06:15"
+
+
+def test_grid_rows_custom_bounds():
+    """10.1: сетка 09:00–18:00 — от «09:00» до «17:00», четверти до «18:00»."""
+    from app.calendar.services.presentation import build_grid_rows
+
+    rows = build_grid_rows(9 * 60, 18 * 60)
+
+    assert [row["hour_label"] for row in rows] == [
+        "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00",
+        "16:00", "17:00",
+    ]
+    last_quarters = rows[-1]["quarters"]
+    assert last_quarters[-1]["start_label"] == "17:45"
+    assert last_quarters[-1]["end_label"] == "18:00"  # конец сетки, не больше
+
+
+def test_build_event_view_clamps_lesson_outside_grid():
+    """10.1: уроки вне рабочего времени прижаты к границе, подпись фактическая.
+
+    Сетка 09:00–18:00: 08:00–08:40 прижата к верху, 17:30–18:30 зажата
+    снизу, 19:00–19:40 (целиком за концом) поднята к нижней границе.
+    """
+    from app.calendar.services.presentation import build_event_view
+    from app.calendar.services.schedule_event import ScheduleEvent
+
+    def view(start_h, start_m, duration):
+        end_h, end_m = divmod(start_h * 60 + start_m + duration, 60)
+        event = ScheduleEvent(
+            starts_at=datetime(2026, 10, 21, start_h, start_m, tzinfo=UTC),
+            ends_at=datetime(2026, 10, 21, end_h, end_m, tzinfo=UTC),
+            day=date(2026, 10, 21),
+            start=time(start_h, start_m),
+            end=time(end_h, end_m),
+            lesson_id="clamp", status="planned",
+        )
+        return build_event_view(
+            event, now=datetime(2026, 10, 21, 12, 0, tzinfo=UTC),
+            grid_start_min=9 * 60, grid_end_min=18 * 60,
+        )
+
+    early = view(8, 0, 40)
+    assert early["top_h"] == "0"          # прижата к верхней границе
+    assert early["height_h"] == "0.6667"  # своя длительность, не сжата
+    assert early["time_label"] == "08:00 – 08:40"  # фактический интервал
+
+    straddling = view(17, 30, 60)
+    assert straddling["top_h"] == "8.5"   # 17:30 внутри сетки
+    assert straddling["height_h"] == "0.5"  # низ зажат концом сетки
+    assert straddling["time_label"] == "17:30 – 18:30"
+
+    late = view(19, 0, 40)
+    assert late["top_h"] == "8.3333"      # прижата к нижней границе
+    assert late["height_h"] == "0.6667"
+    assert late["time_label"] == "19:00 – 19:40"
+
+
+def test_build_event_view_keeps_inside_grid_untouched():
+    """10.1: урок внутри рабочего времени позиционируется как раньше."""
+    from app.calendar.services.presentation import build_event_view
+    from app.calendar.services.schedule_event import ScheduleEvent
+
+    event = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 14, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 14, 40, tzinfo=UTC),
+        day=date(2026, 10, 21), start=time(14, 0), end=time(14, 40),
+        lesson_id="inside", status="planned",
+    )
+    view = build_event_view(
+        event, now=datetime(2026, 10, 21, 12, 0, tzinfo=UTC),
+        grid_start_min=9 * 60, grid_end_min=18 * 60,
+    )
+    # 14:00 при сетке от 09:00 — пятый час от начала: top = 5 часов.
+    assert view["top_h"] == "5"
+    assert view["height_h"] == "0.6667"
+
+
+def test_calendar_grid_default_bounds_in_markup(client, calendar_owner):
+    """10.2: до настройки сетка 06:00–23:00 — границы в разметке и метки."""
+    page = client.get("/tutor/calendar?start=2026-10-12").text
+
+    assert 'data-grid-start="360"' in page
+    assert 'data-grid-end="1380"' in page
+    assert '<span class="cal-times__h">06:00</span>' in page
+    assert '<span class="cal-times__h">23:00</span>' in page
+
+
+def test_calendar_grid_follows_working_hours(client, calendar_owner):
+    """10.2/10.3: сетка 09:00–18:00 — меток и четвертей вне интервала нет."""
+    _set_working_hours(calendar_owner, "09:00", "18:00")
+    page = client.get("/tutor/calendar?start=2026-10-12").text
+
+    # Границы в разметке — для calendar.js (дизайн D4).
+    assert 'data-grid-start="540"' in page
+    assert 'data-grid-end="1080"' in page
+    # Первая и конечная метки — из настройки.
+    assert '<span class="cal-times__h">09:00</span>' in page
+    assert '<span class="cal-times__h">18:00</span>' in page
+    # Ни часовых меток, ни кликабельных четвертей вне интервала.
+    assert '<span class="cal-times__h">06:00</span>' not in page
+    assert '<span class="cal-times__h">23:00</span>' not in page
+    assert 'data-start="2026-10-12T08:45"' not in page
+    assert 'data-start="2026-10-12T18:00"' not in page
+    assert 'data-start="2026-10-12T06:00"' not in page
+
+
+def test_calendar_out_of_grid_lessons_visible_and_clickable(
+    client, calendar_owner, student_factory
+):
+    """10.3: уроки вне рабочего времени видны, прижаты и кликабельны."""
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Ранний")
+    early_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 12, 8, 0), duration_min=40,
+    )
+    late_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 12, 17, 30), duration_min=60,
+    )
+    _set_working_hours(calendar_owner, "09:00", "18:00")
+    page = client.get("/tutor/calendar?start=2026-10-12").text
+
+    early = _card(page, early_id)
+    late = _card(page, late_id)
+    assert early and late, "Карточки вне рабочего времени пропали из сетки"
+    # Кликабельны: редактирование по hx-get.
+    assert f'hx-get="/tutor/lessons/{early_id}/edit"' in early
+    assert f'hx-get="/tutor/lessons/{late_id}/edit"' in late
+    # Прижаты к границам сетки, но не вылезают за колонку.
+    assert "--top: 0;" in early
+    assert "--top: 8.5;" in late and "--dur: 0.5;" in late
+    # Подписи — фактические интервалы, а не зажатые.
+    assert "08:00 – 08:40" in early
+    assert "17:30 – 18:30" in late
+
+
+def test_calendar_drag_clamps_to_markup_bounds():
+    """10.4: драг и предзаполнение зажимаются границами из разметки.
+
+    Сценарий спеки «Перетаскивание зажимается рабочим временем»: при
+    сетке 09:00–18:00 блок не уводится вне интервала. Браузерных тестов
+    в проекте нет — поведение проверяется по исходнику компонента.
+    """
+    js = _calendar_js()
+
+    # Границы читаются из data-атрибутов сетки, констант больше нет.
+    assert "GRID_START_MIN" not in js
+    assert "GRID_END_MIN" not in js
+    assert 'grid.getAttribute("data-grid-start")' in js
+    assert 'grid.getAttribute("data-grid-end")' in js
+    # Зажим конца драга — до конца рабочего времени минус длительность.
+    end = js[js.index("onDragEnd: function"):js.index("moveLesson: function")]
+    assert "var bounds = gridBounds(this.$root);" in end
+    assert "Math.min(newMin, bounds.end - drag.duration)" in end
+    # Предзаполнение «Добавить» тоже зажимается рабочим временем.
+    prefill = js[js.index("prefillMoment: function"):js.index("openForm: function")]
+    assert "gridBounds(this.$root)" in prefill
+    assert "Math.max(bounds.start, Math.min(minutes, bounds.end))" in prefill

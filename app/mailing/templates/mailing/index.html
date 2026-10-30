@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Коммуникации — Open Tutor CRM{% endblock %}
+
+{# Клиентское состояние формы рассылки (mailingsPage) и модалок шаблонов
+   (mailingsDialog). Скрипт идёт до alpine.min.js: подписка на `alpine:init`
+   должна сработать раньше обхода DOM (правило AGENTS.md). #}
+{% block head %}
+    <script src="/static/mailings.js" defer></script>
+{% endblock %}
+
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            {% include "_notice_banner.html" %}
+
+            <a class="back-link" href="/tutor/">
+                <i data-lucide="arrow-left"></i>
+                Назад
+            </a>
+
+            <div class="page-header">
+                <div>
+                    <h1>Коммуникации</h1>
+                    <p>Рассылки и история сообщений бота</p>
+                </div>
+            </div>
+
+            {# Вкладки и содержимое — в одном контейнере: htmx-ручка вкладок
+               подменяет его целиком (паттерн финансов). #}
+            {% include "mailing/_content.html" %}
+
+            {# Сюда htmx вставляет модалки шаблонов. #}
+            <div id="modal"></div>
+        </div>
+    </main>
+
+    <!-- Нижний таб-бар (мобилка) -->
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/tutor/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/tutor/bookings" class="bottom-bar__item">
+            <i data-lucide="calendar-check"></i><span>Брони</span>
+        </a>
+        <a href="/tutor/mailings" class="bottom-bar__item">
+            <i data-lucide="send"></i><span>Рассылки</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
+{% endblock %}

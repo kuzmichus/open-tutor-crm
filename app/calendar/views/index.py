@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.calendar.services.color_mode import parse_color_mode
 from app.calendar.services.week import week_start
-from app.calendar.services.presentation import build_calendar_context
+from app.calendar.services.presentation import (
+    build_calendar_context,
+    clock_to_minutes,
+)
 from app.calendar.services.week_days import build_week_days
 from app.common.access import require_tutor_id
 from app.common.services.tutor_time import (
@@ -18,6 +21,7 @@ from app.common.responses import is_htmx
 from app.database import get_db
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
+from app.tutor.services.settings import get_settings
 
 router = APIRouter()
 
@@ -48,11 +52,18 @@ def calendar(
     except ValueError:
         monday = week_start(today_local(tutor))
 
+    # Рабочее время — границы сетки (дизайн D6): читается один раз рядом
+    # с остальным контекстом; `get_settings` сам даёт дефолт 06:00–23:00,
+    # пока репетитор не сохранил настройку.
+    settings = get_settings(db, tutor_id)
+
     context = build_calendar_context(
         build_week_days(db, tutor_id, monday, tutor),
         now=now_local(tutor),
         tutor=tutor,
         color_mode=parse_color_mode(color),
+        grid_start_min=clock_to_minutes(settings.workday_start),
+        grid_end_min=clock_to_minutes(settings.workday_end),
     )
     context["timezone_label"] = tutor_zone_name(tutor)
     # Локальный момент для клиента: `calendar.js` берёт «сегодня» и

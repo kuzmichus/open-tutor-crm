@@ -16,11 +16,13 @@
 import json
 from datetime import date, datetime, time
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.common.services.forms import checked, int_or_none, text_value
 from app.common.services.tutor_time import to_local, to_utc
 from app.group.models.group import Group
+from app.group.models.group_member import GroupMember
 from app.homework.services.homework_context import homework_panel_context
 from app.lesson.models.lesson import (
     LESSON_DURATIONS,
@@ -29,6 +31,11 @@ from app.lesson.models.lesson import (
     LESSON_TYPE_LABELS,
     MAX_LESSON_RATING,
     MIN_LESSON_RATING,
+)
+from app.lesson.models.lesson_attendance import (
+    ABSENCE_REASON_LABELS,
+    ABSENCE_REASONS,
+    LessonAttendance,
 )
 from app.lesson.services.presentation import (
     format_lesson_datetime,
@@ -150,6 +157,52 @@ def parse_duration_min(raw: str | None) -> int | None:
     return value
 
 
+def parse_attendance(raw: str | None) -> tuple[list[dict] | None, bool]:
+    """Скрытое поле `attendance` → список отметок; `(значение, ошибка)`.
+
+    Структурная проверка (design D7): JSON-список объектов
+    `{student_id, present, reason}`, у каждого объекта непустой
+    `student_id`, булев `present`, а `reason` — из `ABSENCE_REASONS` и
+    только у отсутствовавших. Неполные записи — ошибка формы: молчаливый
+    пропуск отметил бы участника присутствовавшим против воли репетитора.
+
+    Состав группы здесь не проверяется (нет сессии): чужие и вышедшие id
+    отсеивает `lesson_writer` — форма могла быть открыта до выхода
+    участника. Отсутствие поля (создание урока, сохранение без JS) — не
+    ошибка и не очистка: отметки просто не трогаются.
+    """
+    if raw is None or raw == "":
+        return None, False
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return None, True
+    if not isinstance(parsed, list):
+        return None, True
+    records: list[dict] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            return None, True
+        student_id = item.get("student_id")
+        present = item.get("present")
+        reason = item.get("reason")
+        if not isinstance(student_id, str) or not student_id:
+            return None, True
+        if not isinstance(present, bool):
+            return None, True
+        if present:
+            # У присутствовавшего причины нет: чекбокс её сбрасывает, а
+            # подделанное поле не должно проскочить в БД.
+            if reason not in (None, ""):
+                return None, True
+            records.append({"student_id": student_id, "present": True, "reason": None})
+        else:
+            if reason not in ABSENCE_REASONS:
+                return None, True
+            records.append({"student_id": student_id, "present": False, "reason": reason})
+    return records, False
+
+
 def parse_lesson_form(form, tutor) -> tuple[dict, list[str]]:
     """Данные формы урока и ошибки разбора полей.
 
@@ -167,6 +220,10 @@ def parse_lesson_form(form, tutor) -> tuple[dict, list[str]]:
     if price_error:
         errors.append("Оплата ученика — целое число не меньше нуля.")
 
+    attendance, attendance_error = parse_attendance(text_value(form, "attendance"))
+    if attendance_error:
+        errors.append("Посещаемость: неверный формат данных.")
+
     starts_at = _parse_datetime(text_value(form, "starts_at"))
     data = {
         "student_id": text_value(form, "student_id") or None,
@@ -181,6 +238,11 @@ def parse_lesson_form(form, tutor) -> tuple[dict, list[str]]:
         "interval_weeks": int_or_none(text_value(form, "interval_weeks")),
         "until_date": _parse_date(text_value(form, "until_date")),
         "slots": _parse_slots(text_value(form, "slots")),
+        # Отметки присутствия (design D7): None — поле не пришло (создание,
+        # сохранение без JS), список — прислали; состав группы проверит
+        # writer. При ошибке формата здесь None — сохранение не дойдёт до
+        # отметок из-за непустого errors.
+        "attendance": attendance,
         "status": text_value(form, "status") or None,
         "rating": _rating_value(text_value(form, "rating")),
         "family_comment": text_value(form, "family_comment") or None,
@@ -271,6 +333,43 @@ def _form_values(lesson, data: dict | None, tutor) -> dict:
     }
 
 
+def _attendance_participants(db: Session, lesson) -> list[dict]:
+    """Участники блока «Присутствие»: текущий состав + сохранённые отметки.
+
+    Список строится из текущего состава группы (design D8): вышедший
+    участник в блоке не показывается, его отметка в БД не трогается.
+    Участник без отметки — присутствовал (design D2: нет отметок = все
+    пришли), отметка присутствовавшего хранится, но на деньги не влияет.
+    """
+    marks = {
+        mark.student_id: mark
+        for mark in db.scalars(
+            select(LessonAttendance).where(
+                LessonAttendance.lesson_id == lesson.id
+            )
+        ).all()
+    }
+    students = db.scalars(
+        select(Student)
+        .join(GroupMember, GroupMember.student_id == Student.id)
+        .where(GroupMember.group_id == lesson.group_id)
+    ).all()
+    participants = []
+    for student in sorted(students, key=student_full_name):
+        mark = marks.get(student.id)
+        present = mark.present if mark is not None else True
+        participants.append(
+            {
+                "student_id": student.id,
+                "name": student_full_name(student),
+                "present": present,
+                # Причина есть только у отсутствовавшего (инвариант CHECK).
+                "reason": mark.reason if mark is not None and not present else None,
+            }
+        )
+    return participants
+
+
 def lesson_form_context(
     db: Session,
     *,
@@ -305,6 +404,15 @@ def lesson_form_context(
     подменять окно там же, где оно открыто.
     """
     values = _form_values(lesson, data, tutor)
+
+    # Блок «Присутствие»: только у существующего группового урока (в
+    # создании блока нет — участников ещё не выбрать). Один расчёт на
+    # контекст: участники идут и в шаблон, и в Alpine-конфиг.
+    attendance_participants = (
+        _attendance_participants(db, lesson)
+        if lesson is not None and lesson.type == "group" and lesson.group_id
+        else []
+    )
 
     if lesson is not None:
         student_name = _target_student_name(db, lesson.student_id)
@@ -350,8 +458,15 @@ def lesson_form_context(
         # Цена проведённого урока — только для чтения (и в форме, и на
         # сервере, см. lesson_writer): предупреждение о пересчёте не нужно.
         "price_locked": lesson is not None and lesson.status == "completed",
+        # Пустой список скрывает блок и у группового урока без состава.
+        "attendance_participants": attendance_participants,
+        "absence_reasons": ABSENCE_REASONS,
+        "absence_reason_labels": ABSENCE_REASON_LABELS,
         "form_config": {
             "type": values["type"],
+            # Alpine-состояние блока «Присутствие» (design D6): участники
+            # и сохранённые отметки приходят конфигом, как у слотов.
+            "attendance": attendance_participants,
         },
         # Баннер недоступности: отдельно от `errors` (design.md D5, п. 3).
         "unavailable_warning": unavailable_warning or {},

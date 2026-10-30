@@ -1,0 +1,115 @@
+{# Блок «Приглашение в мессенджеры» на вкладке «Настройки» формы ученика.
+
+   Живёт как HTMX-фрагмент (#student-invites): действия заменяют его
+   целиком (outerHTML), а пока приглашение не погашено — фрагмент
+   опрашивает сам себя, и ученик подключается без кликов, когда нажал
+   «Запустить» в чате с ботом.
+
+   Кнопки блока живут ВНУТРИ формы «Настроек», а вложенные `<form>`
+   браузер выбрасывает (см. ловушку в `_form.html`), поэтому действие
+   держится на самой кнопке: `hx-post` для htmx и `formaction` +
+   `formmethod` на той же кнопке — тот же маршрут для отправки
+   родительской формы без JS.
+
+   Ссылку приглашения сервер показывает целиком («продублированная
+   открытая ссылка»): в буфер её кладёт Alpine-фабрика `studentInvites`
+   (students.js) — ответ «Пригласить» помечен `data-autocopy`, опросы
+   приходят без него и копирование не повторяют.
+
+   Контекст: student_id, invites_block {invites, errors, autocopy}. #}
+<div id="student-invites"
+     x-data="studentInvites()"
+     data-autocopy="{{ invites_block.autocopy }}"
+     {% if invites_block.invites | selectattr("pending") | list %}
+     hx-get="/tutor/students/{{ student_id }}/messengers" hx-trigger="every 4s"
+     hx-swap="outerHTML"
+     {% endif %}>
+    <fieldset class="form-section">
+        <legend class="form-section__title">Приглашение в мессенджеры</legend>
+        <p class="card__desc">
+            Пригласите ученика в своего бота — напоминания будут приходить ему в мессенджер.
+        </p>
+
+        {% if invites_block.errors %}
+        <div class="error" role="alert">
+            <ul>
+                {% for message in invites_block.errors %}
+                <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="invite-list">
+            {% for invite in invites_block.invites %}
+            <div class="channel-card{% if invite.bound %} channel-card--connected{% elif invite.pending %} channel-card--pending{% endif %}">
+                {% if invite.bound %}
+                <i class="channel-card__icon channel-card__icon--on" data-lucide="circle-check" aria-hidden="true"></i>
+                <div class="channel-card__main">
+                    <span class="channel-card__title">Ученик подключён к {{ invite.label }}</span>
+                    <span class="channel-card__desc">{{ invite.chat_label }}</span>
+                </div>
+                <div class="channel-card__action">
+                    <button class="channel-card__unlink" type="submit"
+                            formmethod="post"
+                            formaction="/tutor/students/{{ student_id }}/messengers/{{ invite.messenger }}/unlink"
+                            hx-post="/tutor/students/{{ student_id }}/messengers/{{ invite.messenger }}/unlink"
+                            hx-target="#student-invites" hx-swap="outerHTML">
+                        <i data-lucide="unlink" aria-hidden="true"></i>
+                        Отвязать
+                    </button>
+                </div>
+                {% elif invite.pending %}
+                <i class="channel-card__icon" data-lucide="{{ invite.icon }}" aria-hidden="true"></i>
+                <div class="channel-card__main">
+                    <span class="channel-card__title">Приглашение в {{ invite.label }}</span>
+                    <p class="channel-card__desc">
+                        Отправьте ученику эту ссылку — после нажатия «Запустить» он подключится к каналу:
+                    </p>
+                    {# Ссылка дублируется открытым текстом: её видно целиком,
+                       даже если буфер обмена недоступен. #}
+                    <a class="invite-link" data-invite-link="{{ invite.messenger }}"
+                       href="{{ invite.link }}" target="_blank" rel="noopener">{{ invite.link }}</a>
+                    <div class="invite-actions">
+                        <button class="btn btn--ghost btn--sm" type="button"
+                                @click="copy('{{ invite.messenger }}')">
+                            <i data-lucide="copy" aria-hidden="true"></i>
+                            Скопировать ссылку
+                        </button>
+                        <button class="btn btn--ghost btn--sm" type="submit"
+                                formmethod="post"
+                                formaction="/tutor/students/{{ student_id }}/messengers/{{ invite.messenger }}/invite"
+                                hx-post="/tutor/students/{{ student_id }}/messengers/{{ invite.messenger }}/invite"
+                                hx-target="#student-invites" hx-swap="outerHTML">
+                            Сгенерировать новую
+                        </button>
+                    </div>
+                    <span class="invite-status" x-show="copied === '{{ invite.messenger }}'" x-cloak>
+                        Ссылка скопирована в буфер обмена.
+                    </span>
+                    <span class="invite-status invite-status--warn" x-show="copyFailed" x-cloak>
+                        Не удалось скопировать автоматически — выделите ссылку и скопируйте вручную.
+                    </span>
+                    <span class="channel-card__desc">Ожидаем, пока ученик нажмёт «Запустить»…</span>
+                </div>
+                {% else %}
+                <i class="channel-card__icon" data-lucide="{{ invite.icon }}" aria-hidden="true"></i>
+                <div class="channel-card__main">
+                    <span class="channel-card__title">Приглашение в {{ invite.label }}</span>
+                    <span class="channel-card__desc">Ссылка на подключение к вашему боту</span>
+                </div>
+                <div class="channel-card__action">
+                    <button class="btn btn--primary btn--sm" type="submit"
+                            formmethod="post"
+                            formaction="/tutor/students/{{ student_id }}/messengers/{{ invite.messenger }}/invite"
+                            hx-post="/tutor/students/{{ student_id }}/messengers/{{ invite.messenger }}/invite"
+                            hx-target="#student-invites" hx-swap="outerHTML">
+                        Пригласить
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </fieldset>
+</div>

@@ -55,11 +55,13 @@ class _FakeResponse:
 def _patch_urlopen(monkeypatch, responder, calls):
     """Подменяет urlopen; каждый вызов дописывается в список `calls`."""
 
-    def fake_urlopen(request, timeout=None):
+    def fake_urlopen(request, timeout=None, context=None):
         calls.append({
             "url": request.full_url,
             "data": json.loads(request.data.decode()),
             "headers": dict(request.header_items()),
+            # verify_mode: 2 = CERT_REQUIRED (проверка), 0 = CERT_NONE.
+            "tls_verify": context is None or context.verify_mode != 0,
         })
         return responder(calls[-1])
 
@@ -234,20 +236,6 @@ def test_send_http_error_uses_api_description(client, tutor_factory, monkeypatch
     assert errors and "chat not found" in errors[0]
 
 
-def test_send_network_error(client, tutor_factory, monkeypatch):
-    def fail(call):
-        raise urllib.error.URLError("connection refused")
-
-    calls = []
-    _patch_urlopen(monkeypatch, fail, calls)
-    tutor_id = tutor_factory()
-    with SessionLocal() as db:
-        _connect(db, tutor_id)
-        errors = send_message(db, tutor_id, "telegram", CHAT_ID, "привет")
-
-    assert errors and "сеть недоступна" in errors[0]
-
-
 # ---------------------------------------------------------------------------
 # send_message: MAX (HTTP подменён)
 # ---------------------------------------------------------------------------
@@ -314,7 +302,16 @@ def test_send_max_unexpected_response(client, tutor_factory, monkeypatch):
     assert errors and "неожиданный ответ" in errors[0]
 
 
-def test_send_max_network_error(client, tutor_factory, monkeypatch):
+@pytest.mark.parametrize(
+    "messenger",
+    [
+        pytest.param("telegram", id="telegram"),
+        pytest.param("max", id="max"),
+    ],
+)
+def test_send_network_error(messenger, client, tutor_factory, monkeypatch):
+    """Недоступная сеть — ошибка доставки у любого мессенджера."""
+
     def fail(call):
         raise urllib.error.URLError("connection refused")
 
@@ -322,11 +319,10 @@ def test_send_max_network_error(client, tutor_factory, monkeypatch):
     _patch_urlopen(monkeypatch, fail, calls)
     tutor_id = tutor_factory()
     with SessionLocal() as db:
-        _connect_max(db, tutor_id)
-        errors = send_message(db, tutor_id, "max", CHAT_ID, "привет")
+        set_param(db, tutor_id, token_key(messenger), TOKEN)
+        errors = send_message(db, tutor_id, messenger, CHAT_ID, "привет")
 
     assert errors and "сеть недоступна" in errors[0]
-
 
 def test_connected_messengers_orders_by_closed_list(client, tutor_factory):
     """Подключены оба: порядок задаёт MESSENGERS, а не порядок сохранения."""

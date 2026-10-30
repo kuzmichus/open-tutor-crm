@@ -1,0 +1,146 @@
+{# Вкладка «Прогноз на месяц» (по референсу).
+
+   Сверху — месяц и действия (скачать CSV, зафиксировать прогноз), ниже
+   карточки-метрики в две колонки, блок предупреждений и расшифровки:
+   «Не в расписании» и «По ученикам — календарь». Если месяц уже
+   зафиксирован, первой идёт карточка «Прогноз vs факт».
+
+   Все суммы, диапазоны и подписи приходят готовыми из `services/forecast.py`
+   — шаблон ничего не складывает и не форматирует (правило «шаблон не
+   форматирует бизнес-данные сам»).
+
+   Прогноза по педагогам, ЗП и маржи здесь нет: у репетитора один аккаунт,
+   а ставок педагогов в модели нет (решение владельца — эти блоки не нужны).
+
+   Контекст: period (key), forecast (month, month_options, cards, warnings,
+   calendar_rows, unscheduled_rows, snapshot | None, csv_url). #}
+<section class="fin-forecast" aria-label="Прогноз на месяц">
+    <div class="fin-forecast__toolbar">
+        {# Месяц — GET-форма: работает без JS (action — страница), а htmx
+           перехватывает submit и подменяет только секцию операций. #}
+        <form class="fin-forecast__month" method="get" action="/tutor/finance" x-data
+              hx-get="/tutor/finance/tabs/forecast"
+              hx-target="#finance-operations"
+              hx-swap="outerHTML">
+            <input type="hidden" name="tab" value="forecast">
+            <input type="hidden" name="period" value="{{ period.key }}">
+            <label class="sr-only" for="forecast-month">Месяц прогноза</label>
+            <select class="input fin-forecast__select" id="forecast-month" name="month"
+                    @change="$el.form.requestSubmit()">
+                {% for option in forecast.month_options %}
+                <option value="{{ option.key }}"{% if forecast.month.key == option.key %} selected{% endif %}>
+                    {{ option.label }}
+                </option>
+                {% endfor %}
+            </select>
+            <noscript>
+                <button class="btn btn--outline btn--sm" type="submit">Показать</button>
+            </noscript>
+        </form>
+
+        <div class="fin-forecast__actions">
+            <a class="btn btn--outline btn--sm" href="{{ forecast.csv_url }}">
+                <i data-lucide="download"></i>
+                Скачать CSV
+            </a>
+            {# Фиксация — POST обычной формы: редкое осознанное действие,
+               ответ — 303 на эту же вкладку с карточкой сравнения. #}
+            <form method="post" action="/tutor/finance/forecast/pin?month={{ forecast.month.key }}">
+                <button class="btn btn--primary btn--sm" type="submit">
+                    <i data-lucide="pin"></i>
+                    Зафиксировать прогноз
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {% if forecast.snapshot %}
+    {# Снимок: прогноз, каким он был в момент фиксации, против факта на
+       сегодня. Отклонение считается от середины диапазона (сервис). #}
+    <section class="card fin-snapshot" aria-label="Прогноз vs факт">
+        <header class="fin-snapshot__head">
+            <h2 class="fin-snapshot__title">Прогноз vs факт — на сегодня</h2>
+            <p class="fin-snapshot__meta">
+                Снимок от {{ forecast.snapshot.captured_at }} (зафиксирован вручную)
+            </p>
+        </header>
+        <p class="fin-snapshot__row">
+            <span class="fin-snapshot__label">Выручка</span>
+            <span class="fin-snapshot__value">
+                прогноз {{ forecast.snapshot.range }} · факт {{ forecast.snapshot.fact }}
+                <span class="fin-snapshot__badge {{ forecast.snapshot.status_class }}">
+                    {{ forecast.snapshot.status_label }} ({{ forecast.snapshot.deviation }})
+                </span>
+            </span>
+        </p>
+    </section>
+    {% endif %}
+
+    <div class="fin-forecast__grid">
+        {% for card in forecast.cards %}
+        <section class="card fin-metric fin-metric--{{ card.key }}" aria-label="{{ card.label }}">
+            <h2 class="fin-metric__label">
+                {{ card.label }}
+                <span class="fin-metric__hint" title="{{ card.hint }}">
+                    <i data-lucide="info" aria-hidden="true"></i>
+                    <span class="sr-only">{{ card.hint }}</span>
+                </span>
+            </h2>
+            <p class="fin-metric__value">{{ card.value }}</p>
+            <p class="fin-metric__note">{{ card.note }}</p>
+        </section>
+        {% endfor %}
+    </div>
+
+    {% if forecast.warnings %}
+    <section class="fin-warning" aria-label="На что обратить внимание">
+        <h2 class="fin-warning__title">
+            <i data-lucide="triangle-alert" aria-hidden="true"></i>
+            На что обратить внимание
+        </h2>
+        <ul class="fin-warning__list">
+            {% for message in forecast.warnings %}
+            <li class="fin-warning__item">{{ message }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {% if forecast.unscheduled_rows %}
+    <section class="card fin-forecast__detail" aria-label="Не в расписании">
+        <h2 class="fin-forecast__detail-title">
+            Не в расписании ({{ forecast.unscheduled_rows|length }})
+        </h2>
+        <ul class="fin-forecast__rows">
+            {% for row in forecast.unscheduled_rows %}
+            <li class="fin-forecast__row">
+                <span class="fin-forecast__row-main">
+                    <span class="fin-forecast__row-name">{{ row.name }}</span>
+                    <span class="fin-forecast__row-detail">{{ row.detail }}</span>
+                </span>
+                <span class="fin-forecast__row-amount">{{ row.amount }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {% if forecast.calendar_rows %}
+    <section class="card fin-forecast__detail" aria-label="По ученикам — календарь">
+        <h2 class="fin-forecast__detail-title">
+            По ученикам — календарь ({{ forecast.calendar_rows|length }})
+        </h2>
+        <ul class="fin-forecast__rows">
+            {% for row in forecast.calendar_rows %}
+            <li class="fin-forecast__row">
+                <span class="fin-forecast__row-main">
+                    <span class="fin-forecast__row-name">{{ row.name }}</span>
+                    <span class="fin-forecast__row-detail">{{ row.count_label }}</span>
+                </span>
+                <span class="fin-forecast__row-amount">{{ row.total_label }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+</section>

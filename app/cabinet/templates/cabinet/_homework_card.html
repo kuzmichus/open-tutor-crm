@@ -1,0 +1,156 @@
+{# Карточка домашнего задания вкладки «Домашние задания» кабинета.
+
+   Нативный `<details>`: раскрытие по клику работает всегда, включая
+   отключённый JS (design D4). Форма ответа — HTMX-фрагмент, целящийся
+   в свою карточку (`outerHTML`): ошибка возвращает карточку со списком
+   ошибок и введёнными значениями, успех — с сохранённым ответом и чипом
+   «Сдано» (design D5). Без HTMX форма отправляется обычным POST —
+   вьюха отвечает 303 на страницу.
+
+   После отправки вьюха рендерит этот же фрагмент с `card_open=true` —
+   карточка остаётся раскрытой.
+
+   ДЗ в статусе «Проверено» показывается без формы: сохранённый ответ
+   только для чтения (design D2).
+
+   «Добавить ссылку» — инлайн-Alpine (D5): сохранённые ссылки рендерит
+   сервер, Alpine добавляет пустые строки; пустые значения при разборе
+   отбрасываются.
+
+   Контекст: item (HomeworkCard: homework, lesson, answer, links),
+   tutor; опционально card_open, answer_data, answer_errors,
+   answer_saved. #}
+{% set card_open = card_open | default(false) %}
+{% set answer_data = answer_data | default(none) %}
+{% set answer_errors = answer_errors | default([]) %}
+{% set answer_saved = answer_saved | default(false) %}
+<details class="hw-card" id="hw-card-{{ item.homework.id }}"{% if card_open %} open{% endif %}>
+    <summary class="hw-card__summary">
+        <span class="hw-card__icon" aria-hidden="true">
+            <i data-lucide="book-open"></i>
+        </span>
+        <span class="hw-card__title">{{ homework_lesson_title(item.lesson, tutor) }}</span>
+        <span class="hw-card__side">
+            <span class="chip {{ homework_chip_class(item.homework.status) }}">
+                {{ homework_status_label(item.homework.status) }}
+            </span>
+            <i data-lucide="chevron-down" class="hw-card__chevron" aria-hidden="true"></i>
+        </span>
+    </summary>
+
+    <div class="hw-card__body">
+        {% if answer_errors %}
+        <div class="error" role="alert">
+            <ul>
+                {% for message in answer_errors %}
+                <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <p class="hw-card__assignment">{{ item.homework.assignment }}</p>
+
+        {% if item.homework.due_at %}
+        <p class="hw-card__due">
+            <i data-lucide="clock" aria-hidden="true"></i>
+            <span>Срок: {{ homework_due_label(item.homework.due_at, tutor) }}</span>
+        </p>
+        {% endif %}
+
+        {% if item.homework.recording_url %}
+        <p class="hw-card__recording">
+            <a href="{{ item.homework.recording_url }}" target="_blank" rel="noopener">Запись урока</a>
+        </p>
+        {% endif %}
+
+        {% if item.homework.teacher_comment %}
+        <p class="hw-card__comment">
+            <span class="hw-card__comment-label">Комментарий репетитора:</span>
+            {{ item.homework.teacher_comment }}
+        </p>
+        {% endif %}
+
+        <hr class="hw-card__divider">
+
+        {% if item.homework.status != 'checked' %}
+        <form class="hw-answer"
+              method="post"
+              action="/student/homework/{{ item.homework.id }}/answer"
+              hx-post="/student/homework/{{ item.homework.id }}/answer"
+              hx-target="#hw-card-{{ item.homework.id }}"
+              hx-swap="outerHTML">
+            <p class="hw-answer__head">
+                <i data-lucide="send" aria-hidden="true"></i>
+                <span>Ваш ответ</span>
+            </p>
+
+            {% if answer_saved %}
+            <p class="hw-answer__done" role="status">Ответ отправлен репетитору.</p>
+            {% endif %}
+
+            {# При ошибке показываем введённое, иначе — сохранённый ответ. #}
+            {% set answer_text = answer_data.text if answer_data is not none
+                                 else (item.answer.text if item.answer else '') %}
+            <label class="hw-answer__label" for="hw-text-{{ item.homework.id }}">Текст ответа</label>
+            <textarea class="input" id="hw-text-{{ item.homework.id }}"
+                      name="text"
+                      rows="4"
+                      placeholder="Напишите ответ или комментарий к выполненному заданию...">{{ answer_text }}</textarea>
+
+            <p class="hw-links__head">
+                <i data-lucide="link" aria-hidden="true"></i>
+                <span>Ссылки на работу</span>
+            </p>
+            <p class="hw-links__hint">Прикрепить можно только ссылки на облачные хранилища — рекомендую Яндекс Диск или Облако Mail. Откройте доступ по ссылке, чтобы репетитор смог открыть файл.</p>
+
+            <div class="hw-links" x-data="{ extra: 0 }">
+                {% set answer_links = answer_data.links if answer_data is not none else item.links %}
+                {% for url in answer_links %}
+                <input class="input" type="url" name="links" value="{{ url }}"
+                       aria-label="Ссылка на работу">
+                {% endfor %}
+                <template x-for="i in extra" :key="i">
+                    <input class="input" type="url" name="links"
+                           placeholder="https://disk.yandex.ru/..."
+                           aria-label="Ссылка на работу">
+                </template>
+                <button class="btn btn--outline btn--sm hw-links__add" type="button"
+                        @click="extra++">
+                    <i data-lucide="plus" aria-hidden="true"></i>
+                    <span>Добавить ссылку</span>
+                </button>
+            </div>
+
+            <div class="hw-card__actions">
+                <button class="btn btn--primary" type="submit">
+                    <i data-lucide="send" aria-hidden="true"></i>
+                    <span>Отправить ответ</span>
+                </button>
+            </div>
+        </form>
+        {% else %}
+        <div class="hw-answer hw-answer--readonly">
+            <p class="hw-answer__head">
+                <i data-lucide="send" aria-hidden="true"></i>
+                <span>Ответ ученика</span>
+            </p>
+            {% if item.answer and item.answer.text %}
+            <p class="hw-answer__text">{{ item.answer.text }}</p>
+            {% endif %}
+            {% if item.links %}
+            <ul class="hw-links__list">
+                {% for url in item.links %}
+                <li><a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a></li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {# Ответа не было и до проверки — пустой заголовок без пояснения
+               выглядит как обрыв рендера. #}
+            {% if not item.answer and not item.links %}
+            <p class="hw-answer__empty">Ответа пока нет.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</details>

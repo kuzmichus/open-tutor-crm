@@ -1,0 +1,14 @@
+{# Содержимое страницы «Коммуникации»: вкладки + активная вкладка.
+
+   Корень #mailings-content — цель htmx-ручки `/tutor/mailings/tabs/{tab}`
+   (outerHTML): переключение вкладки перерисовывает секцию целиком, адрес
+   двигает `HX-Push-Url`. Один шаблон на страницу и на ручку — разметка не
+   может разойтись. #}
+<div id="mailings-content">
+    {% include "mailing/_tabs.html" %}
+    {% if tab == "history" %}
+        {% include "mailing/_history.html" %}
+    {% else %}
+        {% include "mailing/_compose.html" %}
+    {% endif %}
+</div>

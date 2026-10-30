@@ -1,0 +1,177 @@
+{# Диалог задачи: создание и правка (спека task-management).
+
+   Один шаблон на три случая (`task_dialog_context`):
+   - создание (`task is None`) — пустые поля, этап «Новые»;
+   - правка (`task`) — сохранённые значения и ученики;
+   - повторный показ после ошибки (`data`) — присланные значения,
+     ошибки сверху.
+
+   Полей ответственного в форме нет осознанно: задачи ставит себе сам
+   педагог, отдельного исполнителя в модели не существует.
+
+   Поле «Ученики» — общий виджет `createPersonPicker` (`picker.js`):
+   список открывается сразу по клику, выбранные ученики показываются
+   строками с кнопкой «Убрать», их id уходят повторяющимся полем
+   `students`. Разметка та же, что у состава группы.
+
+   Контекст: task, task_form (title, priority, stage, due_value,
+   description), task_errors, task_priorities, task_priority_labels,
+   task_stages, task_stage_labels, task_selected, task_options_json. #}
+{% from "_person_picker.html" import person_picker with context %}
+<div class="modal-root"
+     id="task-dialog"
+     x-data="taskForm()"
+     x-show="open"
+     x-cloak
+     @keydown.escape.window="close()"
+     @task-saved.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true"
+         aria-labelledby="task-dialog-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="task-dialog-title">
+                    {% if task %}Задача{% else %}Новая задача{% endif %}
+                </h2>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form" id="task-form"
+              {% if task %}
+              hx-post="/tutor/tasks/{{ task.id }}"
+              {% else %}
+              hx-post="/tutor/tasks"
+              {% endif %}
+              hx-target="#task-dialog"
+              hx-swap="outerHTML">
+            <div class="modal-body">
+                {% if task_errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in task_errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="field field--full">
+                    <label class="label" for="task-title">Название</label>
+                    <input class="input" id="task-title" type="text"
+                           name="title" required maxlength="200"
+                           placeholder="Подготовить отчёт..."
+                           value="{{ task_form.title }}">
+                </div>
+
+                <div class="task-form__row">
+                    <div class="field">
+                        <label class="label" for="task-priority">Приоритет</label>
+                        <select class="input" id="task-priority" name="priority">
+                            {% for value in task_priorities %}
+                            <option value="{{ value }}"
+                                    {% if task_form.priority == value %}selected{% endif %}>
+                                {{ task_priority_labels[value] }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="task-due">Срок</label>
+                        <input class="input" id="task-due" type="date"
+                               name="due_date"
+                               value="{{ task_form.due_value }}">
+                    </div>
+                </div>
+
+                <div class="field field--full">
+                    <label class="label" for="task-stage">Этап</label>
+                    <select class="input" id="task-stage" name="stage">
+                        {% for value in task_stages %}
+                        <option value="{{ value }}"
+                                {% if task_form.stage == value %}selected{% endif %}>
+                            {{ task_stage_labels[value] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field field--full">
+                    <label class="label" for="task-description">Описание</label>
+                    <textarea class="input" id="task-description"
+                              name="description" rows="4"
+                              placeholder="Детали задачи...">{{ task_form.description }}</textarea>
+                </div>
+
+                <fieldset class="form-section form-section--tasks">
+                    <legend class="form-section__title">Ученики</legend>
+
+                    {# Виджет выбора живёт в собственном компоненте
+                       `taskStudents` (tasks.js): поля `onInput`/`choose`
+                       общего `createPersonPicker` ищутся в ближайшей
+                       Alpine-области, а не в компоненте модалки. Уже
+                       выбранные ученики лежат в `selected`, их id уходят
+                       повторяющимся полем `students`. #}
+                    <div class="task-students"
+                         x-data="taskStudents()"
+                         data-options="{{ task_options_json }}"
+                         data-selected='{{ task_selected | tojson }}'>
+                        <p class="task-students__empty" x-show="selected.length === 0" x-cloak>
+                            Ученики не привязаны
+                        </p>
+
+                        <ul class="task-students__list">
+                            <template x-for="student in selected" :key="student.id">
+                                <li class="task-students__row">
+                                    <input type="hidden" name="students" :value="student.id">
+                                    <span class="task-students__name" x-text="student.name"></span>
+                                    <button class="btn btn--ghost btn--sm" type="button"
+                                            @click="removeStudent(student)"
+                                            :aria-label="'Убрать ' + student.name">
+                                        <i data-lucide="x"></i>
+                                        Убрать
+                                    </button>
+                                </li>
+                            </template>
+                        </ul>
+
+                        {{ person_picker(
+                            "task-student-search", "task-student-listbox",
+                            placeholder="Привязать к ученику...",
+                            name_expr="item.name",
+                            meta_expr="''",
+                            empty_note="Ничего не найдено"
+                        ) }}
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="modal-actions">
+                {% if task %}
+                {# Двухшаговое подтверждение удаления (паттерн `group/_manage.html`). #}
+                <button class="btn btn--destructive" type="button"
+                        x-show="!confirmingDelete"
+                        @click="confirmingDelete = true">
+                    Удалить
+                </button>
+                <button class="btn btn--destructive" type="button"
+                        hx-post="/tutor/tasks/{{ task.id }}/delete"
+                        hx-target="#task-dialog"
+                        hx-swap="outerHTML"
+                        x-show="confirmingDelete" x-cloak>
+                    Точно удалить?
+                </button>
+                {% endif %}
+                <button class="btn btn--ghost" type="button" @click="close()">
+                    Отмена
+                </button>
+                <button class="btn btn--primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>

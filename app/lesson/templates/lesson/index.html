@@ -98,10 +98,19 @@
                     </form>
                 </div>
 
+                {# `hx-disinherit` обязателен: контейнер включает фильтры в свой
+                   перезапрос по `lesson-saved`, а его потомки — ссылки
+                   сортировки, пагинации и форма массовой отметки — не должны
+                   наследовать `hx-include`: их адрес уже полный, иначе
+                   параметры задваивались бы (`?q=&q=`) при каждом клике.
+                   Ставится на контейнер, а не на ссылки: htmx применяет
+                   `hx-disinherit` только с предка, собственный атрибут
+                   элемента он игнорирует (проверено в браузере). #}
                 <div id="lessons-table"
                      hx-get="/tutor/lessons/list"
                      hx-trigger="lesson-saved from:body"
                      hx-include="#lessons-filters"
+                     hx-disinherit="hx-include"
                      hx-swap="innerHTML">
                     {% include "lesson/_table.html" %}
                 </div>

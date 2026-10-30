@@ -8,6 +8,7 @@
 from sqlalchemy.orm import Session
 
 from app.common.services.timezones import timezone_options_json
+from app.messenger.services.binding import channels_block_context
 from app.tutor.models.tutor import Tutor
 from app.tutor.models.tutor_settings import REMINDER_OFFSETS, REMINDER_OFFSET_LABELS
 from app.tutor.services.settings import get_settings
@@ -29,6 +30,10 @@ TAB_ACTIONS = {
     "notifications": "/tutor/profile/notifications",
     "calendar": "/tutor/profile/calendar",
 }
+
+# Опции селектов рабочего времени: целые часы суток «00:00»…«23:00»
+# (дизайн D2 — select вместо time-input не даёт ввести минуты вовсе).
+WORKDAY_HOUR_OPTIONS = tuple(f"{hour:02d}:00" for hour in range(24))
 
 
 def normalize_tab(raw: str | None) -> str:
@@ -74,6 +79,8 @@ def _form_defaults(tutor: Tutor, settings, tab: str) -> dict:
         "quarter2_end": settings.quarter2_end,
         "quarter3_end": settings.quarter3_end,
         "quarter4_end": settings.quarter4_end,
+        "workday_start": settings.workday_start,
+        "workday_end": settings.workday_end,
         "default_lesson_duration": str(settings.default_lesson_duration),
         "default_lesson_price": (
             "" if settings.default_lesson_price is None
@@ -89,11 +96,12 @@ def profile_page_context(
     saved: bool = False,
     errors: list[str] | None = None,
     form: dict | None = None,
+    channels_block: dict | None = None,
 ) -> dict:
     """Контекст шаблона настроек: вкладки, карточка, настройки и форма."""
     settings = get_settings(db, tutor.id)
     tab = normalize_tab(tab)
-    return {
+    context = {
         "active_page": "settings",
         "user_name": tutor.name,
         "user_role": "Владелец",
@@ -108,4 +116,12 @@ def profile_page_context(
         "timezone_options_json": timezone_options_json(),
         "reminder_offsets": REMINDER_OFFSETS,
         "reminder_offset_labels": REMINDER_OFFSET_LABELS,
+        "workday_hour_options": WORKDAY_HOUR_OPTIONS,
     }
+    if tab == "notifications":
+        # Блок каналов рендерится сетенезависимо из параметров; готовый
+        # словарь передают действия блока (их ошибки тоже внутри блока).
+        if channels_block is None:
+            channels_block = channels_block_context(db, tutor.id)
+        context["channels_block"] = channels_block
+    return context

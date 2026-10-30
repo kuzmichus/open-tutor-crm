@@ -18,7 +18,6 @@ from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.finance.models.account_operation import AccountOperation
-from app.student.models.student import Student
 from app.tutor.services.clock import utcnow
 
 # Неразрывный пробел форматтера денег: «2 000 ₽» пишется без обычных пробелов.
@@ -231,7 +230,7 @@ def test_income_create_without_student_reopens_dialog(
     client, tutor_factory, student_factory
 ):
     """Ученик не выбран — ошибка валидации, а не 404 и не платёж."""
-    tutor_id = _login(client, tutor_factory)
+    _login(client, tutor_factory)
     today = utcnow().strftime("%Y-%m-%d")
 
     response = client.post(
@@ -346,7 +345,7 @@ def test_summary_partial_is_refreshable(client, tutor_factory, student_factory):
 
 def test_isolation_between_tutors(client, tutor_factory, student_factory):
     """Чужие ученики и суммы не видны ни на странице, ни в диалоге."""
-    tutor_id = _login(client, tutor_factory)
+    _login(client, tutor_factory)
     stranger = student_factory(first_name="Чужанин")
     _operation(stranger, "payment", 9999, utcnow(),
                status="paid", method="transfer")
@@ -365,3 +364,49 @@ def test_income_button_on_page_opens_dialog(client, tutor_factory):
     html = client.get("/tutor/finance").text
     assert 'hx-get="/tutor/payments/new"' in html
     assert 'id="modal-payment"' in html
+
+def test_summary_has_two_tiers_with_all_eight_cards(client, tutor_factory):
+    """Сводка разделена на два яруса, но показывает все восемь карточек.
+
+    Восемь карточек одинакового веса — стена, в которой глазу не за что
+    зацепиться (UI-аудит). Главные три (доход за период, чистая прибыль,
+    долги) получают класс `fin-kpi--lead`, остальные пять — `fin-kpi--compact`.
+    Скрывать данные нельзя: спека «Сводка за период» требует все восемь,
+    поэтому иерархия — это вес, а не фильтр.
+    """
+    _login(client, tutor_factory)
+    html = client.get("/tutor/finance").text
+
+    lead = re.search(
+        r'<div class="fin-kpis fin-kpis--lead">(.*?)</div>\s*<div class="fin-kpis fin-kpis--secondary">',
+        html,
+        re.S,
+    )
+    secondary = re.search(
+        r'<div class="fin-kpis fin-kpis--secondary">(.*?)</div>\s*<section class="card fin-compare"',
+        html,
+        re.S,
+    )
+    assert lead, "нет главного яруса сводки (.fin-kpis--lead)"
+    assert secondary, "нет компактного яруса сводки (.fin-kpis--secondary)"
+
+    def titles(block: str) -> list[str]:
+        return re.findall(r'class="fin-kpi__title">([^<]+)<', block)
+
+    # Главные — ответ на вопрос, с которым открывают «Финансы».
+    assert titles(lead.group(1)) == ["Доход", "Чистая прибыль", "Долги учеников"]
+    # Расшифровка — остальные пять, порядок прежний.
+    assert titles(secondary.group(1)) == [
+        "Возвраты",
+        "Чистый доход",
+        "Расходы",
+        "Заработано (уроки)",
+        "Переплата",
+    ]
+
+    # Главный ярус идёт первым: иначе иерархия читалась бы снизу вверх.
+    assert html.index("fin-kpis--lead") < html.index("fin-kpis--secondary")
+
+    # Классы карточек соответствуют ярусу, а не только контейнеру.
+    assert lead.group(1).count("fin-kpi--lead") == 3
+    assert secondary.group(1).count("fin-kpi--compact") == 5

@@ -1,0 +1,50 @@
+{# Вкладка «История»: последние записи журнала бота. В журнал попадают
+   все исходящие через `send_message` — рассылки, приветственные при
+   привязке, будущие автонотификации. #}
+<section class="card mailing-history">
+    <header class="mailing-history__header">
+        <h2 class="mailing-history__title">История сообщений бота</h2>
+        {% if history_rows and history_rows | length >= history_limit %}
+        <p class="mailing-history__note">Показаны последние {{ history_limit }} записей</p>
+        {% endif %}
+    </header>
+
+    {% if history_rows %}
+    <div class="mailing-history__scroll">
+        <table class="mailing-history__table">
+            <thead>
+            <tr>
+                <th>Дата</th>
+                <th>Ученик</th>
+                <th>Канал</th>
+                <th>Сообщение</th>
+                <th>Статус</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in history_rows %}
+            <tr class="mailing-history__row">
+                <td class="mailing-history__date">{{ operation_datetime(row.message.created_at, tutor) }}</td>
+                <td>{{ row.student_name or "—" }}</td>
+                <td>{{ row.messenger_label }}</td>
+                <td class="mailing-history__text">{{ row.message.text }}</td>
+                <td>
+                    <span class="mailing-history__status{% if row.is_error %} mailing-history__status--error{% endif %}">
+                        {{ row.status_label }}
+                    </span>
+                    {% if row.is_error and row.message.error %}
+                    <div class="mailing-history__error">{{ row.message.error }}</div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state mailing-history__empty">
+        <p class="empty-state__title">Сообщений пока нет</p>
+        <p class="empty-state__text">Здесь появятся все сообщения бота: рассылки, приветствия при привязке и уведомления.</p>
+    </div>
+    {% endif %}
+</section>

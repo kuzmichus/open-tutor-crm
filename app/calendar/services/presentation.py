@@ -2,8 +2,9 @@
 
 Чистые функции без БД и HTTP: принимают дни недели и
 «сейчас», возвращают словари для шаблона. Позиция и высота блока считаются
-в часах от 6:00 — шаблон умножает их на CSS-переменную `--cal-hour-h`,
-поэтому сетка масштабируется без пересчёта на сервере (design.md D1).
+в часах от начала сетки (рабочее время репетитора) — шаблон умножает их
+на CSS-переменную `--cal-hour-h`, поэтому сетка масштабируется без
+пересчёта на сервере (design.md D1).
 """
 
 from datetime import date, datetime, timedelta
@@ -19,17 +20,19 @@ from app.slot.services.presentation import is_muted as slot_is_muted
 from app.slot.services.presentation import state_label as slot_state_label
 from app.slot.services.public_link import PUBLIC_PREFIX
 
-# Границы таймлайна: часовые интервалы 6:00–23:00 (спека «Сетка времени»).
-GRID_START_HOUR = 6
-GRID_END_HOUR = 23
+# Границы таймлайна по умолчанию, минуты суток 6:00–23:00: дефолт рабочего
+# времени репетитора до первого сохранения настройки (tutor_settings.workday_*).
+DEFAULT_GRID_START_MIN = 6 * 60
+DEFAULT_GRID_END_MIN = 23 * 60
+
+# Четверти часа внутри часовой строки, минуты от её начала.
+QUARTER_STEPS = (0, 15, 30, 45)
 
 # Акцент карточки окна: собственный токен дизайн-системы, а не цвет цели.
 # Окно — не ученик и не группа, поэтому палитра целей к нему не применима
 # (спека calendar, «Карточка окна визуально отличается от урока»). Ссылка
 # на переменную, а не литерал: тема задаёт значение сама.
 SLOT_ACCENT = "var(--cal-slot-accent)"
-# Часовые строки таймлайна: 6:00 … 22:00, плюс подписи 6:30 … 22:30.
-HOURS = tuple(range(GRID_START_HOUR, GRID_END_HOUR))
 
 # Родительный падеж для заголовка диапазона: «12 октября – 18 октября 2026».
 MONTHS_GENITIVE = (
@@ -66,6 +69,59 @@ def format_clock(value) -> str:
     return f"{value.hour:02d}:{value.minute:02d}"
 
 
+def format_minutes(minutes: int) -> str:
+    """«14:30» — минуты суток строкой «ЧЧ:ММ»."""
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def clock_to_minutes(clock: str) -> int:
+    """Минуты суток из строки «ЧЧ:ММ»; кривое значение — дефолт начала.
+
+    Настройка валидируется формой, но сетка не должна падать на старой
+    или испорченной строке: незамеченный мусор даёт дефолтную сетку.
+    """
+    try:
+        hours, minutes = clock.strip().split(":")
+        hours, minutes = int(hours), int(minutes)
+    except ValueError:
+        return DEFAULT_GRID_START_MIN
+    if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+        return DEFAULT_GRID_START_MIN
+    return hours * 60 + minutes
+
+
+def build_grid_rows(grid_start_min: int, grid_end_min: int) -> list[dict]:
+    """Часовые строки таймлайна с готовыми подписями и четвертями.
+
+    Строка существует, пока её начало раньше конца рабочего времени;
+    подпись половины («+:30») — только если она не за концом, четверти
+    строки — тоже отфильтрованы по `< end`. Шаблон получает готовые
+    строки «ЧЧ:ММ» и не делает арифметики над часами сам (дизайн D3).
+    """
+    rows: list[dict] = []
+    for row_start in range(grid_start_min, grid_end_min, 60):
+        quarters = [
+            {
+                "start_label": format_minutes(row_start + step),
+                "end_label": format_minutes(row_start + step + 15),
+            }
+            for step in QUARTER_STEPS
+            if row_start + step < grid_end_min
+        ]
+        rows.append(
+            {
+                "hour_label": format_minutes(row_start),
+                "half_label": (
+                    format_minutes(row_start + 30)
+                    if row_start + 30 < grid_end_min
+                    else ""
+                ),
+                "quarters": quarters,
+            }
+        )
+    return rows
+
+
 def lessons_word(count: int) -> str:
     """Число занятий со склонением: «1 урок», «2 урока», «5 уроков».
 
@@ -99,6 +155,30 @@ def format_time_range(start, end) -> str:
     return f"{format_clock(start)} – {format_clock(end)}"
 
 
+def _visible_span(
+    start_minutes: int, end_minutes: int, grid_start_min: int, grid_end_min: int
+) -> tuple[int, int]:
+    """Видимые границы карточки в минутах суток — с зажимом в сетку.
+
+    Занятие вне рабочего времени не пропадает (спека «Занятия вне рабочего
+    времени остаются видимыми»): пересекающее границу зажимается ей,
+    целиком лежащее за сеткой — прижимается к соответствующему краю
+    своей реальной длительностью, чтобы остаться внутри колонки.
+    """
+    duration = max(15, end_minutes - start_minutes)
+    if end_minutes <= grid_start_min:
+        # Урок раньше рабочего времени — прижат к верхней границе.
+        return grid_start_min, grid_start_min + duration
+    if start_minutes >= grid_end_min:
+        # Урок позже рабочего времени — прижат к нижней границе.
+        top = max(grid_start_min, grid_end_min - duration)
+        return top, grid_end_min
+    return (
+        max(start_minutes, grid_start_min),
+        min(end_minutes, grid_end_min),
+    )
+
+
 def build_event_view(
     event: ScheduleEvent,
     *,
@@ -106,6 +186,8 @@ def build_event_view(
     columns: int = 1,
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
+    grid_start_min: int = DEFAULT_GRID_START_MIN,
+    grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> dict:
     """Словарь одного блока события для шаблона — урока или окна.
 
@@ -113,6 +195,9 @@ def build_event_view(
     свою долю ширины (спека «Пересекающиеся занятия накладываются»).
     `color_mode` — активный режим раскраски (design.md D5): акцент урока
     считается тем же правилом, что и точки в шапке дня.
+    `grid_start_min`/`grid_end_min` — рабочее время репетитора (минуты
+    суток): `top_h` считается от начала сетки, а края карточки зажимаются
+    её границами (дизайн D3).
 
     Поля урока и окна различаются (design D5): у окна нет цели, цены и
     статуса урока, зато есть `slot_id`, `slot_state` и подпись состояния.
@@ -121,8 +206,11 @@ def build_event_view(
     """
     start_minutes = event.start.hour * 60 + event.start.minute
     end_minutes = event.end.hour * 60 + event.end.minute
-    top_h = max(0, start_minutes - GRID_START_HOUR * 60) / 60
-    height_h = max(15, end_minutes - start_minutes) / 60
+    top_min, bottom_min = _visible_span(
+        start_minutes, end_minutes, grid_start_min, grid_end_min
+    )
+    top_h = (top_min - grid_start_min) / 60
+    height_h = max(15, bottom_min - top_min) / 60
 
     view = {
         "top_h": _num(top_h),
@@ -131,7 +219,10 @@ def build_event_view(
         "width_pct": f"{_num(100 / columns)}%",
         "time_label": format_time_range(event.start, event.end),
         # Данные для клиентского drag (спека «Перетаскивание занятия»):
-        # дата колонки, начало и длительность в минутах.
+        # дата колонки, начало и длительность в минутах. Фактические, не
+        # зажатые: карточка вне рабочего времени при перетаскивании
+        # возвращается в интервал, а подпись времени показывает реальный
+        # урок (спека «Данные о времени — фактический интервал»).
         "date": event.day.isoformat(),
         "start_min": start_minutes,
         "duration_min": max(15, end_minutes - start_minutes),
@@ -235,7 +326,14 @@ def event_accent(event: ScheduleEvent, *, now: datetime, color_mode: str) -> str
     return event.color
 
 
-def build_day_view(day: ScheduleDay, *, now: datetime, color_mode: str = DEFAULT_COLOR_MODE) -> dict:
+def build_day_view(
+    day: ScheduleDay,
+    *,
+    now: datetime,
+    color_mode: str = DEFAULT_COLOR_MODE,
+    grid_start_min: int = DEFAULT_GRID_START_MIN,
+    grid_end_min: int = DEFAULT_GRID_END_MIN,
+) -> dict:
     """Словарь одного столбца сетки: шапка дня и его события.
 
     `unavailable` — подпись причины отметки для шапки дня (`""` — день
@@ -246,7 +344,13 @@ def build_day_view(day: ScheduleDay, *, now: datetime, color_mode: str = DEFAULT
     суббота и воскресенье выглядят как обычные дни, пока репетитор не
     отметил их сам.
     """
-    lessons = layout_events(day.events, now=now, color_mode=color_mode)
+    lessons = layout_events(
+        day.events,
+        now=now,
+        color_mode=color_mode,
+        grid_start_min=grid_start_min,
+        grid_end_min=grid_end_min,
+    )
     mark = day.unavailable
     return {
         "date": day.date,
@@ -278,18 +382,37 @@ def build_calendar_context(
     now: datetime,
     tutor=None,
     color_mode: str = DEFAULT_COLOR_MODE,
+    grid_start_min: int = DEFAULT_GRID_START_MIN,
+    grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> dict:
-    """Полный контекст шаблона календаря по семи дням недели."""
+    """Полный контекст шаблона календаря по семи дням недели.
+
+    `grid_start_min`/`grid_end_min` — рабочее время репетитора (минуты
+    суток): из них строятся часовые строки, конечная метка и `data-`-
+    атрибуты границ для клиентского скрипта (дизайн D3, D4).
+    """
     monday, sunday = days[0].date, days[-1].date
-    views = [build_day_view(day, now=now, color_mode=color_mode) for day in days]
-    # Публичная ссылка на эту неделю (design D7): «Ссылка на окна» копирует
-    # её, а не адрес календаря. Собирается сервером из `tutor_id` и
+    views = [
+        build_day_view(
+            day,
+            now=now,
+            color_mode=color_mode,
+            grid_start_min=grid_start_min,
+            grid_end_min=grid_end_min,
+        )
+        for day in days
+    ]
+    # Публичная ссылка на эту неделю (design D7): «Ссылка для записи»
+    # копирует её, а не адрес календаря. Собирается сервером из `tutor_id` и
     # понедельника — клиент не должен угадывать формат адреса.
     tutor_id = getattr(tutor, "id", "") or ""
     return {
         "tutor": tutor,
         "days": views,
-        "hours": HOURS,
+        "grid_rows": build_grid_rows(grid_start_min, grid_end_min),
+        "grid_start_min": grid_start_min,
+        "grid_end_min": grid_end_min,
+        "grid_end_label": format_minutes(grid_end_min),
         "range_title": format_range_title(monday, sunday),
         "months_label": format_months_label(monday, sunday),
         "prev_start": (monday - timedelta(days=7)).isoformat(),
@@ -318,6 +441,8 @@ def layout_events(
     *,
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
+    grid_start_min: int = DEFAULT_GRID_START_MIN,
+    grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> list[dict]:
     """Блоки дня с колонками наложения для пересекающихся уроков.
 
@@ -339,6 +464,8 @@ def layout_events(
                     columns=total,
                     now=now,
                     color_mode=color_mode,
+                    grid_start_min=grid_start_min,
+                    grid_end_min=grid_end_min,
                 )
             )
 

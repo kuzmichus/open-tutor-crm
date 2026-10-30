@@ -1,0 +1,71 @@
+{# Форма сохранения/правки шаблона: один диалог на оба случая —
+   «Сохранить как шаблон» (кнопка композера, текущий текст приходит
+   query-параметром) и правка из модалки списка.
+
+   Ошибки перерисовывают диалог с введёнными значениями; успех — пустое
+   тело с `templates-saved`: диалог закрывает слушатель, селект композера
+   перечитывает список. #}
+<div class="modal-root"
+     id="mailings-template-form-dialog"
+     x-data="mailingsDialog()"
+     x-show="open" x-cloak
+     @keydown.escape.window="close()"
+     @templates-saved.window="close()">
+    <div class="modal-overlay" @click="close()"></div>
+
+    <div class="modal-content" role="dialog" aria-modal="true"
+         aria-labelledby="mailings-template-form-title">
+        <div class="modal-header">
+            <div>
+                <h2 id="mailings-template-form-title">
+                    {% if template %}Правка шаблона{% else %}Сохранить как шаблон{% endif %}
+                </h2>
+            </div>
+            <button class="btn btn--ghost btn--icon" type="button"
+                    @click="close()" aria-label="Закрыть">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <form class="modal-form"
+              {% if template %}
+              hx-post="/tutor/mailings/templates/{{ template.id }}"
+              {% else %}
+              hx-post="/tutor/mailings/templates"
+              {% endif %}
+              hx-target="#mailings-template-form-dialog"
+              hx-swap="outerHTML">
+            <div class="modal-body">
+                {% if template_errors %}
+                <div class="error" role="alert">
+                    <ul>
+                        {% for message in template_errors %}
+                        <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="field">
+                    <label class="label" for="mailing-template-title">Название</label>
+                    <input class="input" id="mailing-template-title" type="text"
+                           name="title" required maxlength="200"
+                           placeholder="Например: Напоминание об оплате"
+                           value="{{ template_form.title }}">
+                </div>
+
+                <div class="field">
+                    <label class="label" for="mailing-template-text">Текст</label>
+                    <textarea class="input" id="mailing-template-text"
+                              name="text" rows="6"
+                              placeholder="Текст сообщения...">{{ template_form.text }}</textarea>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn--ghost" type="button" @click="close()">Отмена</button>
+                <button class="btn btn--primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>

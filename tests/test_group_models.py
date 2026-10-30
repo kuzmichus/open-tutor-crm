@@ -10,16 +10,6 @@ from app.group.models.group_member import GroupMember
 from app.student.models.student import Student
 
 
-def test_groups_tables_are_created():
-    """Таблицы `groups` и `group_members` появились в базе (init_db/миграция)."""
-    from sqlalchemy import inspect
-
-    from app.database import engine
-
-    tables = set(inspect(engine).get_table_names())
-    assert {"groups", "group_members"} <= tables
-
-
 def test_group_object_defaults():
     """Создание объекта Group: опциональные поля по умолчанию пустые."""
     group = Group(tutor_id="tutor-1", name="Математика 9А")

@@ -294,13 +294,6 @@ def test_lessons_modal_empty_state(client, owner, student_factory):
     assert "У ученика пока нет уроков." in page
 
 
-def test_lessons_modal_isolation(client, owner, tutor_factory, student_factory):
-    """Чужой ученик — 404, как несуществующий."""
-    other_id = tutor_factory(email="metrics-other@example.com")
-    foreign = student_factory(tutor_id=other_id, first_name="Чужой")
-    assert client.get(f"/tutor/students/{foreign}/lessons").status_code == 404
-
-
 # --------------------------------------------------------------------------
 # Модалка «Отчёт»
 # --------------------------------------------------------------------------
@@ -361,7 +354,16 @@ def test_report_month_arrows_return_content_not_modal(client, owner, student_fac
         assert shell not in content, f"Стрелки получили оболочку окна: {shell!r}"
 
 
-def test_report_modal_isolation(client, owner, tutor_factory, student_factory):
-    other_id = tutor_factory(email="metrics-other2@example.com")
+@pytest.mark.parametrize(
+    "modal",
+    [
+        pytest.param("lessons", id="lessons"),
+        pytest.param("report", id="report"),
+    ],
+)
+def test_modal_isolation(modal, client, owner, tutor_factory, student_factory):
+    """Модалки чужого ученика отвечают 404, как несуществующие."""
+    other_id = tutor_factory(email=f"metrics-other-{modal}@example.com")
     foreign = student_factory(tutor_id=other_id, first_name="Чужой")
-    assert client.get(f"/tutor/students/{foreign}/report").status_code == 404
+
+    assert client.get(f"/tutor/students/{foreign}/{modal}").status_code == 404
