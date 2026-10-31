@@ -7,6 +7,7 @@
 
 import re
 from collections.abc import Mapping
+from datetime import date
 
 from app.common.services.forms import checked, text_value
 from app.student.models.student import (
@@ -34,6 +35,7 @@ _TEXT_FIELDS = (
     "phone",
     "email",
     "grade",
+    "birth_date",
     "school",
     "level",
     "notes",
@@ -111,6 +113,19 @@ def parse_student_form(form: Mapping) -> tuple[dict, list[str]]:
                 data["grade"] = grade
     else:
         data["grade"] = None
+
+    # Дата рождения: пусто или ISO-строка `YYYY-MM-DD` из `input type="date"`.
+    # Часовой пояс к дате не применяется — это календарный день, а не момент
+    # времени. Поле доступно и ребёнку, и взрослому.
+    birth_date_raw = data["birth_date"]
+    if birth_date_raw:
+        try:
+            data["birth_date"] = date.fromisoformat(birth_date_raw)
+        except ValueError:
+            errors.append("Дата рождения указана некорректно.")
+            data["birth_date"] = None
+    else:
+        data["birth_date"] = None
 
     # Для взрослого класс и школа не сохраняются.
     if data["kind"] == "adult":

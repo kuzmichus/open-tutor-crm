@@ -116,6 +116,7 @@ def student_to_form(student: Student) -> dict:
         "kind": student.kind,
         "status": student.status,
         "grade": "" if student.grade is None else str(student.grade),
+        "birth_date": student.birth_date.isoformat() if student.birth_date else "",
         "school": student.school or "",
         "level": student.level or "",
         "notes": student.notes or "",
@@ -131,6 +132,11 @@ def form_from_data(data: dict) -> dict:
     """Значения формы из очищенных данных (для повторной отрисовки с ошибкой)."""
     form = {key: data.get(key, "") for key in empty_student_form()}
     form["grade"] = "" if data.get("grade") is None else str(data["grade"])
+    # Парсер формы отдаёт дату объектом `date`, а поле `type="date"` ждёт
+    # ISO-строку — иначе после ошибки валидации выбранная дата теряется.
+    form["birth_date"] = (
+        "" if data.get("birth_date") is None else data["birth_date"].isoformat()
+    )
     for field in ("remind_lesson", "remind_homework", "remind_cancel"):
         form[field] = bool(data.get(field))
     return form
@@ -146,6 +152,7 @@ def empty_student_form() -> dict:
         "kind": "child",
         "status": "new",
         "grade": "",
+        "birth_date": "",
         "school": "",
         "level": "",
         "notes": "",
@@ -191,6 +198,17 @@ def month_label(month: date) -> str:
     return f"{_MONTHS_FULL[month.month - 1]} {month.year} г."
 
 
+def birth_date_label(value: date | None) -> str:
+    """«17.05.2012» — дата рождения в карточке; нет значения — «».
+
+    Часовой пояс сюда не применяется: дата рождения — календарный день,
+    а не момент времени, поэтому `short_date_label` для неё не годится.
+    """
+    if value is None:
+        return ""
+    return f"{value:%d.%m.%Y}"
+
+
 def register_template_helpers() -> None:
     """Регистрирует функции отображения в общем Jinja-окружении."""
     from app.templating import templates
@@ -204,6 +222,7 @@ def register_template_helpers() -> None:
         next_lesson_label=next_lesson_label,
         short_date_label=short_date_label,
         month_label=month_label,
+        birth_date_label=birth_date_label,
     )
 
 

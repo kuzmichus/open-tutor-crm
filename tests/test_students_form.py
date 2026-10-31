@@ -89,6 +89,7 @@ def test_form_has_all_card_fields(client, owner):
         "kind",
         "status",
         "grade",
+        "birth_date",
         "school",
         "level",
         "notes",
@@ -328,6 +329,19 @@ def test_grade_and_school_depend_on_kind(client, owner):
     assert grade_field, "Поле класса не помечено зависимым от kind"
     assert school_field, "Поле школы не помечено зависимым от kind"
     assert "x-show=\"kind === 'child'\"" in html
+
+def test_birth_date_is_date_input_without_kind_dependency(client, owner):
+    """Дата рождения — обычный `type="date"`, доступный и ребёнку, и взрослому."""
+    html = client.get("/tutor/students/new").text
+    start = html.index('id="student-birth-date"')
+    tag = html[html.rindex("<", 0, start) : html.index(">", start) + 1]
+    assert 'type="date"' in tag
+    assert 'name="birth_date"' in tag
+    # Поле не скрывается для взрослого: ни data-depends-on-kind, ни x-show.
+    field_start = html.rindex('<div class="field"', 0, start)
+    field_open = html[field_start : html.index(">", field_start) + 1]
+    assert "data-depends-on-kind" not in field_open
+    assert "x-show" not in field_open
 
 def test_modal_uses_alpine_and_closes_by_escape(client, owner):
     """Escape закрывает только верхний слой: счёт поверх карточки — первым."""

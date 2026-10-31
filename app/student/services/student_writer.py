@@ -25,6 +25,7 @@ _STUDENT_FIELDS = (
     "email",
     "kind",
     "grade",
+    "birth_date",
     "school",
     "level",
     "notes",

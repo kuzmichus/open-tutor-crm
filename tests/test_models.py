@@ -1,6 +1,6 @@
 """Тесты ORM-моделей (Student, Contact, StudentContact, Tutor) и ссылочной целостности."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
@@ -60,6 +60,7 @@ def test_create_and_read_student(student_factory):
         assert student.email is None
         assert student.phone is None
         assert student.grade is None
+        assert student.birth_date is None
         assert student.school is None
         assert student.level is None
         assert student.notes is None
@@ -97,6 +98,7 @@ def test_full_card_values_are_preserved(tutor_factory, student_factory):
         email="Maria@Example.com",
         kind="child",
         grade=5,
+        birth_date=date(2012, 5, 17),
         school="Гимназия №1",
         level="B1",
         notes="Любит задачи со звёздочкой",
@@ -111,6 +113,7 @@ def test_full_card_values_are_preserved(tutor_factory, student_factory):
         assert student.phone == "+7 555 555-55-55"
         assert student.email == "Maria@Example.com"
         assert student.grade == 5
+        assert student.birth_date == date(2012, 5, 17)
         assert student.school == "Гимназия №1"
         assert student.level == "B1"
         assert student.notes == "Любит задачи со звёздочкой"

@@ -1,11 +1,12 @@
 """Модель «Ученик»."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -66,6 +67,8 @@ class Student(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     kind: Mapped[str] = mapped_column(String(8), nullable=False, default="child")
     grade: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Дата рождения — календарная дата; часовой пояс к ней не применяется.
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     school: Mapped[str | None] = mapped_column(String(255), nullable=True)
     level: Mapped[str | None] = mapped_column(String(100), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
