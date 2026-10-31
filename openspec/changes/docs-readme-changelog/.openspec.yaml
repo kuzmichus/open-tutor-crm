@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-31
+# Документационное изменение (README, CHANGELOG): поведение приложения не меняется.
+skip_specs: true
