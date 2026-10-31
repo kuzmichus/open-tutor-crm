@@ -114,6 +114,34 @@ def test_invalid_email_is_rejected():
     _data, errors = parse_student_form(_student_data(email="не-почта"))
     assert "Укажите корректный email." in errors
 
+def test_birth_date_is_parsed_as_date():
+    from datetime import date
+
+    data, errors = parse_student_form(_student_data(birth_date="2012-05-17"))
+    assert errors == []
+    assert data["birth_date"] == date(2012, 5, 17)
+
+def test_empty_birth_date_is_none():
+    data, errors = parse_student_form(_student_data(birth_date=""))
+    assert errors == []
+    assert data["birth_date"] is None
+
+@pytest.mark.parametrize("raw", ("вчера", "2012-13-40", "17.05.2012"))
+def test_invalid_birth_date_is_rejected(raw):
+    data, errors = parse_student_form(_student_data(birth_date=raw))
+    assert "Дата рождения указана некорректно." in errors
+    assert data["birth_date"] is None
+
+def test_adult_keeps_birth_date():
+    """Дата рождения есть и у взрослого: ограничение «только ребёнок» не действует."""
+    from datetime import date
+
+    data, errors = parse_student_form(
+        _student_data(first_name="Ольга", kind="adult", birth_date="1990-01-02")
+    )
+    assert errors == []
+    assert data["birth_date"] == date(1990, 1, 2)
+
 
 def test_reminders_are_parsed_independently():
     data, errors = parse_student_form(
@@ -211,6 +239,7 @@ def test_create_student_rejects_unlinked_payer(tutor_factory):
                 "email": "",
                 "kind": "child",
                 "grade": None,
+                "birth_date": None,
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -244,6 +273,7 @@ def test_create_student_accepts_linked_payer(tutor_factory):
                 "email": "",
                 "kind": "child",
                 "grade": None,
+                "birth_date": None,
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -407,6 +437,7 @@ def test_empty_status_does_not_reset_existing_status(tutor_factory):
                 "email": "",
                 "kind": "child",
                 "grade": None,
+                "birth_date": None,
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -432,6 +463,7 @@ def test_empty_status_does_not_reset_existing_status(tutor_factory):
                 "email": "",
                 "kind": "child",
                 "grade": None,
+                "birth_date": None,
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -460,6 +492,7 @@ def test_status_change_is_saved(tutor_factory):
                 "email": "",
                 "kind": "child",
                 "grade": None,
+                "birth_date": None,
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -483,6 +516,7 @@ def test_status_change_is_saved(tutor_factory):
                 "email": "",
                 "kind": "child",
                 "grade": None,
+                "birth_date": None,
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -573,6 +607,7 @@ def _student_data(**overrides):
         "email": "",
         "kind": "child",
         "grade": None,
+        "birth_date": None,
         "school": "",
         "level": "",
         "notes": "",
@@ -605,6 +640,30 @@ def test_update_changes_fields_but_not_id_or_tutor(tutor_factory, student_factor
         assert student.last_name == "Петрова"
         assert student.level == "B1"
 
+
+def test_create_and_update_store_birth_date(tutor_factory, student_factory):
+    """Дата рождения записывается при создании и очищается пустым значением."""
+    from datetime import date
+
+    tutor_id = tutor_factory()
+    with SessionLocal() as db:
+        student, errors = create_student(
+            db, tutor_id, _student_data(birth_date=date(2012, 5, 17)), []
+        )
+        assert errors == []
+        assert student.birth_date == date(2012, 5, 17)
+
+        errors = update_student(
+            db, student, tutor_id, _student_data(birth_date=None), []
+        )
+        assert errors == []
+        assert db.get(Student, student.id).birth_date is None
+
+        errors = update_student(
+            db, student, tutor_id, _student_data(birth_date=date(2013, 6, 1)), []
+        )
+        assert errors == []
+        assert db.get(Student, student.id).birth_date == date(2013, 6, 1)
 
 def test_update_reuses_contact_and_updates_it_for_all_students(
     tutor_factory, student_factory

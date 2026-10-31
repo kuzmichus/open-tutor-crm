@@ -1,5 +1,7 @@
 """Тесты страниц и операций с учениками (список, создание, правка, архив)."""
 
+from datetime import date
+
 import pytest
 
 from app.database import SessionLocal
@@ -30,6 +32,7 @@ def _create_payload(**overrides) -> dict:
         "email": "",
         "kind": "child",
         "grade": "",
+        "birth_date": "",
         "school": "",
         "level": "",
         "notes": "",
@@ -272,6 +275,67 @@ def test_update_changes_last_name_and_level(client, owner, student_factory):
         assert student.level == "B1"
         assert student.id == student_id
         assert student.tutor_id == owner
+
+
+def test_update_saves_birth_date(client, owner, student_factory):
+    """Дата рождения сохраняется и возвращается в форму редактирования."""
+    student_id = student_factory(tutor_id=owner, first_name="Маша")
+
+    response = client.post(
+        f"/tutor/students/{student_id}",
+        data=_create_payload(first_name="Маша", birth_date="2012-05-17"),
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 200
+
+    with SessionLocal() as db:
+        assert db.get(Student, student_id).birth_date == date(2012, 5, 17)
+
+    edit_html = client.get(f"/tutor/students/{student_id}/edit").text
+    assert 'name="birth_date"' in edit_html
+    assert 'value="2012-05-17"' in edit_html
+
+
+def test_empty_birth_date_clears_value(client, owner, student_factory):
+    """Пустое поле в форме очищает сохранённую дату до NULL."""
+    student_id = student_factory(
+        tutor_id=owner, first_name="Маша", birth_date=date(2012, 5, 17)
+    )
+
+    client.post(
+        f"/tutor/students/{student_id}",
+        data=_create_payload(first_name="Маша", birth_date=""),
+        headers={"HX-Request": "true"},
+    )
+
+    with SessionLocal() as db:
+        assert db.get(Student, student_id).birth_date is None
+
+
+def test_invalid_birth_date_shows_error(client, owner, student_factory):
+    """Некорректная дата — сообщение об ошибке, а не 500."""
+    student_id = student_factory(tutor_id=owner, first_name="Маша")
+
+    response = client.post(
+        f"/tutor/students/{student_id}",
+        data=_create_payload(first_name="Маша", birth_date="2012-13-40"),
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 200
+    assert "Дата рождения указана некорректно." in response.text
+
+    with SessionLocal() as db:
+        assert db.get(Student, student_id).birth_date is None
+
+
+def test_card_shows_birth_date(client, owner, student_factory):
+    """Карточка ученика показывает дату рождения в формате ДД.ММ.ГГГГ."""
+    student_id = student_factory(
+        tutor_id=owner, first_name="Маша", birth_date=date(2012, 5, 17)
+    )
+    html = client.get(f"/tutor/students/{student_id}").text
+    assert "Дата рождения" in html
+    assert "17.05.2012" in html
 
 
 def test_update_changes_payer(client, owner, student_factory):

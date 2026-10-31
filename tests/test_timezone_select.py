@@ -43,6 +43,7 @@ def _create_payload(**overrides) -> dict:
         "email": "",
         "kind": "child",
         "grade": "",
+        "birth_date": "",
         "school": "",
         "level": "",
         "notes": "",
