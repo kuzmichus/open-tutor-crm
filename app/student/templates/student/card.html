@@ -77,6 +77,12 @@
                             <span>{{ student.email }}</span>
                         </div>
                         {% endif %}
+                        {% if student.birth_date %}
+                        <div class="field">
+                            <span class="label">Дата рождения</span>
+                            <span>{{ birth_date_label(student.birth_date) }}</span>
+                        </div>
+                        {% endif %}
                         {% if student.kind == 'child' and student.grade %}
                         <div class="field">
                             <span class="label">Класс</span>

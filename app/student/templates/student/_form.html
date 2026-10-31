@@ -142,6 +142,14 @@
                             <input class="input" id="student-email" type="email" name="email"
                                    value="{{ form.email }}">
                         </div>
+                        {# Дата рождения — календарная дата без времени и часового
+                           пояса, поэтому обычный `type="date"`. Доступна и ребёнку,
+                           и взрослому. #}
+                        <div class="field">
+                            <label class="label" for="student-birth-date">Дата рождения</label>
+                            <input class="input" id="student-birth-date" type="date" name="birth_date"
+                                   value="{{ form.birth_date }}">
+                        </div>
 
                         {# Класс и школа относятся только к ребёнку: для взрослого
                            поля скрыты и не сохраняются. #}
