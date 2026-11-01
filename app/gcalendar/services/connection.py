@@ -18,7 +18,7 @@ from app.gcalendar.services import oauth
 from app.gcalendar.services.errors import GoogleApiError
 from app.tutor.services.params import (
     all_params,
-    delete_param,
+    forget_param,
     get_param,
     save_param,
     set_param,
@@ -86,8 +86,13 @@ def save_tokens(
     expires_in: int | None,
     account_email: str = "",
     calendar_id_value: str = DEFAULT_CALENDAR_ID,
+    commit: bool = True,
 ) -> None:
-    """Сохраняет токены подключения в текущей транзакции (без коммита).
+    """Сохраняет токены подключения.
+
+    `commit=True` — для действий пользователя (подключение): параметры
+    должны сохраниться сразу, отдельной транзакции у вьюхи нет.
+    `commit=False` — когда вызывающий коммитит сам.
 
     `refresh_token` может отсутствовать: Google отдаёт его только при
     первом согласии, при повторном подключении приходит лишь access.
@@ -104,14 +109,17 @@ def save_tokens(
     save_param(db, tutor_id, CALENDAR_ID_KEY, calendar_id_value or DEFAULT_CALENDAR_ID)
     # Успешное подключение снимает прежнюю ошибку: карточка не должна
     # показывать «требуется повторное подключение» после нового входа.
-    delete_param(db, tutor_id, LAST_ERROR_KEY)
+    forget_param(db, tutor_id, LAST_ERROR_KEY)
+    if commit:
+        db.commit()
 
 def set_last_error(db: Session, tutor_id: str, message: str) -> None:
     """Запоминает текст ошибки для карточки (пусто — очищает)."""
     if message:
-        set_param(db, tutor_id, LAST_ERROR_KEY, message)
+        save_param(db, tutor_id, LAST_ERROR_KEY, message)
     else:
-        delete_param(db, tutor_id, LAST_ERROR_KEY)
+        forget_param(db, tutor_id, LAST_ERROR_KEY)
+    db.commit()
 
 def save_oauth_state(db: Session, tutor_id: str, state: str) -> None:
     """Одноразовый `state` ссылки согласия — защита от подмены callback."""
@@ -121,13 +129,20 @@ def take_oauth_state(db: Session, tutor_id: str) -> str | None:
     """Читает и гасит `state`: второй callback с тем же значением отклоняется."""
     state = get_param(db, tutor_id, OAUTH_STATE_KEY)
     if state is not None:
-        delete_param(db, tutor_id, OAUTH_STATE_KEY)
+        forget_param(db, tutor_id, OAUTH_STATE_KEY)
+        db.commit()
     return state
 
 def clear(db: Session, tutor_id: str) -> None:
-    """Удаляет все параметры интеграции (отключение календаря)."""
+    """Удаляет все параметры интеграции (отключение календаря).
+
+    Один коммит на всю операцию: частично снятое подключение (токены
+    удалены, состояние осталось) давало бы карточке противоречивые
+    признаки.
+    """
     for key in ALL_KEYS:
-        delete_param(db, tutor_id, key)
+        forget_param(db, tutor_id, key)
+    db.commit()
 
 def access_token(db: Session, tutor_id: str) -> str | None:
     """Действующий access_token; истёкший обновляется по refresh_token.
@@ -167,7 +182,6 @@ def _refresh(db: Session, tutor_id: str, refresh_token: str) -> str:
         access_token=token,
         expires_in=body.get("expires_in"),
     )
-    db.commit()
     return token
 
 def _expired(raw: str | None) -> bool:
