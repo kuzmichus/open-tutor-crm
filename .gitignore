@@ -64,6 +64,8 @@ db.sqlite3-journal
 
 # Local SQLite database (open-tutor-crm)
 tutor.db
+# Резервные копии локальной базы (создаются перед разрушающими скриптами).
+tutor.db.bak-*
 
 # Flask stuff:
 instance/

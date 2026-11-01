@@ -16,7 +16,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.finance.models.account_operation import (
@@ -38,7 +38,15 @@ REMAINING = "remaining_lessons"
 
 
 def _balances(db: Session, student_ids: list[str]) -> dict[str, int]:
-    """Баланс по каждому ученику: GROUP BY «вид, статус» + формула знака."""
+    """Баланс по каждому ученику: GROUP BY «вид, статус» + формула знака.
+
+    Сумма берётся агрегатом `SUM`, а не «сырой» колонкой: при `GROUP BY`
+    без агрегата SQLite отдаёт произвольную строку группы, и баланс ученика
+    с десятью уроками по 2 000 ₽ выглядел бы как 2 000 ₽, а не 20 000 ₽ —
+    должник в списке числился бы платёжеспособным. Формула знака остаётся
+    общей (`signed_amount`), агрегат её не дублирует: знак зависит только
+    от «вид, статус», то есть от ключа группировки.
+    """
     if not student_ids:
         return {}
     rows = db.execute(
@@ -46,7 +54,7 @@ def _balances(db: Session, student_ids: list[str]) -> dict[str, int]:
             AccountOperation.student_id,
             AccountOperation.kind,
             AccountOperation.status,
-            AccountOperation.amount,
+            func.sum(AccountOperation.amount),
         )
         .where(AccountOperation.student_id.in_(student_ids))
         .group_by(
@@ -56,8 +64,8 @@ def _balances(db: Session, student_ids: list[str]) -> dict[str, int]:
         )
     ).all()
     totals: dict[str, int] = {student_id: 0 for student_id in student_ids}
-    for student_id, kind, status, amount in rows:
-        totals[student_id] += signed_amount(kind, status, amount)
+    for student_id, kind, status, total in rows:
+        totals[student_id] += signed_amount(kind, status, int(total or 0))
     return totals
 
 
