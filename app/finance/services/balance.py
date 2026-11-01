@@ -74,6 +74,22 @@ def balance(db: Session, student_id: str) -> int:
     return sum(signed_amount(kind, status, amount) for kind, status, amount in rows)
 
 
+def shortfall(balance_value: int, price: int | None) -> int:
+    """Сколько рублей не хватает на оплату урока по цене `price`.
+
+    Ноль — денег хватает (или цена не задана: сравнивать не с чем).
+    Иначе разница «цена − баланс»; отрицательный баланс даёт нехватку
+    больше цены — так и должно быть: долг тоже надо покрыть.
+
+    Чистая функция рядом с формулой баланса, чтобы сравнение
+    «хватает/не хватает» жило в одном месте: его используют и сводка дня,
+    и любые будущие напоминания о нехватке средств.
+    """
+    if price is None:
+        return 0
+    return max(price - balance_value, 0)
+
+
 def last_operation_at(db: Session, student_id: str) -> datetime | None:
     """Момент последней операции ученика в aware UTC; операций нет — None.
 

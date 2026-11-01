@@ -91,6 +91,28 @@ def absent_student_ids(db: Session, lesson_id: str) -> set[str]:
     )
 
 
+def lesson_targets_any_status(
+    db: Session, lesson: Lesson
+) -> list[tuple[str, int | None]]:
+    """Цели урока с ценами независимо от статуса: «ученик, цена».
+
+    Правило цены живёт здесь одно: индивидуальный урок — `lesson.price`,
+    участник группы — `price_override ?? group.price_per_lesson`
+    (`group_targets`). Отметки отсутствия не учитываются: это вопрос
+    состоявшегося занятия, его решает `lesson_targets`.
+
+    Функция нужна сводке дня (`app/lesson/services/daily_digest.py`):
+    пометка «не хватает денег» относится к ещё не проведённому уроку,
+    поэтому фильтр `COMPLETED_STATUS` там неприменим, а дублировать
+    правило цены во втором модуле нельзя — цены разъехались бы.
+    """
+    if lesson.group_id:
+        return group_targets(db, lesson.group_id)
+    if lesson.student_id:
+        return [(lesson.student_id, lesson.price)]
+    return []
+
+
 def lesson_targets(db: Session, lesson: Lesson) -> list[tuple[str, int | None]]:
     """Цели урока с ценами: пусто у непроведённого урока.
 
@@ -110,12 +132,10 @@ def lesson_targets(db: Session, lesson: Lesson) -> list[tuple[str, int | None]]:
         absent = absent_student_ids(db, lesson.id)
         return [
             (student_id, price)
-            for student_id, price in group_targets(db, lesson.group_id)
+            for student_id, price in lesson_targets_any_status(db, lesson)
             if student_id not in absent
         ]
-    if lesson.student_id:
-        return [(lesson.student_id, lesson.price)]
-    return []
+    return lesson_targets_any_status(db, lesson)
 
 
 def sync_lesson_charge(db: Session, lesson: Lesson) -> int:
