@@ -3,10 +3,19 @@
    Страница построена на CRM-каркасе (решение владельца 2026-10-30):
    сайдбар кабинета `cabinet/_sidebar.html` (те же классы, что у
    репетитора, своё меню с переключателем темы) и контент в `.main`.
-   Ближайшее занятие — карточка сверху, список — таблица в карточке.
 
-   Контекст: student, tutor, lessons, nearest (первый элемент lessons
-   либо None). Время выводится в зоне репетитора (спека student-cabinet). #}
+   Таблица ближайших занятий заменена недельным календарём (change
+   student-lessons-calendar): тот же визуальный компонент `.cal-*`, что в
+   кабинете репетитора, но строго для чтения. Карточка «Ближайшее занятие»
+   осталась (замечание администратора к плану). Разметка области живёт в
+   `cabinet/_lessons_calendar.html` — она же отдаётся фрагментом при
+   листании недель (`hx-target="#student-calendar"`), поэтому одна
+   разметка на оба случая.
+
+   Контекст: student, tutor, nearest (ближайший запланированный урок либо
+   None) и всё из `student_calendar_context()` — days, grid_rows,
+   range_title, prev_start/next_start, timezone_label, is_empty. Время
+   выводится в зоне репетитора (спека student-cabinet). #}
 {% extends "base.html" %}
 {% block title %}Мои уроки — Open Tutor CRM{% endblock %}
 
@@ -27,7 +36,7 @@
         <div class="page-header">
             <div>
                 <h1>Мои уроки</h1>
-                <p>Ближайшие запланированные занятия</p>
+                <p>Расписание на неделю</p>
             </div>
         </div>
 
@@ -41,33 +50,11 @@
         </section>
         {% endif %}
 
-        {% if lessons %}
-        <div class="card">
-            <table class="cabinet-table">
-                <caption class="sr-only">Ближайшие уроки: дата, время, тип занятия</caption>
-                <thead>
-                <tr>
-                    <th scope="col">Дата</th>
-                    <th scope="col">Время</th>
-                    <th scope="col">Занятие</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for lesson in lessons %}
-                <tr>
-                    <td class="cabinet-table__date">{{ lesson_date(lesson.starts_at, tutor) }}</td>
-                    <td class="cabinet-table__time">{{ lesson_time_span(lesson, tutor) }}</td>
-                    <td class="cabinet-table__type">{{ lesson_type_chip(lesson.type) }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="card">
-            <p class="cabinet-empty">Запланированных занятий пока нет.</p>
-        </div>
-        {% endif %}
+        {# Календарь только для чтения: перенос, открытие и редактирование
+           занятий из кабинета ученика недоступны (требование задачи). #}
+        <section class="card cabinet-calendar">
+            {% include "cabinet/_lessons_calendar.html" %}
+        </section>
     </div>
 </main>
 {% endblock %}

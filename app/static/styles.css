@@ -8506,6 +8506,96 @@
     font-size: var(--text-sm);
   }
 
+  /* ---- Недельный календарь ученика (change student-lessons-calendar):
+     тот же компонент `.cal-*`, что у репетитора, но только для чтения.
+     Переопределения скоупятся под `.cabinet-calendar`, чтобы не задеть
+     календарь репетитора: у него свои переменные сетки в `.cal-card`. ---- */
+
+  .cabinet-calendar {
+    /* Переменные сетки: в календаре репетитора они объявлены на `.cal-card`,
+       здесь роль контейнера играет карточка кабинета. */
+    --cal-hour-h: 44px;             /* высота одного часового интервала */
+    --cal-time-w: 56px;             /* ширина колонки времени */
+    --cal-line: var(--border);      /* линии сетки */
+    --cal-line-soft: color-mix(in srgb, var(--border) 55%, transparent);
+
+    display: flex;
+    flex-direction: column;
+    padding: 0;                     /* панель и сетка прижаты к краям карточки */
+    overflow: hidden;
+    /* Ограничение высоты: без него `.cal-scroll` не становится
+       скролл-контейнером и неделя растягивает страницу на всю длину
+       рабочего дня. Панель и шапка дней при этом остаются закреплёнными. */
+    max-height: calc(100dvh - 14rem);
+  }
+
+  /* Область календаря — тот же flex-контейнер, что `#calendar-swap`
+     у репетитора: иначе flex-ребёнок с `min-height: auto` тянется по
+     контенту и скролл не появляется. */
+  .cabinet-calendar__area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Карточка урока только для чтения: не перетаскивается и не открывается —
+     курсор и hover-эффект не должны обещать действие, которого нет. */
+  .cal-event--readonly {
+    cursor: default;
+    touch-action: auto;
+  }
+
+  .cal-event--readonly:hover {
+    transform: none;
+    box-shadow: none;
+    z-index: auto;
+  }
+
+  /* Четверти часа в кабинете ученика пассивны: подсветка наведения
+     осталась бы обещанием клика, который открывает форму урока. */
+  .cabinet-calendar .cal-slot:hover {
+    background: none;
+  }
+
+  /* Строка занятия с значком ДЗ: имя/«Урок» и значок в одну линию. */
+  .cabinet-calendar .cal-event__title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space));
+  }
+
+  /* Значок домашнего задания в карточке урока: цвет — единственный
+     носитель статуса, поэтому задаётся модификатором (значения считает
+     `homework_badge_class` в services/presentation.py). Только токены
+     темы: значок читается и в светлой, и в тёмной теме. */
+  .cal-hw-badge {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+
+  .cal-hw-badge [data-lucide] {
+    width: 12px;
+    height: 12px;
+  }
+
+  .cal-hw-badge--assigned {
+    color: var(--muted-foreground);
+  }
+
+  .cal-hw-badge--submitted {
+    color: var(--status-regular-fg);
+  }
+
+  .cal-hw-badge--checked {
+    color: var(--success);
+  }
+
+  .cal-hw-badge--not_done {
+    color: var(--destructive);
+  }
+
   /* ---- Кабинет родителя (change parent-cabinet): те же токены, что у
      CRM; сайдбар переиспользует `.sidebar*`, таблицы — `.cabinet-table`. ---- */
 
