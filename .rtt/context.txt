@@ -1,4 +1,4 @@
-# rtt index | generated 2026-10-30 20:42 | 579 files | 159104 tokens
+# rtt index | generated 2026-11-01 17:40 | 581 files | 160675 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -2966,7 +2966,7 @@ def new_student_form_context() -> dict  # Контекст пустой форм
 def edit_student_form_context(db: Session, student: Student) -> dict  # Контекст формы редактирования существующего ученика.
 
 # app/student/services/list_metrics.py [python]
-imports: datetime.datetime, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.BALANCE_PAYMENT_STATUS, app.finance.models.account_operation.AccountOperation, app.finance.services.balance.signed_amount, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.tutor.services.clock.as_utc
+imports: datetime.datetime, sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.BALANCE_PAYMENT_STATUS, app.finance.models.account_operation.AccountOperation, app.finance.services.balance.signed_amount, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.tutor.services.clock.as_utc
 def _balances(db: Session, student_ids: list[str]) -> dict[str, int]  # Баланс по каждому ученику: GROUP BY «вид, статус» + формула знака.
 def _completed_counts(db: Session, student_ids: list[str]) -> dict[str, int]  # Число проведённых уроков: индивидуальные плюс групповые, где участник.
 def _next_lessons(db: Session, student_ids: list[str], now: datetime) -> dict[str, datetime]  # Ближайший запланированный урок каждого ученика (UTC, `>= now`).
@@ -3922,6 +3922,67 @@ def _extract_array(source: str, variable: str) -> str | None  # Тело мас�
 def collect_icons(source: str, names: list[str]) -> dict[str, list]  # Данные иконок; ключ — имя из `data-lucide` (kebab-case).
 def build(output: Path = OUTPUT) -> tuple[int, int]  # Собирает набор и пишет `output`. Возвращает (иконок, байт).
 def main() -> int
+
+# scripts/seed_demo.py [python]
+imports: sys, datetime.date, datetime.datetime, datetime.time, datetime.timedelta, pathlib.Path, sqlalchemy.select, sqlalchemy.text, app.common.colors.assign_color, app.common.services.tutor_time.to_utc, app.common.services.tutor_time.tutor_zone, app.database.SessionLocal, app.finance.models.account_operation.AccountOperation, app.finance.models.expense.Expense, app.finance.services.balance.balance, app.finance.services.charges.sync_lesson_charge, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.homework.models.answer.HomeworkAnswer, app.homework.models.answer_link.HomeworkAnswerLink, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.lesson.models.lesson_series.LessonSeries, app.mailing.models.message_template.MessageTemplate, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.task.models.task.Task, app.task.models.task_student.TaskStudent
+def _slot(weekday: int, start: str, duration: int) -> dict  # Слот расписания: день недели, начало «ЧЧ:ММ» и длительность.
+def _in_vacation(day: date) -> bool  # Попадает ли день в зимние каникулы (уроки не генерируются).
+def _reset_demo_data(db, email: str) -> None  # Удаляет демо-репетитора со всеми его данными.
+def _create_tutor(db) -> Tutor  # Пересоздаёт карточку демо-репетитора с прежними учётными данными.
+def _create_contacts(db, tutor: Tutor) -> dict[str, Contact]  # Создаёт контакты взрослых; возвращает их по ключу.
+def _create_students(
+    db, tutor: Tutor, contacts: dict[str, Contact]
+) -> dict[str, Student]  # Создаёт учеников, их привязки к контактам и плательщика.
+def _create_groups(
+    db, tutor: Tutor, students: dict[str, Student]
+) -> dict[str, Group]  # Создаёт группы и их состав (с индивидуальными ценами участников).
+def _create_series(
+    db,
+    tutor: Tutor,
+    slots: list[dict],
+) -> LessonSeries  # Серия повторяющихся уроков: слоты, интервал и конец учебного года.
+def _generate_lessons(
+    db,
+    tutor: Tutor,
+    series: LessonSeries,
+    slots: list[dict],
+    *,
+    now: datetime,
+    student: Student | None = None,
+    group: Group | None = None,
+    lesson_type: str,
+    price: int | None,
+    meeting_url: str | None = None,
+    note: str | None = None,
+) -> list[Lesson]  # Материализует уроки серии от начала учебного года до его конца.
+def _add_extra_lessons(
+    db, tutor: Tutor, students: dict[str, Student]
+) -> list[Lesson]  # Разовые уроки вне серий: отработка и пробный урок нового ученика.
+def _mark_attendance(
+    db,
+    lessons_by_key: dict[tuple[str, date], Lesson],
+    students: dict[str, Student],
+) -> None  # Ставит отметки неявки на групповых уроках (причина из закрытого списка).
+def _sync_charges(db, lessons: list[Lesson]) -> None  # Создаёт списания за проведённые уроки общей формулой приложения.
+def _month_charges(db, tutor: Tutor, student_id: str, year: int, month: int) -> int  # Сумма списаний ученика за календарный месяц (в зоне педагога).
+def _round_up(value: int, step: int = 100) -> int  # Округление вверх до шага: суммы платежей выглядят «человеческими».
+def _payment_at(tutor: Tutor, day: date, hour: int = 12) -> datetime  # Момент операции: календарный день и время ввода в зоне педагога (UTC).
+def _create_payments(
+    db, tutor: Tutor, students: dict[str, Student]
+) -> dict[str, AccountOperation]  # Платежи за сентябрь и октябрь по модели оплаты каждого ученика.
+def _create_homework(
+    db, tutor: Tutor, lessons_by_key: dict[tuple[str, date], Lesson]
+) -> None  # Домашние задания с разными статусами, ответами и ссылками.
+def _create_tasks(db, tutor: Tutor, students: dict[str, Student]) -> None  # Задачи на канбан-доске с привязкой к ученикам.
+def _create_expenses(db, tutor: Tutor) -> None  # Расходы репетитора: аренда, подписки, материалы, реклама.
+def _create_misc(db, tutor: Tutor) -> None  # Шаблоны рассылок и недоступность: отпуск и постоянный выходной.
+def _print_report(db, tutor: Tutor, students: dict[str, Student]) -> None  # Короткая сводка: что получилось и у кого какой баланс.
+def main() -> None  # Точка входа: сброс демо-данных и сборка учебного года заново.
+
+# scripts/smoke_demo.py [python]
+imports: sys, pathlib.Path, fastapi.testclient.TestClient, sqlalchemy.select, app.database.SessionLocal, app.group.models.group.Group, app.student.models.student.Student, app.task.models.task.Task, main.app
+def _detail_pages() -> list[str]  # Карточки всех учеников, групп и задач из текущей базы.
+def main() -> None  # Входит демо-репетитором и обходит все страницы, считая ошибки.
 
 # scripts/vendor/lucide.min.js [javascript]
 
@@ -6523,6 +6584,8 @@ def test_card_counts_group_lessons(client, owner, student_factory, group_factory
                                    group_member_factory)  # «Проведено» считает и групповые уроки, где ученик участник.
 def test_balance_rendered_in_rubles_with_colors(client, owner, student_factory,
                                                 operation_factory)  # Баланс — знаком рубля: долг красным (класс), плюс зелёным; «$» нет.
+def test_balance_sums_all_operations_of_same_kind(client, owner, student_factory,
+                                                  operation_factory)  # Баланс — сумма всех операций, а не одна строка из группы.
 def test_next_lesson_label_today_and_future(client, owner, student_factory)  # Ближайший запланированный урок: «Сегодня/Завтра в HH:MM», дальше — дата.
 def test_remaining_lessons_from_positive_balance(client, owner, student_factory,
                                                  operation_factory)  # «Осталось: N занятий» — баланс // цена последнего урока с ценой.

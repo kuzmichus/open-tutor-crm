@@ -87,6 +87,29 @@ def test_balance_rendered_in_rubles_with_colors(client, owner, student_factory,
     assert "$" not in table
 
 
+def test_balance_sums_all_operations_of_same_kind(client, owner, student_factory,
+                                                  operation_factory):
+    """Баланс — сумма всех операций, а не одна строка из группы.
+
+    Регрессия: `_balances` группирует по «вид, статус», но отдавала
+    `amount` без `SUM` — SQLite возвращал произвольную строку группы.
+    Ученик с тремя уроками по 1 200 ₽ и платежом 1 000 ₽ показывался
+    платёжеспособным (1 000 ₽), хотя его настоящий баланс — −2 600 ₽,
+    и должник не попадал ни в панель долга, ни в фильтр.
+    """
+    debtor = student_factory(tutor_id=owner, first_name="МногоУроков")
+    for _ in range(3):
+        operation_factory(student_id=debtor, kind="lesson", amount=1200, status=None)
+    operation_factory(student_id=debtor, amount=1000)
+
+    page = client.get("/tutor/students").text
+    assert "\u22122\u00a0600\u00a0₽" in page
+    assert "Должников <span>1</span>" in page
+
+    only_debtors = client.get("/tutor/students/list", params={"debtors": "1"}).text
+    assert "МногоУроков" in only_debtors
+
+
 def test_next_lesson_label_today_and_future(client, owner, student_factory):
     """Ближайший запланированный урок: «Сегодня/Завтра в HH:MM», дальше — дата."""
     soon = student_factory(tutor_id=owner, first_name="Скоро")
