@@ -8,6 +8,7 @@
 from sqlalchemy.orm import Session
 
 from app.common.services.timezones import timezone_options_json
+from app.gcalendar.services.presentation import google_calendar_context
 from app.messenger.services.binding import channels_block_context
 from app.tutor.models.tutor import Tutor
 from app.tutor.models.tutor_settings import REMINDER_OFFSETS, REMINDER_OFFSET_LABELS
@@ -97,6 +98,8 @@ def profile_page_context(
     errors: list[str] | None = None,
     form: dict | None = None,
     channels_block: dict | None = None,
+    google_calendar: dict | None = None,
+    google_error: str = "",
 ) -> dict:
     """Контекст шаблона настроек: вкладки, карточка, настройки и форма."""
     settings = get_settings(db, tutor.id)
@@ -124,4 +127,11 @@ def profile_page_context(
         if channels_block is None:
             channels_block = channels_block_context(db, tutor.id)
         context["channels_block"] = channels_block
+    elif tab == "calendar":
+        # Блок Google Календаря живёт вне формы настроек: у него свои
+        # GET/POST-действия, а вложенные формы недопустимы.
+        context["google_calendar"] = (
+            google_calendar if google_calendar is not None
+            else google_calendar_context(db, tutor.id, error=google_error)
+        )
     return context

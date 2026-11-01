@@ -1,0 +1,72 @@
+{# Блок «Google Календарь» вкладки «Календарь» профиля: карточка
+   состояния и одна кнопка. Живёт вне формы настроек: у него собственные
+   GET/POST-действия, а вложенная форма недопустима.
+
+   Разметка переиспользует классы `.channel-card*` (вкладка
+   «Уведомления»): это та же карточка «иконка — название — действие»,
+   поэтому новых стилей не нужно. #}
+
+<section class="card settings-card">
+    <h2 class="card__title">Google Календарь</h2>
+    <p class="card__desc">
+        Занятия автоматически попадают в календарь: создаются, меняются при
+        переносе и удаляются вместе с уроком.
+    </p>
+
+    {% if google_calendar.last_error %}
+    <div class="error" role="alert">{{ google_calendar.last_error }}</div>
+    {% endif %}
+
+    {% if not google_calendar.configured %}
+    <div class="channel-card">
+        <i class="channel-card__icon" data-lucide="calendar" aria-hidden="true"></i>
+        <div class="channel-card__main">
+            <span class="channel-card__title">Интеграция не настроена</span>
+            <span class="channel-card__desc">
+                Задайте GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET в окружении
+                сервера, затем обновите страницу.
+            </span>
+        </div>
+        <div class="channel-card__action">
+            <button class="btn btn--primary btn--sm" type="button" disabled>Подключить Google</button>
+        </div>
+    </div>
+    {% elif google_calendar.connected %}
+    <div class="channel-card channel-card--connected">
+        <i class="channel-card__icon channel-card__icon--on" data-lucide="circle-check" aria-hidden="true"></i>
+        <div class="channel-card__main">
+            <span class="channel-card__title">Календарь подключён</span>
+            <span class="channel-card__desc">
+                {% if google_calendar.account_email %}
+                Аккаунт: {{ google_calendar.account_email }}.
+                {% endif %}
+                {% if not google_calendar.sync_enabled %}
+                Синхронизация выключена на сервере (GOOGLE_CALENDAR_SYNC=false).
+                {% endif %}
+                При отключении события останутся в календаре Google.
+            </span>
+        </div>
+        <form class="channel-card__action" method="post"
+              action="{{ google_calendar.disconnect_url }}">
+            <button class="channel-card__unlink" type="submit">
+                <i data-lucide="unlink" aria-hidden="true"></i>
+                Отключить
+            </button>
+        </form>
+    </div>
+    {% else %}
+    <div class="channel-card">
+        <i class="channel-card__icon" data-lucide="calendar" aria-hidden="true"></i>
+        <div class="channel-card__main">
+            <span class="channel-card__title">Календарь не подключён</span>
+            <span class="channel-card__desc">
+                Подключите аккаунт Google — будущие занятия выгрузятся сразу,
+                а новые будут добавляться автоматически.
+            </span>
+        </div>
+        <div class="channel-card__action">
+            <a class="btn btn--primary btn--sm" href="{{ google_calendar.connect_url }}">Подключить Google</a>
+        </div>
+    </div>
+    {% endif %}
+</section>

@@ -9,6 +9,9 @@ from app.tutor.views import (
     profile,
     profile_calendar,
     profile_channels,
+    profile_google_callback,
+    profile_google_connect,
+    profile_google_disconnect,
     profile_notifications,
     profile_save,
     profile_security,
@@ -29,6 +32,11 @@ router.include_router(profile_security.router)
 router.include_router(profile_notifications.router)
 router.include_router(profile_calendar.router)
 router.include_router(profile_channels.router)
+# Подключение Google Календаря: свои пути `/tutor/profile/google/...`,
+# с маршрутами вкладок не пересекаются (один эндпоинт на файл).
+router.include_router(profile_google_connect.router)
+router.include_router(profile_google_callback.router)
+router.include_router(profile_google_disconnect.router)
 router.include_router(settings.router)
 router.include_router(settings_messengers.router)
 router.include_router(register.router)
