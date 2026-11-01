@@ -6,16 +6,24 @@ Runner выполняется с тестовой БД (conftest): реальн�
 проверяет саму точку входа (pythonpath = ["."]).
 """
 
+import urllib.request
+from datetime import date, timedelta
+
 import cron  # noqa: F401  # точка входа импортируется и не падает
-from datetime import timedelta
 
 from app.common.services import cron as cron_module
 from app.database import SessionLocal
 from app.lesson.models.lesson import Lesson
+from app.messenger.models.sent_message import SentMessage
+from app.messenger.services.binding import chat_id_key
+from app.messenger.services.birthday_digest import BIRTHDAY_SENT_KEY
+from app.messenger.services.messengers import token_key
 from app.student.models.student import Student
 from app.tutor.services.clock import utcnow
+from app.tutor.services.params import get_param, set_param
 
 PASSWORD = "Секретный-Пароль-1"
+TELEGRAM_TOKEN = "123456:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
 
 
 def test_registry_contains_auto_complete():
@@ -27,6 +35,11 @@ def test_registry_contains_daily_digest():
     """В реестре зарегистрировано задание дневной сводки в мессенджеры."""
     names = [name for name, _ in cron_module.TASKS]
     assert "messenger.daily_digest" in names
+
+def test_registry_contains_birthday_digest():
+    """В реестре зарегистрировано задание рассылки дней рождения."""
+    names = [name for name, _ in cron_module.TASKS]
+    assert "messenger.birthday_digest" in names
 
 
 def test_run_tasks_commits_changes(tutor_factory, student_factory, lesson_factory):
@@ -70,6 +83,49 @@ def test_failing_task_isolated(monkeypatch, tutor_factory):
         names = {row.first_name for row in db.query(Student).all()}
     assert "Успешный" in names      # задание закоммичено
     assert "Откаченный" not in names  # упавшее откатилось
+
+
+def test_run_tasks_commits_birthday_digest(monkeypatch, tutor_factory, student_factory):
+    """Прогон runner'а коммитит и маркер дня, и журнал отправки."""
+    from datetime import UTC, datetime
+
+    from app.messenger.services import birthday_digest
+
+    calls: list[str] = []
+
+    class _Response:
+        """Минимальный ответ urlopen: контекстный менеджер с JSON-телом."""
+
+        def read(self):
+            return b'{"ok": true, "result": {"message_id": 1}}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(request, timeout=None, context=None):
+        calls.append(request.full_url)
+        return _Response()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    # «Сейчас» задания подменяется: прогон не должен зависеть от часов машины.
+    monkeypatch.setattr(
+        birthday_digest, "utcnow", lambda: datetime(2026, 11, 2, 10, 0, tzinfo=UTC)
+    )
+    tutor_id = tutor_factory()
+    student_factory(tutor_id=tutor_id, birth_date=date(2014, 11, 2))
+    with SessionLocal() as db:
+        set_param(db, tutor_id, token_key("telegram"), TELEGRAM_TOKEN)
+        set_param(db, tutor_id, chat_id_key("telegram"), "100200300")
+
+    assert cron_module.run_tasks() == 0
+
+    assert len(calls) == 1
+    with SessionLocal() as db:
+        assert get_param(db, tutor_id, BIRTHDAY_SENT_KEY) == "2026-11-02"
+        assert db.query(SentMessage).filter_by(tutor_id=tutor_id).count() == 1
 
 
 def test_cron_entry_point_wiring():
