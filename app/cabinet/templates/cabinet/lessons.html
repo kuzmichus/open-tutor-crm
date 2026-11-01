@@ -51,9 +51,14 @@
         {% endif %}
 
         {# Календарь только для чтения: перенос, открытие и редактирование
-           занятий из кабинета ученика недоступны (требование задачи). #}
+           занятий из кабинета ученика недоступны (требование задачи).
+           `#student-calendar` — корень области подмены: htmx меняет его
+           `innerHTML`, поэтому каркас карточки при листании недель не
+           перерисовывается. #}
         <section class="card cabinet-calendar">
-            {% include "cabinet/_lessons_calendar.html" %}
+            <div id="student-calendar" class="cabinet-calendar__area">
+                {% include "cabinet/_lessons_calendar.html" %}
+            </div>
         </section>
     </div>
 </main>

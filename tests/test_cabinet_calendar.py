@@ -333,13 +333,19 @@ def test_calendar_page_has_week_navigation(
 
 
 def test_calendar_htmx_fragment_has_no_shell(client, owner, student_factory):
-    """HTMX-фрагмент — только область календаря, без каркаса страницы."""
+    """HTMX-фрагмент — только содержимое области, без каркаса страницы.
+
+    Корень `#student-calendar` ставит страница, htmx меняет его `innerHTML`:
+    фрагмент не повторяет id, иначе в DOM оказались бы два элемента с ним.
+    """
     student_id = student_factory(tutor_id=owner)
     _login(client, student_id)
 
     fragment = client.get("/student?start=2027-03-01", headers=HTMX).text
 
-    assert 'id="student-calendar"' in fragment
+    assert 'class="cal-toolbar"' in fragment
+    assert 'class="cal-grid"' in fragment
+    assert 'id="student-calendar"' not in fragment
     assert "<html" not in fragment
     assert "sidebar" not in fragment
     assert "Кабинет ученика" not in fragment
