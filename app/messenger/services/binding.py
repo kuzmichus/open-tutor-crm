@@ -34,7 +34,7 @@ from app.messenger.services.messengers import (
     token_key,
 )
 from app.messenger.services.welcome import send_welcome
-from app.tutor.services.params import delete_param, get_param, set_param
+from app.tutor.services.params import all_params, delete_param, get_param, set_param
 
 # Одноразовый код: 32 символа base64url. Telegram ограничивает payload
 # диплинка 64 символами, MAX — 128: с запасом влезает в оба.
@@ -145,6 +145,27 @@ def unbind_channel(db: Session, tutor_id: str, messenger: str) -> None:
         bind_link_key(messenger),
     ):
         delete_param(db, tutor_id, key)
+
+
+def bound_chats(db: Session, tutor_id: str) -> dict[str, str]:
+    """Привязанные каналы репетитора: «мессенджер → chat_id».
+
+    Читаются параметры `<мессенджер>_chat_id` по закрытому списку
+    `SUPPORTED`, одним запросом за всеми параметрами. Порядок словаря —
+    порядок `SUPPORTED` (он же порядок секций настроек), поэтому обход
+    даёт предсказуемую очередь отправки.
+
+    Функция живёт здесь, а не в `connections.py`: `connections` уже
+    импортирует `messengers`, а обратный импорт `connections → binding`
+    замкнул бы цикл (`binding → welcome → send → connections`).
+    """
+    params = all_params(db, tutor_id)
+    result: dict[str, str] = {}
+    for messenger in SUPPORTED:
+        chat_id = params.get(chat_id_key(messenger))
+        if chat_id:
+            result[messenger] = chat_id
+    return result
 
 
 def channels_block_context(
