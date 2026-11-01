@@ -1,0 +1,142 @@
+{# Недельный календарь ученика — область подмены HTMX `#student-calendar`.
+
+   Рендерится и в полной странице (`cabinet/lessons.html`), и как фрагмент
+   при листании недель: одна разметка на оба случая, поэтому подпись и
+   кнопки панели живут здесь, а не в странице.
+
+   Компонент переиспользует вид календаря репетитора (`.cal-*` из
+   `app/calendar`), но строго для чтения (требование задачи):
+
+   * четверти часа — пассивные `div.cal-slot` без `@click`, `data-start` и
+     `data-end`: сетка рисуется, но не открывает форму урока;
+   * карточка урока — `div` без `hx-get`, без `data-start-min`/
+     `data-duration-min` (их читает drag в `calendar.js`), курсор
+     `default` (`cal-event--readonly`);
+   * `/static/calendar.js` на страницу не подключается, поэтому `x-data`,
+     `x-show` и `@click` здесь не встречаются.
+
+   Контекст — `student_calendar_context()` из `cabinet/services/calendar.py`
+   (поверх `build_calendar_context` календаря): days, grid_rows,
+   range_title, prev_start/next_start, timezone_label, is_empty. #}
+<div id="student-calendar" class="cabinet-calendar__area">
+    <div class="cal-toolbar">
+        {# Листание недель: обычная ссылка `?start=…` работает и без JS,
+           `hx-get` подменяет только область календаря. #}
+        <a class="btn btn--ghost btn--icon"
+           href="/student?start={{ prev_start }}"
+           hx-get="/student?start={{ prev_start }}"
+           hx-target="#student-calendar"
+           hx-swap="innerHTML"
+           aria-label="Предыдущая неделя">
+            <i data-lucide="chevron-left"></i>
+        </a>
+        <a class="btn btn--ghost btn--icon"
+           href="/student?start={{ next_start }}"
+           hx-get="/student?start={{ next_start }}"
+           hx-target="#student-calendar"
+           hx-swap="innerHTML"
+           aria-label="Следующая неделя">
+            <i data-lucide="chevron-right"></i>
+        </a>
+        <a class="btn btn--ghost"
+           href="/student"
+           hx-get="/student"
+           hx-target="#student-calendar"
+           hx-swap="innerHTML">
+            Сегодня
+        </a>
+
+        <h2 class="cal-toolbar__title">{{ range_title }}</h2>
+
+        <span class="cal-toolbar__spacer"></span>
+
+        {# Бейдж часового пояса: время сетки показано в зоне репетитора
+           (спека student-cabinet, зона ученика появится с «Профилем»). #}
+        <span class="cal-tz">
+            <i data-lucide="globe"></i>{{ timezone_label }}
+        </span>
+    </div>
+
+    {% if is_empty %}
+    <div class="cal-empty">На этой неделе уроков нет.</div>
+    {% endif %}
+
+    <div class="cal-scroll">
+        <div class="cal-grid">
+            {# Угол сетки с месяцем/годом (sticky по обеим осям) #}
+            <div class="cal-corner">{{ months_label }}</div>
+            {% for day in days %}
+            <div class="cal-dayhead">
+                <span class="cal-dayhead__name">{{ day.weekday_short }}</span>
+                <span class="cal-dayhead__num{% if day.is_today %} cal-dayhead__num--today{% endif %}">
+                    {{ day.day_number }}
+                </span>
+                {% if day.lessons_label %}
+                <span class="cal-dayhead__count">{{ day.lessons_label }}</span>
+                {% endif %}
+                <span class="cal-dayhead__dots">
+                    {% for color in day.dots %}
+                    <i class="cal-dot" style="--dot: {{ color }}"></i>
+                    {% endfor %}
+                </span>
+            </div>
+            {% endfor %}
+
+            {# Колонка времени: строки и подписи построены на сервере #}
+            <div class="cal-times">
+                {% for row in grid_rows %}
+                <div class="cal-times__hour">
+                    <span class="cal-times__h">{{ row.hour_label }}</span>
+                    {% if row.half_label %}
+                    <span class="cal-times__m">{{ row.half_label }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                <div class="cal-times__end"><span class="cal-times__h">{{ grid_end_label }}</span></div>
+            </div>
+
+            {# Семь колонок дней: пассивные четверти + карточки уроков поверх #}
+            {% for day in days %}
+            <div class="cal-day" data-date="{{ day.iso_date }}">
+                {% for row in grid_rows %}
+                <div class="cal-hour">
+                    {% for quarter in row.quarters %}
+                    <div class="cal-slot"></div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                {% for event in day.lessons %}
+                {# Карточка урока только для чтения: ни `hx-get`, ни данных
+                   для drag — открыть и перенести занятие из кабинета нельзя.
+                   Содержимое: интервал времени, подпись занятия («Урок» или
+                   название группы) и значок ДЗ со статусом. #}
+                <div class="cal-event cal-event--readonly{% if event.is_past %} cal-event--past{% endif %}"
+                     data-date="{{ event.date }}"
+                     title="{{ event.target_name }} · {{ event.time_label }}{% if event.homework_label %} · ДЗ: {{ event.homework_label }}{% endif %}"
+                     style="--top: {{ event.top_h }};
+                            --dur: {{ event.height_h }};
+                            --left: {{ event.left_pct }};
+                            --width: {{ event.width_pct }};
+                            --accent: {{ event.color }};">
+                    <span class="cal-event__strip" aria-hidden="true"></span>
+                    <span class="cal-event__title">
+                        {{ event.target_name }}
+                        {% if event.homework_status %}
+                        <span class="cal-hw-badge {{ homework_badge_class(event.homework_status) }}"
+                              title="Домашнее задание: {{ event.homework_label }}"
+                              aria-label="Домашнее задание: {{ event.homework_label }}">
+                            <i data-lucide="book-open" aria-hidden="true"></i>
+                        </span>
+                        {% endif %}
+                    </span>
+                    <span class="cal-event__meta">
+                        <span class="cal-event__time">{{ event.time_label }}</span>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
