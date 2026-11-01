@@ -44,6 +44,7 @@ from app.student.models.student import Student
 from app.student.services.birthdays import birthday_students
 from app.student.services.presentation import birthday_age_label, student_full_name
 from app.tutor.models.tutor import Tutor
+from app.tutor.models.tutor_param import TutorParam
 from app.tutor.models.tutor_settings import (
     DEFAULT_DIGEST_TIME,
     TutorSettings,
@@ -131,6 +132,22 @@ def _settings_map(db: Session, tutor_ids: list[str]) -> dict[str, TutorSettings]
             result[tutor_id] = TutorSettings(tutor_id=tutor_id, **default_values())
     return result
 
+def _tutors_with_channels(db: Session) -> list[str]:
+    """Id репетиторов, у которых привязан хотя бы один канал уведомлений.
+
+    Отбор до чтения настроек: у остальных отправлять некуда, и минутный
+    прогон не должен ни читать их данные, ни писать предупреждения.
+    """
+    keys = [chat_id_key(messenger) for messenger in SUPPORTED]
+    return list(
+        db.scalars(
+            select(TutorParam.tutor_id)
+            .where(TutorParam.key.in_(keys))
+            .distinct()
+            .order_by(TutorParam.tutor_id)
+        ).all()
+    )
+
 def _send_birthdays(
     db: Session,
     tutor: Tutor,
@@ -154,10 +171,7 @@ def _send_birthdays(
         return 0
 
     chats = _chats(params)
-    if not chats:
-        # Канал не привязан — отправлять некуда; маркер не ставим, чтобы
-        # привязка канала в течение дня ещё успела дать рассылку.
-        logger.warning("дни рождения: у репетитора %s нет привязанных каналов", tutor.id)
+    if not chats:  # pragma: no cover — отбор уже гарантирует канал
         return 0
 
     students = birthday_students(db, tutor.id, today)
@@ -186,15 +200,19 @@ def notify_birthday_digest(db: Session, *, now: datetime | None = None) -> int:
     держать открытую транзакцию SQLite и блокировать запись веб-приложению.
     """
     moment = as_utc(now or utcnow())
-    tutor_ids = list(db.scalars(select(Tutor.id).order_by(Tutor.id)).all())
+    tutor_ids = _tutors_with_channels(db)
     if not tutor_ids:
         return 0
     settings = _settings_map(db, tutor_ids)
     params = all_params_by_tutors(db, tutor_ids)
+    tutors = {
+        tutor.id: tutor
+        for tutor in db.scalars(select(Tutor).where(Tutor.id.in_(tutor_ids))).all()
+    }
 
     sent = 0
     for tutor_id in tutor_ids:
-        tutor = db.get(Tutor, tutor_id)
+        tutor = tutors.get(tutor_id)
         if tutor is None:  # pragma: no cover — FK CASCADE: строка не может пропасть
             continue
         try:
