@@ -368,6 +368,27 @@ def test_notifications_save(client):
     assert 'name="low_balance_threshold" value="500"' in html
 
 
+def test_notifications_birthday_toggle_is_saved(client):
+    """«День рождения» сохраняется и показывается; отдельного поля времени нет."""
+    _login(client)
+    response = client.post(
+        "/tutor/profile/notifications",
+        data={"digest_time": "09:00", "low_balance_threshold": "0", "notify_birthday": "on"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with SessionLocal() as db:
+        settings = db.get(TutorSettings, _tutor_by_email("profile-user@example.com").id)
+    assert settings.notify_birthday is True
+
+    html = _notifications_page(client)
+    assert re.search(r'name="notify_birthday"\s+checked', html)
+    # Время рассылки дней рождения — общее поле «Время отправки».
+    assert html.count('name="digest_time"') == 1
+    assert 'name="birthday_time"' not in html
+
+
 def test_notifications_invalid_time_shows_error(client):
     _login(client)
     response = client.post(
