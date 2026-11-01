@@ -40,10 +40,19 @@ def set_param(db: Session, tutor_id: str, key: str, value: str) -> None:
 
 def delete_param(db: Session, tutor_id: str, key: str) -> None:
     """Удаляет параметр; отсутствие строки — не ошибка."""
+    forget_param(db, tutor_id, key)
+    db.commit()
+
+def forget_param(db: Session, tutor_id: str, key: str) -> None:
+    """Удаляет параметр в текущей транзакции, без коммита.
+
+    Нужен операциям, которые меняют несколько параметров одной
+    транзакцией (подключение календаря): коммит на каждом ключе разрывал
+    бы атомарность «токены сохранены целиком или не сохранены вовсе».
+    """
     row = db.get(TutorParam, (tutor_id, key))
     if row is not None:
         db.delete(row)
-        db.commit()
 
 def all_params(db: Session, tutor_id: str) -> dict[str, str]:
     """Все параметры репетитора одним запросом, словарём «ключ → значение»."""
