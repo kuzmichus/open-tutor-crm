@@ -11,8 +11,8 @@
   поэтому наложение прогонов и повторный запуск безопасны.
 
 Логику конкретных заданий держат доменные сервисы (например,
-`app/lesson/services/auto_complete.py`, `app/messenger/services/daily_digest.py`)
-— здесь только общий механизм.
+`app/lesson/services/auto_complete.py`, `app/messenger/services/daily_digest.py`,
+`app/messenger/services/birthday_digest.py`) — здесь только общий механизм.
 """
 
 import logging
@@ -29,6 +29,7 @@ from app.database import SessionLocal
 from app import models  # noqa: F401
 
 from app.lesson.services.auto_complete import auto_complete_finished_lessons
+from app.messenger.services.birthday_digest import notify_birthday_digest
 from app.messenger.services.daily_digest import run_daily_digests
 
 if TYPE_CHECKING:  # только для аннотации: циклический импорт не нужен
@@ -43,6 +44,7 @@ TaskCallable = Callable[["Session"], int]
 TASKS: list[tuple[str, TaskCallable]] = [
     ("lesson.auto_complete", auto_complete_finished_lessons),
     ("messenger.daily_digest", run_daily_digests),
+    ("messenger.birthday_digest", notify_birthday_digest),
 ]
 
 
