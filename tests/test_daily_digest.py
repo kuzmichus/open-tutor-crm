@@ -15,8 +15,6 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 
-import pytest
-
 from app.common.services import cron as cron_module
 from app.database import SessionLocal
 from app.messenger.services.binding import chat_id_key

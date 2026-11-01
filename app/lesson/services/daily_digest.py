@@ -18,7 +18,7 @@
 педагога, на выход — строки для текста сообщения.
 """
 
-from datetime import date, datetime
+from datetime import date
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
