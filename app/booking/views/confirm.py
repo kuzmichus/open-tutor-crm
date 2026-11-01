@@ -28,6 +28,8 @@ from app.common.responses import dialog_closed
 from app.common.responses import is_htmx
 from app.common.services.tutor_time import now_utc
 from app.database import get_db
+from app.gcalendar.services.sync import sync_lesson
+from app.lesson.models.lesson import Lesson
 from app.slot.models.slot import Slot
 from app.slot.services.dialog_context import dialog_context
 from app.templating import templates
@@ -76,6 +78,12 @@ async def confirm_booking(
             "slot/_dialog.html",
             dialog_context(db, tutor, slot=slot, errors=errors),
         )
+
+    # Подтверждение создало урок своей транзакцией — событие в Google
+    # пишется после неё, best-effort (design D2, D10).
+    lesson = db.get(Lesson, booking.lesson_id) if booking.lesson_id else None
+    if lesson is not None:
+        sync_lesson(db, tutor, lesson)
 
     if not is_htmx(request):
         return RedirectResponse(url=CALENDAR_URL, status_code=303)

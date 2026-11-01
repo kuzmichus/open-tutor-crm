@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.common.access import require_tutor_id
 from app.common.responses import saved_response
 from app.database import get_db
+from app.gcalendar.services.sync import sync_lessons
 from app.lesson.services.lesson_form import (
     lesson_form_context,
     parse_duration_min,
@@ -113,9 +114,14 @@ async def create_lesson_view(
 
     if not errors and warning is None:
         if data["repeat"]:
-            _, errors = create_series(db, data, tutor)
+            lessons, errors = create_series(db, data, tutor)
         else:
-            _, errors = create_single_lesson(db, data, tutor)
+            lesson, errors = create_single_lesson(db, data, tutor)
+            lessons = [lesson] if lesson is not None else []
+        if not errors:
+            # Уроки уже сохранены своей транзакцией: синхронизация с Google
+            # best-effort и не ломает создание (design D2, D10).
+            sync_lessons(db, tutor, lessons)
 
     if errors or warning is not None:
         return templates.TemplateResponse(
