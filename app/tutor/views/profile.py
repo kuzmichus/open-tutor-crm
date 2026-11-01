@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.common.access import LoginRequired, require_tutor_id
 from app.database import get_db
+from app.gcalendar.services.presentation import google_error_message
 from app.messenger.services.binding import BINDING_FAILED_HINT, channels_block_context
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
@@ -25,6 +26,7 @@ def profile(
     tab: str = "",
     saved: str = "",
     bind_error: str = "",
+    google_error: str = "",
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 ):
@@ -45,5 +47,9 @@ def profile(
             if bind_error
             else None
         ),
+        # Действия Google без JS возвращаются 303-редиректом: точный текст
+        # ошибки через URL не переносится, поэтому передаётся кодом, а
+        # подпись строит `google_error_message`.
+        google_error=google_error_message(google_error),
     )
     return templates.TemplateResponse(request, "tutor/profile.html", context)

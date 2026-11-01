@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 from app.common.responses import saved_response
 from app.common.services.tutor_time import to_local
 from app.database import get_db
-from app.finance.services.charges import sync_lesson_charges
+from app.finance.services.charges import series_lessons, sync_lesson_charges
+from app.gcalendar.services.sync import sync_lesson, sync_lessons
 from app.lesson.services.access import get_owned_lesson, require_tutor_id
 from app.lesson.services.lesson_form import (
     DEFAULT_MODAL_TARGET,
@@ -162,5 +163,14 @@ async def update_lesson_view(
     # история денег осталась бы старой.
     sync_lesson_charges(db, lesson, series_applied=form.get("series_all") == "1")
     db.commit()
+
+    # Синхронизация с Google — после коммита и best-effort (design D2, D10):
+    # ошибка внешнего сервиса не отменяет сохранение урока. Массовая правка
+    # длительности или ссылки меняет события всей серии, хотя `starts_at`
+    # и не трогает, поэтому при `series_all` синхронизируются все её уроки.
+    if form.get("series_all") == "1" and lesson.series_id:
+        sync_lessons(db, tutor, series_lessons(db, lesson.series_id))
+    else:
+        sync_lesson(db, tutor, lesson)
 
     return saved_response(request, "lesson-saved", LESSONS_URL)
