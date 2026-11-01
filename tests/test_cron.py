@@ -23,6 +23,11 @@ def test_registry_contains_auto_complete():
     names = [name for name, _ in cron_module.TASKS]
     assert "lesson.auto_complete" in names
 
+def test_registry_contains_daily_digest():
+    """В реестре зарегистрировано задание дневной сводки в мессенджеры."""
+    names = [name for name, _ in cron_module.TASKS]
+    assert "messenger.daily_digest" in names
+
 
 def test_run_tasks_commits_changes(tutor_factory, student_factory, lesson_factory):
     """Прогон runner'а завершает просроченный урок и коммитит изменение."""
