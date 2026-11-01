@@ -4,6 +4,10 @@
 и расчёт (`invoice_context`), и разметка диалога — период по умолчанию,
 тумблер остатка, отсутствие урока без цены и неактивная кнопка отправки
 (design D13, спека student-finance «Счёт за период»).
+
+«Сегодня» в этом файле зафиксировано autouse-фикстурой `_frozen_today`
+(24.10.2026), поэтому период по умолчанию — всегда ноябрь 2026, а литералы
+дат в ассертах не зависят от дня запуска тестов.
 """
 
 from datetime import UTC, date, datetime
@@ -25,6 +29,20 @@ from app.student.models.student import Student
 from app.tutor.models.tutor import Tutor
 
 PASSWORD = "Секретный-Пароль-1"
+
+# «Сегодня» для всего файла: период по умолчанию — следующий месяц, и без
+# фиксации даты литералы 05–13.11.2026 рано или поздно выпадут из периода
+# (тест, зелёный в октябре, краснеет в ноябре). Заморозка делает прогон
+# независимым от дня запуска и сохраняет читаемые даты в ассертах.
+TODAY = date(2026, 10, 24)
+
+
+@pytest.fixture(autouse=True)
+def _frozen_today(monkeypatch):
+    """Фиксирует «сегодня» в сервисе счёта: 24.10.2026 → период 01–30.11.2026."""
+    from app.finance.services import invoice as module
+
+    monkeypatch.setattr(module, "today_local", lambda tutor: TODAY)
 
 
 @pytest.fixture()
@@ -77,7 +95,10 @@ def _lesson(
 
 
 def _context(owner: str, student_id: str, **kwargs) -> dict:
-    """Контекст счёта с периодом по умолчанию (ноябрь 2026 в UTC)."""
+    """Контекст счёта с периодом по умолчанию (ноябрь 2026 в UTC).
+
+    Период задаёт не системная дата, а `_frozen_today`: «сегодня» — 24.10.2026.
+    """
     with SessionLocal() as session:
         return invoice_context(
             session,
@@ -297,15 +318,18 @@ def test_invoice_text_without_lessons_says_so():
 
 
 def test_invoice_dialog_opens_with_default_period(client, student_id):
-    """Диалог открывается на следующем месяце; поля «С» и «По» заполнены."""
+    """Диалог открывается на следующем месяце; поля «С» и «По» заполнены.
+
+    Ожидания — литералы, а не повторный вызов `next_month_period`: иначе тест
+    сверял бы функцию саму с собой и не заметил бы сдвиг периода по умолчанию.
+    """
     response = client.get(f"/tutor/students/{student_id}/invoice")
 
     assert response.status_code == 200
     html = response.text
     assert "Счёт за период" in html
-    expected_from, expected_to = next_month_period(None)
-    assert f'value="{expected_from.isoformat()}"' in html
-    assert f'value="{expected_to.isoformat()}"' in html
+    assert 'value="2026-11-01"' in html
+    assert 'value="2026-11-30"' in html
 
 
 def test_invoice_dialog_shows_lesson_lines(client, student_id):
