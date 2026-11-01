@@ -16,6 +16,7 @@ from app.cabinet.models.contact_session import ContactSession  # noqa: F401
 from app.cabinet.models.invite import StudentCabinetInvite  # noqa: F401
 from app.cabinet.models.session import StudentSession  # noqa: F401
 from app.finance.models.account_operation import AccountOperation  # noqa: F401
+from app.gcalendar.models.calendar_event import CalendarEvent  # noqa: F401
 from app.finance.models.expense import Expense  # noqa: F401
 from app.finance.models.forecast_snapshot import ForecastSnapshot  # noqa: F401
 from app.group.models.group import Group  # noqa: F401
