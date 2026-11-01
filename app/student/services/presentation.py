@@ -15,6 +15,7 @@ from app.common.services.tutor_time import today_local, to_local
 from app.student.models.contact import Contact
 from app.student.models.student import Student
 from app.student.models.student_contact import StudentContact
+from app.student.services.birthdays import age_on
 
 # Короткие названия месяцев в родительном падеже: «24 окт. в 15:00».
 # Очередная копия в проекте (finance, lesson, tutor): цена разделения
@@ -207,6 +208,31 @@ def birth_date_label(value: date | None) -> str:
     if value is None:
         return ""
     return f"{value:%d.%m.%Y}"
+
+
+def birthday_age_label(birth_date: date | None, day: date) -> str:
+    """«12 лет» — возраст, который исполняется в день `day`; иначе «».
+
+    Русская плюрализация по стандартным правилам (как
+    `lesson.presentation.unmarked_notice_label`): 11–14 всегда «лет»,
+    иначе последняя цифра решает (1 — «год», 2–4 — «года», прочие — «лет»).
+    Пустая строка — возраст неизвестен (нет даты рождения или год
+    рождения ещё не наступил): строку сообщения тогда не дополняем.
+    """
+    if birth_date is None:
+        return ""
+    age = age_on(birth_date, day)
+    if age is None:
+        return ""
+    if age % 100 in (11, 12, 13, 14):
+        word = "лет"
+    elif age % 10 == 1:
+        word = "год"
+    elif age % 10 in (2, 3, 4):
+        word = "года"
+    else:
+        word = "лет"
+    return f"{age} {word}"
 
 
 def register_template_helpers() -> None:
