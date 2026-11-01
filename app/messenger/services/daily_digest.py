@@ -39,7 +39,7 @@ from app.common.services.tutor_time import tutor_zone
 from app.finance.services.balance import balance, shortfall
 from app.finance.services.presentation import balance_label, money
 from app.lesson.services.daily_digest import DigestLesson, DigestTarget, digest_lessons
-from app.lesson.services.presentation import format_lesson_date
+from app.lesson.services.presentation import format_lesson_date, format_target
 from app.messenger.services.binding import bound_chats, chat_id_key
 from app.messenger.services.messengers import SUPPORTED
 from app.messenger.services.send import send_message
@@ -95,13 +95,24 @@ def _shortfall_line(target: DigestTarget, balance_value: int) -> str:
     )
 
 
+def _target_label(lesson: DigestLesson) -> str:
+    """Подпись цели урока: «Группа: имя» у группового, иначе имя ученика.
+
+    Формат берётся из общего `format_target` модуля lesson: подпись в
+    сводке должна совпадать с подписью цели в списке уроков и календаре.
+    """
+    if lesson.is_group:
+        return format_target(None, lesson.target_name, "group")
+    return format_target(lesson.target_name, None, "individual")
+
+
 def _lesson_lines(lesson: DigestLesson, balances: dict[str, int], *, with_shortfall: bool) -> list[str]:
     """Строки одного урока: «ЧЧ:ММ — цель» и пометки о нехватке средств.
 
     Время — настенное время педагога: момент урока уже переведён в зону
     (`to_local`) вызывающим кодом, здесь только формат «ЧЧ:ММ».
     """
-    head = f"{lesson.starts_at.strftime('%H:%M')} — {lesson.target_name}"
+    head = f"{lesson.starts_at.strftime('%H:%M')} — {_target_label(lesson)}"
     lines = [head]
     if not with_shortfall:
         return lines

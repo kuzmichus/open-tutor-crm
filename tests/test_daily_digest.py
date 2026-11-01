@@ -278,7 +278,7 @@ def test_group_lesson_shows_group_name(
     assert _run() == 1
 
     text = _texts(calls)[0]
-    assert "12:00 — Математика 7Б" in text
+    assert "12:00 — Группа: Математика 7Б" in text
     # Балансы нулевые: не хватает полной цены урока у каждого участника.
     assert "Анна: не хватает 1\u00a0000\u00a0₽ (на счету 0\u00a0₽, урок 1\u00a0000\u00a0₽)" in text
     assert "Борис: не хватает 1\u00a0500\u00a0₽ (на счету 0\u00a0₽, урок 1\u00a0500\u00a0₽)" in text
