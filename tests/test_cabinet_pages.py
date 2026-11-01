@@ -274,38 +274,49 @@ def test_login_page_has_no_sidebar(client):
 
 
 def test_cabinet_shows_my_lessons(client, owner, student_factory, lesson_factory):
-    """«Мои уроки»: ближайшее занятие и список; чужие уроки не видны (6.1)."""
+    """«Мои уроки»: недельный календарь; чужие уроки не видны (6.1).
+
+    Урок ученика A виден карточкой в сетке недели, урок ученика B того же
+    репетитора — нет: выборка идёт по ученику из сессии. Проверяется время
+    начала «10:20» и «12:20»: полные часы («12:00») есть в колонке времени,
+    поэтому уникально только время самого урока.
+    """
     student_a = student_factory(tutor_id=owner, first_name="Аня")
     student_b = student_factory(tutor_id=owner, first_name="Борис")
     lesson_factory(
         student_id=student_a,
         status="planned",
-        starts_at=datetime(2027, 3, 1, 10, 0, tzinfo=UTC),
+        starts_at=datetime(2027, 3, 1, 10, 20, tzinfo=UTC),
     )
     lesson_factory(
         student_id=student_b,
         status="planned",
-        starts_at=datetime(2027, 3, 2, 12, 0, tzinfo=UTC),
+        starts_at=datetime(2027, 3, 2, 12, 20, tzinfo=UTC),
     )
 
     with SessionLocal() as db:
         token = create_session(db, student_a)
 
     client.cookies.set("student_session", token)
-    page = client.get("/student").text
+    page = client.get("/student?start=2027-03-01").text
 
     assert "Мои уроки" in page
+    # Карточка ближайшего занятия осталась (замечание администратора к плану).
     assert "Ближайшее занятие" in page
-    assert "01.03.2027" in page
+    # Сетка недели: шапка дней и карточка урока ученика A.
+    assert 'class="cal-grid"' in page
+    assert "10:20 – 11:20" in page
+    # Индивидуальный урок подписан словом «Урок», а не именем ученика.
+    assert "Урок" in page
     # Урок ученика B (даже того же репетитора) не попадает в кабинет A.
-    assert "02.03.2027" not in page
+    assert "12:20" not in page
 
 
 def test_cabinet_group_lesson_visible(client, owner, student_factory, lesson_factory,
-                                       group_factory, group_member_factory):
-    """Групповой урок показан наравне с индивидуальными."""
+                                      group_factory, group_member_factory):
+    """Групповой урок показан в календаре названием группы."""
     student_id = student_factory(tutor_id=owner)
-    group_id = group_factory()
+    group_id = group_factory(tutor_id=owner, name="Английский B2")
     group_member_factory(group_id=group_id, student_id=student_id)
     lesson_factory(
         group_id=group_id,
@@ -317,13 +328,18 @@ def test_cabinet_group_lesson_visible(client, owner, student_factory, lesson_fac
         token = create_session(db, student_id)
     client.cookies.set("student_session", token)
 
-    page = client.get("/student").text
-    assert "05.04.2027" in page
-    assert "Групповой" in page
+    page = client.get("/student?start=2027-04-05").text
+    assert "15:00 – 16:00" in page
+    assert "Английский B2" in page
 
 
-def test_cabinet_empty_when_all_lessons_past(client, owner, student_factory, lesson_factory):
-    """Все уроки в прошлом — список пуст, прошедшие не показываются."""
+def test_cabinet_past_lesson_is_grey(client, owner, student_factory, lesson_factory):
+    """Прошедший урок остаётся в своей неделе, но приглушённым.
+
+    Список ближайших занятий заменён календарём: прошедшие уроки больше не
+    скрываются — ученик видит свою неделю целиком, а «прошло» показывается
+    серым (`cal-event--past`).
+    """
     student_id = student_factory(tutor_id=owner)
     lesson_factory(
         student_id=student_id,
@@ -335,9 +351,21 @@ def test_cabinet_empty_when_all_lessons_past(client, owner, student_factory, les
         token = create_session(db, student_id)
     client.cookies.set("student_session", token)
 
-    page = client.get("/student").text
-    assert "Запланированных занятий пока нет" in page
-    assert "01.01.2020" not in page
+    page = client.get("/student?start=2020-01-01").text
+    assert "10:00 – 11:00" in page
+    assert "cal-event--past" in page
+
+
+def test_cabinet_empty_week_shows_hint(client, owner, student_factory):
+    """Неделя без уроков: пояснение вместо пустой сетки."""
+    student_id = student_factory(tutor_id=owner)
+
+    with SessionLocal() as db:
+        token = create_session(db, student_id)
+    client.cookies.set("student_session", token)
+
+    page = client.get("/student?start=2027-05-03").text
+    assert "На этой неделе уроков нет" in page
 
 
 def test_logout_revokes_session(client, owner, student_factory):
