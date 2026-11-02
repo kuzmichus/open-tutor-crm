@@ -82,11 +82,13 @@ def delete_homework_files(
     lesson_ids: list[str],
     storage: Storage | None = None,
 ) -> int:
-    """Удаляет объекты файлов ДЗ уроков перед каскадным удалением уроков.
+    """Удаляет объекты и метаданные файлов ДЗ уроков перед их удалением.
 
-    БД снимет строки `homework_files` и `files` каскадом (FK `ondelete=
-    CASCADE`), но объекты в хранилище каскад не тронет — их убираем здесь.
-    Возвращает число удалённых объектов.
+    Каскад БД снимает строки `homework_files` вместе с ДЗ, но `files` — нет:
+    FK `file_id` каскадит в обратную сторону (удаление файла убирает связь).
+    Поэтому и объекты в хранилище, и строки метаданных удаляются здесь;
+    иначе файл остался бы в каталоге или бакете без единого пути в БД.
+    Возвращает число удалённых файлов.
     """
     if not lesson_ids:
         return 0
@@ -95,7 +97,12 @@ def delete_homework_files(
             select(Homework.id).where(Homework.lesson_id.in_(lesson_ids))
         ).all()
     )
-    files = [f for group in files_of_homeworks(db, homework_ids).values() for f in group]
+    files = [
+        file
+        for group in files_of_homeworks(db, homework_ids).values()
+        for file in group
+    ]
     for file in files:
         _delete_object(file, storage)
+        db.delete(file)
     return len(files)

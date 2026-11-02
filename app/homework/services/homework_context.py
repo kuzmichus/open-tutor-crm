@@ -8,6 +8,10 @@
 
 Сервис не знает про FastAPI: на вход — сессия и очищенные значения
 формы, на выход — контекст шаблона.
+
+Список файлов (`hw_files`) читается одним SELECT по ДЗ (без N+1) и
+передаётся готовыми строками: шаблон не должен ходить в БД и не должен
+считать размеры сам.
 """
 
 from datetime import datetime
@@ -15,6 +19,9 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import to_local
+from app.config import settings
+from app.files.services.presentation import file_size_label
+from app.files.services.removal import files_of_homework
 from app.homework.models.homework import (
     HOMEWORK_STATUS_LABELS,
     HOMEWORK_STATUSES,
@@ -58,6 +65,25 @@ def panel_values(homework, tutor) -> dict:
     }
 
 
+def _file_rows(db: Session, homework) -> list[dict]:
+    """Строки списка файлов ДЗ: id, имя, размер, ссылка на скачивание.
+
+    Размер форматируется здесь, а не в шаблоне: подпись «12,4 КБ» —
+    правило отображения (`file_size_label`), и Jinja-фильтр не должен
+    дублировать форматирование по месту.
+    """
+    if homework is None:
+        return []
+    return [
+        {
+            "id": file.id,
+            "name": file.original_name,
+            "size_label": file_size_label(file.size),
+            "url": f"/files/{file.id}",
+        }
+        for file in files_of_homework(db, homework.id)
+    ]
+
 def homework_panel_context(
     db: Session,
     lesson: Lesson,
@@ -83,7 +109,8 @@ def homework_panel_context(
     кнопку в состоянии успеха («Успешно сохранено»), которую `lessons.js`
     через пару секунд возвращает в обычный вид (design D8).
     """
-    values = panel_values(get_homework(db, lesson.id), tutor)
+    homework = get_homework(db, lesson.id)
+    values = panel_values(homework, tutor)
     if data is not None:
         values.update(
             {
@@ -100,8 +127,11 @@ def homework_panel_context(
     return {
         "lesson": lesson,
         "hw_form": values,
+        "hw_files": _file_rows(db, homework),
         "hw_errors": errors or [],
         "hw_saved": saved,
         "hw_statuses": HOMEWORK_STATUSES,
         "hw_status_labels": HOMEWORK_STATUS_LABELS,
+        "files_max_size_mb": settings.files_max_size_mb,
+        "files_allowed_extensions": ", ".join(settings.allowed_extensions),
     }

@@ -1,0 +1,39 @@
+{# Список прикреплённых файлов панели ДЗ (спека homework-management,
+   «Прикрепление файлов к ДЗ»).
+
+   Партиал включается и в панель репетитора, и в карточки кабинетов:
+   `files` — готовые строки {id, name, size_label, url}, собранные
+   сервисом; шаблон в БД не ходит и размеры не считает.
+
+   `editable` включает кнопку удаления (только панель репетитора):
+   ученик и родитель файлы только скачивают. Кнопка — `hx-post` на
+   удаление с целью в панель ДЗ: удаление не должно закрывать модалку и
+   терять несохранённые поля вкладки «ДЗ».
+
+   Контекст: files (список строк), editable (флаг), lesson (id урока для
+   адреса удаления). #}
+{% set editable = editable | default(false) %}
+{% if files %}
+<ul class="hw-files">
+    {% for file in files %}
+    <li class="hw-files__item">
+        <span class="hw-files__icon" aria-hidden="true">
+            <i data-lucide="file"></i>
+        </span>
+        <a class="hw-files__link" href="{{ file.url }}"
+           title="Скачать файл">{{ file.name }}</a>
+        <span class="hw-files__size">{{ file.size_label }}</span>
+        {% if editable %}
+        <button class="btn btn--ghost btn--icon hw-files__remove" type="button"
+                hx-post="/tutor/lessons/{{ lesson.id }}/homework/files/{{ file.id }}/delete"
+                hx-target="#homework-panel"
+                hx-swap="outerHTML"
+                aria-label="Удалить файл {{ file.name }}"
+                title="Удалить файл">
+            <i data-lucide="trash-2"></i>
+        </button>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
