@@ -9,23 +9,29 @@
 {% extends "base.html" %}
 {% block body %}
     <main class="auth">
-        <section class="auth__card card" aria-labelledby="auth-title">
-            <a class="auth__brand" href="/">
-                <span class="sidebar__logo" aria-hidden="true">
-                    {% include "_logo.html" %}
-                </span>
-                <span class="sidebar__brand">OpenTutorCRM</span>
-            </a>
+        <div class="auth__stack">
+            <section class="auth__card card" aria-labelledby="auth-title">
+                <a class="auth__brand" href="/">
+                    <span class="sidebar__logo" aria-hidden="true">
+                        {% include "_logo.html" %}
+                    </span>
+                    <span class="sidebar__brand">OpenTutorCRM</span>
+                </a>
 
-            <h1 class="auth__title" id="auth-title">{% block auth_title %}{% endblock %}</h1>
+                <h1 class="auth__title" id="auth-title">{% block auth_title %}{% endblock %}</h1>
 
-            {% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
-            {% if error %}<p class="error">{{ error }}</p>{% endif %}
-            {% if message %}<p class="notice">{{ message }}</p>{% endif %}
+                {% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+                {% if error %}<p class="error">{{ error }}</p>{% endif %}
+                {% if message %}<p class="notice">{{ message }}</p>{% endif %}
 
-            {% block auth_form %}{% endblock %}
+                {% block auth_form %}{% endblock %}
 
-            {% block auth_footer %}{% endblock %}
-        </section>
+                {% block auth_footer %}{% endblock %}
+            </section>
+
+            {# Подпись сервиса под карточкой: версия и исходники видны и до
+               входа — по ним сообщают о проблеме (задача «подпись в подвале»). #}
+            {% include "_footer_signature.html" %}
+        </div>
     </main>
 {% endblock %}

@@ -752,6 +752,13 @@
         display: none;
       }
 
+      /* Подпись сервиса в полосе 72px: версия и значок не влезают в строку
+         (текст + иконка + промежуток шире полосы), поэтому столбиком. */
+      & .app-signature {
+        flex-direction: column;
+        gap: calc(var(--space) * 1);
+      }
+
       /* «Язычок» разворачивает обратно */
       & .sidebar__toggle [data-lucide] {
         transform: rotate(180deg);
@@ -814,6 +821,51 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* --------------------------------------------------------------------------
+     Подпись сервиса в подвале (`_footer_signature.html`): версия и ссылка
+     на исходники. Это справка, а не действие: мелкий приглушённый текст,
+     чтобы не конкурировать с навигацией и строкой пользователя.
+     -------------------------------------------------------------------------- */
+  .app-signature {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--space) * 2);      /* 8px */
+    font-size: var(--text-xs);
+    line-height: 1.2;
+    color: var(--muted-foreground);
+  }
+
+  .app-signature__version {
+    /* Версия — число: табличные цифры не дают подписи «прыгать» при смене
+       версии в пределах одной ширины. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  .app-signature__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    transition: color var(--duration-fast) var(--ease);
+
+    &:hover { color: var(--foreground); }
+  }
+
+  .app-signature__icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* В футере сайдбара подпись идёт под строкой пользователя и отделяется
+     от неё отступом: иначе она читается как часть профиля. */
+  .sidebar__footer .app-signature {
+    margin-top: calc(var(--space) * 2);
   }
 
   /* ==========================================================================
@@ -4203,9 +4255,18 @@
     background: var(--surface);
   }
 
-  .auth__card {
+  /* Колонка страницы входа: карточка формы и подпись сервиса под ней.
+     Ширину задаёт колонка, карточка тянется на её всю. */
+  .auth__stack {
     width: 100%;
     max-width: 400px;               /* not specified — chosen: узкая колонка формы */
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 5);    /* 20px */
+  }
+
+  .auth__card {
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: calc(var(--space) * 5);    /* 20px */
@@ -8436,6 +8497,12 @@
     margin: 0;
     font-size: var(--text-xs);
     color: var(--muted-foreground);
+  }
+
+  /* Подпись сервиса на страницах входа кабинетов: под карточкой формы,
+     по центру, отделена отступом от последнего блока. */
+  .cabinet__signature {
+    margin-top: calc(var(--space) * 8);
   }
 
   /* Ближайшее занятие: карточка с парой «подпись — дата и время». */
