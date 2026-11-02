@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-02 21:14 | 615 files | 174792 tokens
+# rtt index | generated 2026-11-03 01:38 | 616 files | 175264 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -3699,7 +3699,7 @@ def update_task_view(
 )  # Сохраняет задачу; чужая задача отвечает как несуществующая.
 
 # app/templating.py [python]
-imports: pathlib.Path, fastapi.templating.Jinja2Templates, app.student.services.presentation.register_template_helpers, app
+imports: pathlib.Path, fastapi.templating.Jinja2Templates, app.__repository_url__, app.__version__, app.student.services.presentation.register_template_helpers, app
 
 # app/tutor/__init__.py [python]
 
@@ -5343,6 +5343,22 @@ def test_operations_refresh_url_keeps_tab_state(client, tutor_factory)  # Пер
 def test_analytics_pills_load_partial_via_htmx(client, tutor_factory)  # Пилюли 6/12 мес живут внутри секции — тоже грузятся htmx.
 def test_forecast_month_form_loads_partial_via_htmx(client, tutor_factory)  # Смена месяца прогноза подменяет секцию, а не перезагружает страницу.
 def test_tab_isolation_between_tutors(client, tutor_factory, student_factory)  # Чужие операции не попадают в ответ ручки вкладки.
+
+# tests/test_footer_signature.py [python]
+imports: re, tomllib, pathlib.Path, pytest, app.__repository_url__, app.__version__
+def _manifest_version() -> str
+def _login_tutor(client, email: str = "signature-tutor@example.com") -> None
+def _sidebar(page: str) -> str
+def test_version_and_repository_come_from_manifest_and_code()  # Версия подписи — из манифеста, адрес репозитория — из `app`.
+def test_templates_have_no_hardcoded_version()  # В шаблонах нет литерала версии: только переменная окружения.
+def test_tutor_sidebar_footer_shows_current_version(client)  # В подвале сайдбара репетитора — актуальная версия.
+def test_tutor_footer_links_to_github_with_mark(client)  # Ссылка на GitHub — внешняя, безопасная и со значком-иконкой.
+def test_footer_signature_is_near_the_footer_end(client)  # Подпись — самая нижняя часть сайдбара, после профиля и выхода.
+def test_cabinet_sidebar_shows_signature(client, tutor_factory, student_factory)  # Подвал кабинета ученика повторяет подпись CRM.
+def test_public_pages_show_signature(client, url)  # Страницы до входа тоже показывают версию: по ней сообщают о проблеме.
+def test_404_page_shows_signature(client)  # На 404 версия видна: по ней понятно, не устарел ли образ.
+def test_signature_markup_is_shared_partial()  # Одна разметка подписи на все поверхности — партиал `_footer_signature.html`.
+def test_signature_has_css_rules()  # Классы подписи описаны в styles.css — иначе текст потеряет вид.
 
 # tests/test_form_feedback.py [python]
 imports: re, pathlib.Path, pytest
