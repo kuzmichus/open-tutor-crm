@@ -15,7 +15,7 @@ from app.common.services.tutor_time import today_local, to_local
 from app.student.models.contact import Contact
 from app.student.models.student import Student
 from app.student.models.student_contact import StudentContact
-from app.student.services.birthdays import age_on
+from app.student.services.birthdays import age_on, full_years
 
 # Короткие названия месяцев в родительном падеже: «24 окт. в 15:00».
 # Очередная копия в проекте (finance, lesson, tutor): цена разделения
@@ -210,20 +210,15 @@ def birth_date_label(value: date | None) -> str:
     return f"{value:%d.%m.%Y}"
 
 
-def birthday_age_label(birth_date: date | None, day: date) -> str:
-    """«12 лет» — возраст, который исполняется в день `day`; иначе «».
+def _years_label(age: int) -> str:
+    """«1 год» / «2 года» / «5 лет» — возраст со склонением слова «год».
 
     Русская плюрализация по стандартным правилам (как
     `lesson.presentation.unmarked_notice_label`): 11–14 всегда «лет»,
     иначе последняя цифра решает (1 — «год», 2–4 — «года», прочие — «лет»).
-    Пустая строка — возраст неизвестен (нет даты рождения или год
-    рождения ещё не наступил): строку сообщения тогда не дополняем.
+    Одна реализация на все подписи возраста: рассылка «День рождения» и
+    миникарточка списка учеников.
     """
-    if birth_date is None:
-        return ""
-    age = age_on(birth_date, day)
-    if age is None:
-        return ""
     if age % 100 in (11, 12, 13, 14):
         word = "лет"
     elif age % 10 == 1:
@@ -233,6 +228,37 @@ def birthday_age_label(birth_date: date | None, day: date) -> str:
     else:
         word = "лет"
     return f"{age} {word}"
+
+
+def birthday_age_label(birth_date: date | None, day: date) -> str:
+    """«12 лет» — возраст, который исполняется в день `day`; иначе «».
+
+    Пустая строка — возраст неизвестен (нет даты рождения или год
+    рождения ещё не наступил): строку сообщения тогда не дополняем.
+    """
+    if birth_date is None:
+        return ""
+    age = age_on(birth_date, day)
+    if age is None:
+        return ""
+    return _years_label(age)
+
+
+def student_age_label(birth_date: date | None, tutor) -> str:
+    """«12 лет» — полных лет на сегодня в зоне педагога; иначе «».
+
+    День рождения в текущем году учитывается (`full_years`): 2 ноября при
+    дате рождения 3 ноября ученику ещё 11 лет. «Сегодня» берётся в зоне
+    педагога (`today_local`), чтобы возраст совпадал с календарём репетитора
+    (спека tutor-timezone). Пустая строка — даты нет или она в будущем:
+    подпись подтипа тогда ставит шаблон.
+    """
+    if birth_date is None:
+        return ""
+    age = full_years(birth_date, today_local(tutor))
+    if age is None:
+        return ""
+    return _years_label(age)
 
 
 def register_template_helpers() -> None:
@@ -249,6 +275,7 @@ def register_template_helpers() -> None:
         short_date_label=short_date_label,
         month_label=month_label,
         birth_date_label=birth_date_label,
+        student_age_label=student_age_label,
     )
 
 

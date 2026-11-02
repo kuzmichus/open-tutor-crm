@@ -6,7 +6,7 @@
 """
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
@@ -150,6 +150,83 @@ def test_card_hides_grade_and_school_for_adult(client, owner, student_factory):
     )
     card = _card_article(client.get("/tutor/students").text)
     assert "Школа" not in card
+
+# --------------------------------------------------------------------------
+# Возраст вместо подтипа в миникарточке (change show-age-in-minicard)
+# --------------------------------------------------------------------------
+
+@pytest.fixture()
+def fixed_today(monkeypatch):
+    """Фиксирует «сегодня» педагога: 2 ноября 2026 года (зона UTC)."""
+    monkeypatch.setattr(
+        "app.common.services.tutor_time.utcnow",
+        lambda: datetime(2026, 11, 2, 10, 0, tzinfo=UTC),
+    )
+
+def test_card_shows_age_instead_of_child_label(
+    client, owner, student_factory, fixed_today
+):
+    """У ребёнка с датой рождения вместо «Ребёнок» — возраст полных лет."""
+    student_factory(
+        tutor_id=owner, first_name="Маша", birth_date=date(2019, 5, 17)
+    )
+    card = _card_article(client.get("/tutor/students").text)
+
+    assert "7 лет" in card
+    assert "Ребёнок" not in card
+
+def test_card_shows_age_instead_of_adult_label(
+    client, owner, student_factory, fixed_today
+):
+    """У взрослого с датой рождения возраст заменяет «Взрослый»."""
+    student_factory(
+        tutor_id=owner,
+        first_name="Пётр",
+        kind="adult",
+        birth_date=date(1990, 5, 17),
+    )
+    card = _card_article(client.get("/tutor/students").text)
+
+    assert "36 лет" in card
+    assert "Взрослый" not in card
+
+def test_card_shows_age_with_grade_for_child(
+    client, owner, student_factory, fixed_today
+):
+    """Суффикс «, N класс» у ребёнка сохраняется рядом с возрастом."""
+    student_factory(
+        tutor_id=owner,
+        first_name="Маша",
+        birth_date=date(2019, 5, 17),
+        grade=5,
+    )
+    card = _card_article(client.get("/tutor/students").text)
+
+    assert "7 лет, 5 класс" in card
+
+def test_card_without_birth_date_keeps_kind_label(
+    client, owner, student_factory, fixed_today
+):
+    """Без даты рождения подпись подтипа остаётся прежней."""
+    student_factory(tutor_id=owner, first_name="БезДаты")
+    student_factory(tutor_id=owner, first_name="ВзрослыйБезДаты", kind="adult")
+    html = client.get("/tutor/students").text
+
+    first = html[html.index("БезДаты") :]
+    assert "Ребёнок" in first[: first.index("</article>")]
+    assert "Взрослый" in html[html.index("ВзрослыйБезДаты") :]
+
+def test_card_with_future_birth_date_keeps_kind_label(
+    client, owner, student_factory, fixed_today
+):
+    """Дата рождения в будущем не даёт отрицательного возраста — подтип."""
+    student_factory(
+        tutor_id=owner, first_name="ИзБудущего", birth_date=date(2027, 1, 1)
+    )
+    card = _card_article(client.get("/tutor/students").text)
+
+    assert "Ребёнок" in card
+    assert "лет" not in card
 
 
 # --------------------------------------------------------------------------
