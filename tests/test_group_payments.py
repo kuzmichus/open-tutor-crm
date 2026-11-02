@@ -246,8 +246,10 @@ def test_panel_refunds_scoped_to_members(
 
     response = client.get(f"/tutor/groups/{group_id}/payments")
 
+    # Сравниваем отформатированную сумму, а не подстроку «700»: она случайно
+    # встречается в hex-идентификаторах uuid4 прямо в разметке страницы.
     assert money(300) in response.text
-    assert "700" not in response.text
+    assert money(700) not in response.text
 
 
 # --------------------------------------------------------------------------
