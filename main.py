@@ -20,6 +20,7 @@ from app.common.static_files import RevalidatingStaticFiles
 from app.common.views import router as common_router
 from app.common.views.not_found import not_found
 from app.finance.views import router as finance_router
+from app.files.views import router as files_router
 from app.group.views import router as group_router
 from app.homework.views import router as homework_router
 from app.lesson.views import router as lesson_router
@@ -50,6 +51,9 @@ def create_app() -> FastAPI:
     app.include_router(booking_router)
     app.include_router(stats_router)
     app.include_router(task_router)
+    # Файлы: `GET /files/{file_id}` — общий адрес скачивания для репетитора,
+    # ученика и родителя (доступ проверяется по их сессиям).
+    app.include_router(files_router)
     # Кабинет ученика: публичные страницы (`/invite/<token>`,
     # `/student/login`) и страницы с сессией ученика (`/student`).
     app.include_router(cabinet_router)

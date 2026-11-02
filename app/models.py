@@ -19,6 +19,8 @@ from app.finance.models.account_operation import AccountOperation  # noqa: F401
 from app.gcalendar.models.calendar_event import CalendarEvent  # noqa: F401
 from app.finance.models.expense import Expense  # noqa: F401
 from app.finance.models.forecast_snapshot import ForecastSnapshot  # noqa: F401
+from app.files.models.homework_file import HomeworkFile  # noqa: F401
+from app.files.models.stored_file import StoredFile  # noqa: F401
 from app.group.models.group import Group  # noqa: F401
 from app.group.models.group_member import GroupMember  # noqa: F401
 from app.homework.models.answer import HomeworkAnswer  # noqa: F401
