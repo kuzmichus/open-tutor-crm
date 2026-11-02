@@ -9031,6 +9031,64 @@
     color: var(--status-cancelled-fg);
   }
 
+  /* Список прикреплённых файлов ДЗ (change add-file-uploads): строка —
+     иконка, имя-ссылка, размер и (в панели репетитора) кнопка удаления.
+     Размер прижат вправо, имя переносится, чтобы длинное имя не растягивало
+     модалку. */
+  .hw-files {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin: calc(var(--space) * 2) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .hw-files__item {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--muted);
+    font-size: var(--text-sm);
+  }
+
+  .hw-files__icon {
+    display: inline-flex;
+    color: var(--muted-foreground);
+
+    & svg { width: 16px; height: 16px; }
+  }
+
+  .hw-files__link {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--foreground);
+    font-weight: var(--font-medium);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .hw-files__link:hover { color: var(--brand); }
+
+  .hw-files__size {
+    flex: 0 0 auto;
+    color: var(--muted-foreground);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .hw-files__remove { flex: 0 0 auto; }
+
+  /* Поле выбора файлов: нативный input без собственной рамки — вокруг
+     него уже рамка поля формы, вторая читалась бы как ошибка. */
+  .hw-upload {
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    height: auto;
+  }
+
 @layer utilities {
   /* Утилиты — минимальный набор */
   .sr-only {

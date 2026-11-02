@@ -67,6 +67,12 @@
                         <a href="{{ item.recording_url }}" target="_blank" rel="noopener">Запись урока</a>
                     </p>
                     {% endif %}
+                    {# Файлы задания: родитель только скачивает — кнопки
+                       удаления нет (`editable` не задан). #}
+                    {% if item.files %}
+                    {% set files = item.files %}
+                    {% include "homework/_files.html" %}
+                    {% endif %}
                 </div>
             </article>
             {% endfor %}
