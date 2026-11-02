@@ -66,6 +66,8 @@ db.sqlite3-journal
 tutor.db
 # Резервные копии локальной базы (создаются перед разрушающими скриптами).
 tutor.db.bak-*
+# Локальное хранилище загруженных файлов (FILES_BACKEND=local, дефолт ./files).
+/files/
 
 # Flask stuff:
 instance/

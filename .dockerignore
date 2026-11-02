@@ -18,6 +18,9 @@ __pycache__
 .env
 *.db
 
+# Локальные загрузки dev-сервера (FILES_LOCAL_ROOT=./files) — данные, а не код.
+files/
+
 # В рантайме не нужны.
 tests/
 openspec/
