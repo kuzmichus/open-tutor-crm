@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-01 17:40 | 581 files | 160675 tokens
+# rtt index | generated 2026-11-02 21:07 | 615 files | 174792 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -87,6 +87,11 @@ def _has_table(bind, name: str) -> bool  # True, если таблица уже 
 def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
 
+# alembic/versions/c4b7a1f90d21_add_calendar_events.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
 # alembic/versions/cc8049b1f87d_add_tutor_params.py [python]
 imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def upgrade() -> None  # Upgrade schema.
@@ -114,6 +119,11 @@ def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
 
 # alembic/versions/e8ae8f952073_add_tutor_unavailability.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
+# alembic/versions/ea9ed99a62d2_add_student_birth_date.py [python]
 imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
@@ -299,7 +309,7 @@ def cancel_booking(
 )  # Отменяет подтверждённую бронь, не трогая урок и ученика.
 
 # app/booking/views/confirm.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.booking.services.access.get_owned_booking, app.booking.services.access.require_tutor_id, app.booking.services.confirmation.confirm, app.common.responses.dialog_closed, app.common.responses.is_htmx, app.common.services.tutor_time.now_utc, app.database.get_db, app.slot.models.slot.Slot, app.slot.services.dialog_context.dialog_context, app.templating.templates, app.tutor.models.tutor.Tutor
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.booking.services.access.get_owned_booking, app.booking.services.access.require_tutor_id, app.booking.services.confirmation.confirm, app.common.responses.dialog_closed, app.common.responses.is_htmx, app.common.services.tutor_time.now_utc, app.database.get_db, app.gcalendar.services.sync.sync_lesson, app.lesson.models.lesson.Lesson, app.slot.models.slot.Slot, app.slot.services.dialog_context.dialog_context, app.templating.templates, app.tutor.models.tutor.Tutor
 def _choice(form) -> str  # Выбранный ученик из формы; пустое значение — «не выбран».
 def _kind(form) -> str  # Признак нового ученика из формы; недопустимое значение — пусто.
 def confirm_booking(
@@ -427,6 +437,16 @@ def get_student_homework(
     db: Session, homework_id: str, student_id: str
 ) -> Homework  # ДЗ урока этого ученика либо 404.
 
+# app/cabinet/services/calendar.py [python]
+imports: dataclasses.replace, datetime.date, datetime.timedelta, sqlalchemy.select, sqlalchemy.orm.Session, app.cabinet.services.homework.HIDDEN_STATUSES, app.cabinet.services.presentation.homework_status_label, app.calendar.services.presentation.build_calendar_context, app.calendar.services.presentation.clock_to_minutes, app.calendar.services.schedule_day.ScheduleDay, app.calendar.services.schedule_event.ScheduleEvent, app.calendar.services.week.week_bounds, app.calendar.services.week_lesson.WeekLesson, app.common.colors.DEFAULT_TARGET_COLOR, app.common.services.tutor_time.now_local, app.common.services.tutor_time.tutor_zone_name, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.services.settings.get_settings
+def student_week_lessons(
+    db: Session, student_id: str, monday: date, tutor
+) -> list[WeekLesson]  # Уроки ученика за неделю `monday` — индивидуальные и групповые.
+def homework_by_lesson(db: Session, lesson_ids: list[str]) -> dict[str, str]  # Статусы ДЗ по id уроков: один SELECT на всю неделю.
+def student_calendar_context(
+    db: Session, student, tutor, monday: date
+) -> dict  # Контекст шаблона недельного календаря ученика.
+
 # app/cabinet/services/child_finance.py [python]
 imports: dataclasses.dataclass, sqlalchemy.select, sqlalchemy.orm.Session, app.cabinet.services.children.children, app.finance.models.account_operation.BALANCE_PAYMENT_STATUS, app.finance.models.account_operation.AccountOperation, app.finance.services.balance.balance, app.finance.services.operations.student_history, app.student.models.student.Student
 def payments_total(db: Session, student_id: str) -> int  # Сумма пополнений ребёнка: оплаченные платежи, без возвратов.
@@ -503,6 +523,8 @@ def homework_lesson_title(lesson, tutor) -> str  # «урок 30 октября 
 def homework_due_label(value: datetime | None, tutor) -> str  # «30 октября 2026, 12:00» — строка «Срок: …» карточки.
 def homework_status_label(status: str) -> str  # Подпись статуса ДЗ: «Задано»; неизвестное значение — как есть.
 def homework_chip_class(status: str) -> str  # Класс чипа статуса: «chip--hw-assigned»; неизвестное — нейтральный.
+def homework_badge_class(status: str) -> str  # Класс значка ДЗ в карточке календаря; неизвестный статус — «Задано».
+def homework_badge_label(status: str) -> str  # Подпись значка ДЗ для `title`/`aria-label`: «Задано», «Проверено»…
 def register_template_helpers() -> None  # Регистрирует функции отображения в общем Jinja-окружении.
 
 # app/cabinet/services/registration.py [python]
@@ -550,12 +572,13 @@ def submit_answer(
 )  # Сохраняет ответ ученика; чужое ДЗ отвечает как несуществующее (404).
 
 # app/cabinet/views/index.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.cabinet.services.access.require_student_id, app.cabinet.services.lessons.upcoming_lessons, app.database.get_db, app.student.models.student.Student, app.templating.templates, app.tutor.models.tutor.Tutor
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.cabinet.services.access.require_student_id, app.cabinet.services.calendar.student_calendar_context, app.cabinet.services.lessons.upcoming_lessons, app.calendar.services.week.week_start, app.common.responses.is_htmx, app.common.services.tutor_time.today_local, app.database.get_db, app.student.models.student.Student, app.templating.templates, app.tutor.models.tutor.Tutor
 def cabinet_index(
     request: Request,
+    start: str | None = None,
     db: Session = Depends(get_db),
     student_id: str = Depends(require_student_id),
-) -> HTMLResponse  # «Мои уроки»: ближайшее занятие и список ближайших уроков.
+) -> HTMLResponse  # «Мои уроки»: ближайшее занятие и неделя в режиме только чтения.
 
 # app/cabinet/views/login.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.select, sqlalchemy.orm.Session, app.cabinet.services.sessions.create_session, app.cabinet.services.sessions.set_student_cookie, app.database.get_db, app.student.models.student_access.StudentAccess, app.templating.templates, app.tutor.services.password_hasher.PasswordHasher
@@ -823,7 +846,7 @@ def saved_response(
 # app/common/services/__init__.py [python]
 
 # app/common/services/cron.py [python]
-imports: logging, collections.abc.Callable, typing.TYPE_CHECKING, app.database.SessionLocal, app.models, app.lesson.services.auto_complete.auto_complete_finished_lessons
+imports: logging, collections.abc.Callable, typing.TYPE_CHECKING, app.database.SessionLocal, app.models, app.gcalendar.services.reconcile.reconcile_all, app.lesson.services.auto_complete.auto_complete_finished_lessons, app.messenger.services.birthday_digest.notify_birthday_digest, app.messenger.services.daily_digest.run_daily_digests
 def run_tasks() -> int  # Выполняет все задания из `TASKS`; возвращает 0, либо 1 при падении.
 
 # app/common/services/forms.py [python]
@@ -948,6 +971,7 @@ imports: datetime.datetime, sqlalchemy.select, sqlalchemy.orm.Session, app.finan
 def affects_balance(kind: str, status: str | None) -> bool  # Входит ли операция в баланс.
 def signed_amount(kind: str, status: str | None, amount: int) -> int  # Вклад операции в баланс: `+amount` для платежа, `−amount` для остальных.
 def balance(db: Session, student_id: str) -> int  # Текущий баланс ученика в рублях (может быть отрицательным).
+def shortfall(balance_value: int, price: int | None) -> int  # Сколько рублей не хватает на оплату урока по цене `price`.
 def last_operation_at(db: Session, student_id: str) -> datetime | None  # Момент последней операции ученика в aware UTC; операций нет — None.
 
 # app/finance/services/balances.py [python]
@@ -963,6 +987,9 @@ def card_summary_context(db: Session, student, tutor) -> dict  # Контекс�
 imports: sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.AccountOperation, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.student.services.activation.activate_on_first_charge, app.tutor.services.clock.as_utc
 def group_targets(db: Session, group_id: str) -> list[tuple[str, int | None]]  # Цели группового урока: пары «ученик, цена» по текущему составу.
 def absent_student_ids(db: Session, lesson_id: str) -> set[str]  # Ученики, отмеченные на уроке отсутствовавшими (`present = false`).
+def lesson_targets_any_status(
+    db: Session, lesson: Lesson
+) -> list[tuple[str, int | None]]  # Цели урока с ценами независимо от статуса: «ученик, цена».
 def lesson_targets(db: Session, lesson: Lesson) -> list[tuple[str, int | None]]  # Цели урока с ценами: пусто у непроведённого урока.
 def sync_lesson_charge(db: Session, lesson: Lesson) -> int  # Приводит списания урока в соответствие с ним; без коммита.
 def series_lessons(db: Session, series_id: str) -> list[Lesson]  # Уроки серии — для массового пересчёта списаний.
@@ -1419,6 +1446,167 @@ def finance_tab(
     tutor_id: str = Depends(require_tutor_id),
 ) -> HTMLResponse  # Секция операций с открытой вкладкой `tab`; без сессии — на вход.
 
+# app/gcalendar/__init__.py [python]
+
+# app/gcalendar/models/__init__.py [python]
+
+# app/gcalendar/models/calendar_event.py [python]
+imports: datetime.UTC, datetime.datetime, sqlalchemy.DateTime, sqlalchemy.ForeignKey, sqlalchemy.String, sqlalchemy.orm.Mapped, sqlalchemy.orm.mapped_column, app.database.Base
+class CalendarEvent(Base)
+  def __repr__(self) -> str
+
+# app/gcalendar/services/__init__.py [python]
+
+# app/gcalendar/services/api.py [python]
+imports: json, urllib, collections.abc.Callable, app.gcalendar.services.errors.GoogleApiError, app.gcalendar.services.errors.GoogleUnauthorized
+def insert_event(access_token: str, calendar_id: str, payload: dict) -> str  # Создаёт событие и возвращает его id.
+def patch_event(
+    access_token: str,
+    calendar_id: str,
+    event_id: str,
+    payload: dict,
+) -> None  # Частично обновляет событие: меняются только присланные поля.
+def delete_event(access_token: str, calendar_id: str, event_id: str) -> None  # Удаляет событие; 404/410 — событие уже удалено, это не ошибка.
+def list_event_ids(
+    access_token: str,
+    calendar_id: str,
+    *,
+    time_min: str,
+    time_max: str,
+) -> set[str]  # Id всех событий календаря в окне [time_min, time_max) — для сверки.
+class _NotFound(GoogleApiError)
+def _events_url(calendar_id: str) -> str
+def _event_url(calendar_id: str, event_id: str) -> str
+def _request(
+    method: str,
+    url: str,
+    access_token: str,
+    *,
+    payload: dict | None = None,
+    query: str = "",
+) -> dict  # Запрос к API; сеть и ошибки ответа — `GoogleApiError`.
+def _error_message(raw: bytes) -> str  # Текст ошибки из тела ответа Google (`error.message`); без тела — пусто.
+
+# app/gcalendar/services/connection.py [python]
+imports: datetime.UTC, datetime.datetime, datetime.timedelta, sqlalchemy.orm.Session, app.gcalendar.models.calendar_event.DEFAULT_CALENDAR_ID, app.gcalendar.services.oauth, app.gcalendar.services.errors.GoogleApiError, app.tutor.services.params.all_params, app.tutor.services.params.forget_param, app.tutor.services.params.get_param, app.tutor.services.params.save_param, app.tutor.services.params.set_param, app.tutor.services.clock.as_utc, app.tutor.services.clock.utcnow
+def is_connected(db: Session, tutor_id: str) -> bool  # Календарь подключён: сохранён refresh_token.
+def account_email(db: Session, tutor_id: str) -> str  # Email подключённого аккаунта для подписи карточки (может быть пустым).
+def refresh_token(db: Session, tutor_id: str) -> str  # Сохранённый refresh_token (пустая строка — календарь не подключён).
+def calendar_id(db: Session, tutor_id: str) -> str  # Календарь, в который пишутся события; по умолчанию — основной.
+def last_error(db: Session, tutor_id: str) -> str  # Текст последней ошибки синхронизации для карточки (пусто — не было).
+def save_tokens(
+    db: Session,
+    tutor_id: str,
+    *,
+    refresh_token: str | None,
+    access_token: str,
+    expires_in: int | None,
+    account_email: str = "",
+    calendar_id_value: str = DEFAULT_CALENDAR_ID,
+    commit: bool = True,
+) -> None  # Сохраняет токены подключения.
+def set_last_error(db: Session, tutor_id: str, message: str) -> None  # Запоминает текст ошибки для карточки (пусто — очищает).
+def save_oauth_state(db: Session, tutor_id: str, state: str) -> None  # Одноразовый `state` ссылки согласия — защита от подмены callback.
+def take_oauth_state(db: Session, tutor_id: str) -> str | None  # Читает и гасит `state`: второй callback с тем же значением отклоняется.
+def clear(db: Session, tutor_id: str) -> None  # Удаляет все параметры интеграции (отключение календаря).
+def access_token(db: Session, tutor_id: str) -> str | None  # Действующий access_token; истёкший обновляется по refresh_token.
+def force_refresh(db: Session, tutor_id: str) -> str | None  # Принудительно обновляет access_token (после 401 от API).
+def _refresh(db: Session, tutor_id: str, refresh_token: str) -> str  # Обмен refresh_token на новый access_token и сохранение результата.
+def _expired(raw: str | None) -> bool  # Срок access_token истёк (или неизвестен — тогда считаем истёкшим).
+def params_snapshot(db: Session, tutor_id: str) -> dict[str, str]  # Все параметры репетитора одним запросом (для отладочных проверок).
+
+# app/gcalendar/services/errors.py [python]
+class GoogleError(Exception)
+class GoogleNotConfigured(GoogleError)
+class GoogleApiError(GoogleError)
+class GoogleUnauthorized(GoogleApiError)
+class GoogleReauthRequired(GoogleApiError)
+
+# app/gcalendar/services/event_payload.py [python]
+imports: hashlib, json, datetime.timedelta, app.common.services.tutor_time.to_local, app.common.services.tutor_time.tutor_zone_name, app.lesson.models.lesson.LESSON_TYPE_LABELS
+def build_event(
+    lesson,
+    tutor,
+    *,
+    student_name: str | None = None,
+    group_name: str | None = None,
+) -> dict  # Тело события Calendar API из урока.
+def content_hash(payload: dict) -> str  # sha256 тела события: одинаковый урок — одинаковый хеш.
+def _target_name(
+    lesson, *, student_name: str | None, group_name: str | None
+) -> str  # Цель урока так же, как в списке занятий: «Группа: X» или имя ученика.
+def _summary(
+    lesson, *, student_name: str | None, group_name: str | None
+) -> str
+def _description(
+    lesson, *, student_name: str | None, group_name: str | None
+) -> str  # Описание события: тип, стоимость, заметка и ссылка на встречу.
+
+# app/gcalendar/services/initial_sync.py [python]
+imports: sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.now_utc, app.gcalendar.services.sync.OUTCOME_CREATED, app.gcalendar.services.sync.OUTCOME_FAILED, app.gcalendar.services.sync.OUTCOME_UPDATED, app.gcalendar.services.sync.enabled, app.gcalendar.services.sync.sync_lesson, app.group.models.group.Group, app.lesson.models.lesson.Lesson, app.student.models.student.Student
+def sync_upcoming(db: Session, tutor) -> tuple[int, int, int]  # Выгружает будущие занятия. Возвращает `(создано, обновлено, ошибок)`.
+def _upcoming_lessons(db: Session, tutor_id: str) -> list[Lesson]  # Занятия репетитора со `starts_at >= сейчас`, по возрастанию времени.
+
+# app/gcalendar/services/mapping.py [python]
+imports: sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.gcalendar.models.calendar_event.CalendarEvent, app.group.models.group.Group, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.services.clock.utcnow
+def get(db: Session, lesson_id: str) -> CalendarEvent | None  # Строка соответствия урока или `None`, если события ещё нет.
+def upsert(
+    db: Session,
+    lesson_id: str,
+    *,
+    event_id: str,
+    calendar_id: str,
+    content_hash: str,
+) -> CalendarEvent  # Создаёт или обновляет строку соответствия (без коммита).
+def forget(db: Session, lesson_id: str) -> None  # Удаляет строку соответствия (без коммита); отсутствие — не ошибка.
+def forget_tutor(db: Session, tutor_id: str) -> int  # Удаляет все строки соответствий репетитора. Возвращает число строк.
+def event_ids_of_tutor(db: Session, tutor_id: str) -> dict[str, CalendarEvent]  # Все строки соответствий репетитора: «event_id → строка».
+def _owned_query(tutor_id: str)  # Выборка строк соответствий через JOIN по цели урока.
+
+# app/gcalendar/services/oauth.py [python]
+imports: json, urllib, app.config.settings, app.gcalendar.services.errors.GoogleApiError, app.gcalendar.services.errors.GoogleNotConfigured, app.gcalendar.services.errors.GoogleReauthRequired
+def configured() -> bool  # Креды OAuth заданы в окружении сервера (иначе интеграция выключена).
+def _require_configured() -> None
+def build_auth_url(redirect_uri: str, state: str) -> str  # Ссылка согласия Google: offline-доступ и одноразовый `state`.
+def exchange_code(code: str, redirect_uri: str) -> dict  # Обменивает код согласия на токены; возвращает тело ответа Google.
+def refresh_access_token(refresh_token: str) -> dict  # Новый access_token по refresh_token; при `invalid_grant` — повторный вход.
+def revoke_token(token: str) -> None  # Отзывает токен в Google (best-effort: ошибка не считается провалом).
+def fetch_account_email(access_token: str) -> str  # Email аккаунта для подписи карточки; пустая строка — не удалось.
+def _token_request(payload: dict) -> dict  # POST на token endpoint; ошибка Google → доменное исключение.
+def _error_body(raw: bytes) -> tuple[str, str]  # (error, error_description)` из тела ответа; без тела — пустые строки.
+
+# app/gcalendar/services/presentation.py [python]
+imports: sqlalchemy.orm.Session, app.config.settings, app.gcalendar.services.connection, app.gcalendar.services.oauth
+def google_error_message(code: str) -> str  # Текст ошибки по коду из query-параметра; неизвестный код — общий.
+def google_calendar_context(db: Session, tutor_id: str, error: str = "") -> dict  # Словарь состояния блока; `error` — текст из query-параметра страницы.
+
+# app/gcalendar/services/reconcile.py [python]
+imports: logging, datetime.datetime, datetime.timedelta, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.now_utc, app.gcalendar.services.api, app.gcalendar.services.connection, app.gcalendar.services.mapping, app.gcalendar.services.errors.GoogleApiError, app.gcalendar.services.errors.GoogleReauthRequired, app.gcalendar.services.sync.OUTCOME_CREATED, app.gcalendar.services.sync.OUTCOME_FAILED, app.gcalendar.services.sync.OUTCOME_UPDATED, app.gcalendar.services.sync.log_failure, app.gcalendar.services.sync.enabled, app.gcalendar.services.sync.sync_lesson, app.group.models.group.Group, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.models.tutor.Tutor
+def reconcile_all(db: Session, *, now: datetime | None = None) -> int  # Сверяет календари всех подключённых репетиторов; число изменений.
+def reconcile_tutor(db: Session, tutor, *, now: datetime | None = None) -> int  # Сверяет окно одного репетитора. Без коммита — его делает вызывающий.
+def _delete_orphans(
+    db: Session, tutor, time_min: datetime, time_max: datetime
+) -> int  # Удаляет события, чьих занятий в БД уже нет (или они вне окна).
+def _connected_tutors(db: Session) -> list[Tutor]  # Репетиторы с сохранённым refresh_token — одной выборкой, без N+1.
+def _window_lessons(
+    db: Session, tutor_id: str, time_min: datetime, time_max: datetime
+) -> list[Lesson]  # Занятия репетитора в окне сверки, по возрастанию времени.
+
+# app/gcalendar/services/redirect.py [python]
+imports: fastapi.Request, app.config.settings
+def redirect_uri(request: Request) -> str  # Внешний адрес callback: из окружения, иначе из запроса.
+
+# app/gcalendar/services/sync.py [python]
+imports: logging, sqlalchemy.orm.Session, app.config.settings, app.gcalendar.services.api, app.gcalendar.services.connection, app.gcalendar.services.event_payload, app.gcalendar.services.mapping, app.gcalendar.services.errors.GoogleApiError, app.gcalendar.services.errors.GoogleReauthRequired, app.gcalendar.services.errors.GoogleUnauthorized, app.group.models.group.Group, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.student.services.presentation.student_full_name
+def enabled(db: Session, tutor_id: str) -> bool  # Синхронизация возможна: включена флагом и календарь подключён.
+def sync_lesson(db: Session, tutor, lesson: Lesson) -> str  # Создаёт или обновляет событие урока; возвращает `OUTCOME_*`.
+def sync_lessons(db: Session, tutor, lessons: list[Lesson]) -> list[str]  # Синхронизирует пачку уроков (серия); исходы по каждому.
+def delete_lesson_event(db: Session, tutor, lesson: Lesson) -> bool  # Удаляет событие урока в Google.
+def build_payload(db: Session, lesson: Lesson, tutor) -> dict  # Тело события из урока и имён его цели.
+def _call(db: Session, tutor_id: str, action)  # Вызов API с одним повтором после обновления access_token.
+def _handle_reauth(db: Session, tutor_id: str) -> None  # Сбрасывает подключение при отозванном доступе и пишет причину.
+def log_failure(db: Session, tutor_id: str, exc: GoogleApiError) -> None  # Пишет ошибку в лог и в карточку; исключение не пробрасывается.
+
 # app/group/__init__.py [python]
 
 # app/group/models/__init__.py [python]
@@ -1583,13 +1771,14 @@ def create_group_student(
 ) -> HTMLResponse  # Создаёт ученика и возвращает строку состава для формы группы.
 
 # app/group/views/delete_group.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.require_tutor_id, app.common.responses.is_htmx, app.database.get_db, app.group.services.access.get_owned_group, app.group.services.group_writer.delete_group, app.group.services.groups.group_options, app.templating.templates
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.select, sqlalchemy.orm.Session, app.common.access.require_tutor_id, app.common.responses.is_htmx, app.database.get_db, app.gcalendar.services.sync.delete_lesson_event, app.group.services.access.get_owned_group, app.group.services.group_writer.delete_group, app.group.services.groups.group_options, app.lesson.models.lesson.Lesson, app.templating.templates, app.tutor.models.tutor.Tutor
 def delete_group_view(
     request: Request,
     group_id: str,
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 )  # Удаляет группу; чужая группа отвечает как отсутствующая (404).
+def _group_lessons(db: Session, group_id: str) -> list[Lesson]  # Уроки группы — по одной выборке, до каскадного удаления.
 
 # app/group/views/edit_group.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.access.require_tutor_id, app.database.get_db, app.group.services.access.get_owned_group, app.group.services.form_context.manage_context, app.templating.templates
@@ -1753,6 +1942,24 @@ def overdue_lessons(
     after: timedelta = AUTO_COMPLETE_AFTER,
 ) -> list[Lesson]  # Не отмеченные уроки, «просроченные» дольше `after` после конца.
 def auto_complete_finished_lessons(db: Session, *, now: datetime | None = None) -> int  # Отмечает «Проведён» просроченные не отмеченные уроки; возвращает их число.
+
+# app/lesson/services/daily_digest.py [python]
+imports: datetime.date, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.local_day_bounds, app.common.services.tutor_time.today_local, app.finance.services.charges.lesson_targets_any_status, app.group.models.group.Group, app.lesson.models.lesson.Lesson, app.lesson.services.digest_lesson.DigestLesson, app.lesson.services.digest_target.DigestTarget, app.student.models.student.Student, app.tutor.services.clock.as_utc
+def _full_name(first_name: str | None, last_name: str | None) -> str  # «Иван Иванов» — имя ученика одной строкой.
+def _names_by_student(db: Session, tutor_id: str, ids: set[str]) -> dict[str, str]  # Имена учеников педагога одним запросом: `student_id → имя`.
+def digest_lessons(
+    db: Session,
+    tutor,
+    day: date | None = None,
+) -> list[DigestLesson]  # Запланированные уроки дня педагога по времени начала.
+
+# app/lesson/services/digest_lesson.py [python]
+imports: dataclasses.dataclass, datetime.datetime, app.lesson.services.digest_target.DigestTarget
+class DigestLesson
+
+# app/lesson/services/digest_target.py [python]
+imports: dataclasses.dataclass
+class DigestTarget
 
 # app/lesson/services/group_lessons.py [python]
 imports: sqlalchemy.select, sqlalchemy.orm.Session, app.group.models.group.Group, app.homework.models.homework.Homework, app.lesson.models.lesson.LESSON_STATUSES, app.lesson.models.lesson.Lesson
@@ -1945,7 +2152,7 @@ def complete_selected_view(
 )  # Отмечает выбранные уроки проведёнными; чужие id игнорируются.
 
 # app/lesson/views/create.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.access.require_tutor_id, app.common.responses.saved_response, app.database.get_db, app.lesson.services.lesson_form.lesson_form_context, app.lesson.services.lesson_form.parse_duration_min, app.lesson.services.lesson_form.parse_lesson_form, app.lesson.services.lesson_form.parse_starts_at, app.lesson.services.lesson_form.validate_targets, app.lesson.services.lesson_writer.create_series, app.lesson.services.lesson_writer.create_single_lesson, app.lesson.services.unavailability_check.lesson_unavailability_warning, app.lesson.services.unavailability_check.warning_context, app.templating.templates, app.tutor.models.tutor.Tutor
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.access.require_tutor_id, app.common.responses.saved_response, app.database.get_db, app.gcalendar.services.sync.sync_lessons, app.lesson.services.lesson_form.lesson_form_context, app.lesson.services.lesson_form.parse_duration_min, app.lesson.services.lesson_form.parse_lesson_form, app.lesson.services.lesson_form.parse_starts_at, app.lesson.services.lesson_form.validate_targets, app.lesson.services.lesson_writer.create_series, app.lesson.services.lesson_writer.create_single_lesson, app.lesson.services.unavailability_check.lesson_unavailability_warning, app.lesson.services.unavailability_check.warning_context, app.templating.templates, app.tutor.models.tutor.Tutor
 def new_lesson_form(
     request: Request,
     starts_at: str | None = None,
@@ -1989,7 +2196,7 @@ def create_lesson_student(
 ) -> HTMLResponse  # Создаёт ученика и возвращает его как выбранную цель урока.
 
 # app/lesson/views/delete.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.responses.saved_response, app.database.get_db, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.lesson.services.lesson_remover.delete_lesson
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.responses.saved_response, app.database.get_db, app.gcalendar.services.sync.delete_lesson_event, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.lesson.services.lesson_remover.delete_lesson, app.tutor.models.tutor.Tutor
 def delete_lesson_view(
     lesson_id: str,
     request: Request,
@@ -1998,7 +2205,7 @@ def delete_lesson_view(
 )  # Удаляет урок; чужой урок отвечает как несуществующий (404).
 
 # app/lesson/views/delete_series.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.status, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.responses.is_htmx, app.database.get_db, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.lesson.services.lesson_remover.delete_series
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.status, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.responses.is_htmx, app.database.get_db, app.finance.services.charges.series_lessons, app.gcalendar.services.sync.delete_lesson_event, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.lesson.services.lesson_remover.delete_series, app.tutor.models.tutor.Tutor
 def delete_series_view(
     lesson_id: str,
     request: Request,
@@ -2049,7 +2256,7 @@ def lookup_lesson_students(
 ) -> HTMLResponse  # Фрагмент списка выбора ученика: поиск по имени, параметр `q`.
 
 # app/lesson/views/move.py [python]
-imports: datetime.datetime, fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.status, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.responses.saved_response, app.common.services.tutor_time.to_utc, app.database.get_db, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.lesson.services.unavailability_check.start_unavailability_warning, app.lesson.services.unavailability_check.warning_context, app.tutor.models.tutor.Tutor
+imports: datetime.datetime, fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.status, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.responses.saved_response, app.common.services.tutor_time.to_utc, app.database.get_db, app.gcalendar.services.sync.sync_lesson, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.lesson.services.unavailability_check.start_unavailability_warning, app.lesson.services.unavailability_check.warning_context, app.tutor.models.tutor.Tutor
 def _parse_starts_at(date_value: str, time_value: str, tutor) -> datetime  # date` + `time` из drag → начало урока (aware UTC); кривое — 400.
 def _acknowledged(form) -> bool  # Признак подтверждения из запроса: `1`/`on`/`true`/`yes`.
 def move_lesson(
@@ -2068,7 +2275,7 @@ def notices_partial(
 ) -> HTMLResponse  # Плашка напоминания; без сессии — редирект на вход (LoginRequired).
 
 # app/lesson/views/update.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.responses.saved_response, app.common.services.tutor_time.to_local, app.database.get_db, app.finance.services.charges.sync_lesson_charges, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.lesson.services.lesson_form.DEFAULT_MODAL_TARGET, app.lesson.services.lesson_form.lesson_form_context, app.lesson.services.lesson_form.parse_lesson_form, app.lesson.services.lesson_form.validate_edit_fields, app.lesson.services.lesson_form.validate_targets, app.lesson.services.mass_update.apply_to_series, app.lesson.services.lesson_writer.update_lesson, app.lesson.services.unavailability_check.start_unavailability_warning, app.lesson.services.unavailability_check.warning_context, app.templating.templates, app.tutor.models.tutor.Tutor
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.responses.saved_response, app.common.services.tutor_time.to_local, app.database.get_db, app.finance.services.charges.series_lessons, app.finance.services.charges.sync_lesson_charges, app.gcalendar.services.sync.sync_lesson, app.gcalendar.services.sync.sync_lessons, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.lesson.services.lesson_form.DEFAULT_MODAL_TARGET, app.lesson.services.lesson_form.lesson_form_context, app.lesson.services.lesson_form.parse_lesson_form, app.lesson.services.lesson_form.validate_edit_fields, app.lesson.services.lesson_form.validate_targets, app.lesson.services.mass_update.apply_to_series, app.lesson.services.lesson_writer.update_lesson, app.lesson.services.unavailability_check.start_unavailability_warning, app.lesson.services.unavailability_check.warning_context, app.templating.templates, app.tutor.models.tutor.Tutor
 def _modal_target(request: Request) -> str  # Контейнер модалки урока из заголовка `HX-Target`.
 def _start_day_changed(lesson, data: dict, tutor) -> bool  # «Начало» переехало на другой день (время внутри дня не считается).
 def edit_lesson_form(
@@ -2297,7 +2504,7 @@ class StudentMessengerInvite(Base)
 # app/messenger/services/__init__.py [python]
 
 # app/messenger/services/binding.py [python]
-imports: secrets, sqlalchemy.select, sqlalchemy.orm.Session, app.messenger.models.student_invite.StudentMessengerInvite, app.messenger.services.max_bot_api, app.messenger.services.telegram_bot_api, app.messenger.services.errors.BotApiError, app.messenger.services.messengers.MESSENGER_ICONS, app.messenger.services.messengers.MESSENGER_LABELS, app.messenger.services.messengers.MESSENGER_LINK_TEMPLATES, app.messenger.services.messengers.SUPPORTED, app.messenger.services.messengers.token_key, app.messenger.services.welcome.send_welcome, app.tutor.services.params.delete_param, app.tutor.services.params.get_param, app.tutor.services.params.set_param
+imports: secrets, sqlalchemy.select, sqlalchemy.orm.Session, app.messenger.models.student_invite.StudentMessengerInvite, app.messenger.services.max_bot_api, app.messenger.services.telegram_bot_api, app.messenger.services.errors.BotApiError, app.messenger.services.messengers.MESSENGER_ICONS, app.messenger.services.messengers.MESSENGER_LABELS, app.messenger.services.messengers.MESSENGER_LINK_TEMPLATES, app.messenger.services.messengers.SUPPORTED, app.messenger.services.messengers.token_key, app.messenger.services.welcome.send_welcome, app.tutor.services.params.all_params, app.tutor.services.params.delete_param, app.tutor.services.params.get_param, app.tutor.services.params.set_param
 def bind_code_key(messenger: str) -> str  # Имя KV-параметра с ожидаемым кодом привязки (`telegram_bind_code`).
 def bind_link_key(messenger: str) -> str  # Имя KV-параметра со сгенерированной диплинк-ссылкой привязки.
 def chat_id_key(messenger: str) -> str  # Имя KV-параметра с id привязанного чата (`telegram_chat_id`).
@@ -2306,6 +2513,7 @@ def marker_key(messenger: str) -> str  # Имя KV-параметра с мар�
 def start_binding(db: Session, tutor_id: str, messenger: str) -> list[str]  # Готовит привязку: одноразовый код и диплинк сохраняются в параметры.
 def confirm_binding(db: Session, tutor_id: str, messenger: str) -> list[str]  # Проверяет все ожидающие коды аккаунта: канал репетитора и ученики.
 def unbind_channel(db: Session, tutor_id: str, messenger: str) -> None  # Удаляет привязку канала вместе с незавершённой привязкой.
+def bound_chats(db: Session, tutor_id: str) -> dict[str, str]  # Привязанные каналы репетитора: «мессенджер → chat_id».
 def channels_block_context(
     db: Session,
     tutor_id: str,
@@ -2347,10 +2555,45 @@ def _save_channel(
 def _telegram_label(chat: dict) -> str  # Подпись чата Telegram: `@username`, иначе title или имя.
 def _max_label(user: dict) -> str  # Подпись чата MAX: `@username`, иначе имя (`name`/`first_name`).
 
+# app/messenger/services/birthday_digest.py [python]
+imports: logging, datetime.date, datetime.datetime, datetime.time, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.tutor_zone, app.messenger.services.binding.chat_id_key, app.messenger.services.messengers.SUPPORTED, app.messenger.services.send.send_message, app.student.models.student.Student, app.student.services.birthdays.birthday_students, app.student.services.presentation.birthday_age_label, app.student.services.presentation.student_full_name, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_param.TutorParam, app.tutor.models.tutor_settings.DEFAULT_DIGEST_TIME, app.tutor.models.tutor_settings.TutorSettings, app.tutor.models.tutor_settings.default_values, app.tutor.services.clock.as_utc, app.tutor.services.clock.utcnow, app.tutor.services.params.all_params_by_tutors, app.tutor.services.params.save_param
+def _parse_digest_time(value: str | None) -> time  # «ЧЧ:ММ» из настроек → `time`; мусор в строке — дефолтное время.
+def _date_label(day: date) -> str  # «1 ноября» — день и месяц в родительном падеже.
+def birthday_message(students: list[Student], day: date) -> str  # Текст рассылки: заголовок с датой и строки «• Имя Фамилия — N лет».
+def _chats(params: dict[str, str]) -> dict[str, str]  # Привязанные каналы репетитора из уже прочитанных параметров.
+def _settings_map(db: Session, tutor_ids: list[str]) -> dict[str, TutorSettings]  # Настройки пачки репетиторов одним запросом; строки нет — дефолты.
+def _tutors_with_channels(db: Session) -> list[str]  # Id репетиторов, у которых привязан хотя бы один канал уведомлений.
+def _send_birthdays(
+    db: Session,
+    tutor: Tutor,
+    settings: TutorSettings,
+    params: dict[str, str],
+    now_local: datetime,
+) -> int  # Отправляет список именинников одному репетитору; число доставок.
+def notify_birthday_digest(db: Session, *, now: datetime | None = None) -> int  # Рассылает списки именинников всем, кому пора; число доставок.
+
 # app/messenger/services/connections.py [python]
 imports: sqlalchemy.orm.Session, app.messenger.services.messengers.MESSENGERS, app.messenger.services.messengers.token_key, app.tutor.services.params.all_params, app.tutor.services.params.get_param
 def is_messenger_connected(db: Session, tutor_id: str, messenger: str) -> bool  # Подключён ли репетитор к конкретному мессенджеру.
 def connected_messengers(db: Session, tutor_id: str) -> list[str]  # Список мессенджеров, к которым подключён репетитор.
+
+# app/messenger/services/daily_digest.py [python]
+imports: logging, datetime.datetime, datetime.time, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.tutor_zone, app.finance.services.balance.balance, app.finance.services.balance.shortfall, app.finance.services.presentation.balance_label, app.finance.services.presentation.money, app.lesson.services.daily_digest.DigestLesson, app.lesson.services.daily_digest.DigestTarget, app.lesson.services.daily_digest.digest_lessons, app.lesson.services.presentation.format_lesson_date, app.lesson.services.presentation.format_target, app.messenger.services.binding.bound_chats, app.messenger.services.binding.chat_id_key, app.messenger.services.messengers.SUPPORTED, app.messenger.services.send.send_message, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_param.TutorParam, app.tutor.services.clock.as_utc, app.tutor.services.clock.utcnow, app.tutor.services.params.get_param, app.tutor.services.params.set_param, app.tutor.services.settings.get_settings
+def _parse_digest_time(value: str | None) -> time | None  # «ЧЧ:ММ» из настроек → `time`; мусор в строке — None (сводку пропускаем).
+def _shortfall_line(target: DigestTarget, balance_value: int) -> str  # Подстрока «не хватает N ₽ (на счету B ₽, урок P ₽)» или пустая строка.
+def _target_label(lesson: DigestLesson) -> str  # Подпись цели урока: «Группа: имя» у группового, иначе имя ученика.
+def _lesson_lines(lesson: DigestLesson, balances: dict[str, int], *, with_shortfall: bool) -> list[str]  # Строки одного урока: «ЧЧ:ММ — цель» и пометки о нехватке средств.
+def build_digest_text(
+    lessons: list[DigestLesson],
+    tutor,
+    *,
+    balances: dict[str, int],
+    with_shortfall: bool = True,
+) -> str  # Текст сводки дня: заголовок с датой и строки уроков по порядку.
+def _balances(db: Session, lessons: list[DigestLesson]) -> dict[str, int]  # Балансы всех учеников дня: один расчёт на ученика, а не на урок.
+def _tutors_with_channels(db: Session) -> list[str]  # Id репетиторов, у которых привязан хотя бы один канал уведомлений.
+def _send_digest(db: Session, tutor: Tutor, now_local: datetime) -> bool  # Отправляет сводку одному репетитору; True — сообщение ушло.
+def run_daily_digests(db: Session, *, now: datetime | None = None) -> int  # Отправляет сводки всем, кому пора; возвращает число отправленных.
 
 # app/messenger/services/errors.py [python]
 class SendError(Exception)
@@ -2455,7 +2698,7 @@ def send_welcome(
 ) -> list[str]  # Приветствует чат от имени бота; пустой список — доставлено.
 
 # app/models.py [python]
-imports: app.booking.models.booking.Booking, app.booking.models.booking_attempt.BookingAttempt, app.cabinet.models.contact_access.ContactAccess, app.cabinet.models.contact_invite.ContactCabinetInvite, app.cabinet.models.contact_session.ContactSession, app.cabinet.models.invite.StudentCabinetInvite, app.cabinet.models.session.StudentSession, app.finance.models.account_operation.AccountOperation, app.finance.models.expense.Expense, app.finance.models.forecast_snapshot.ForecastSnapshot, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.homework.models.answer.HomeworkAnswer, app.homework.models.answer_link.HomeworkAnswerLink, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.lesson.models.lesson_series.LessonSeries, app.mailing.models.message_template.MessageTemplate, app.messenger.models.sent_message.SentMessage, app.messenger.models.student_invite.StudentMessengerInvite, app.slot.models.slot.Slot, app.student.models.contact.Contact, app.student.models.student_access.StudentAccess, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.task.models.task.Task, app.task.models.task_student.TaskStudent, app.tutor.models.password_reset_token.PasswordResetToken, app.tutor.models.tutor.Tutor
+imports: app.booking.models.booking.Booking, app.booking.models.booking_attempt.BookingAttempt, app.cabinet.models.contact_access.ContactAccess, app.cabinet.models.contact_invite.ContactCabinetInvite, app.cabinet.models.contact_session.ContactSession, app.cabinet.models.invite.StudentCabinetInvite, app.cabinet.models.session.StudentSession, app.finance.models.account_operation.AccountOperation, app.gcalendar.models.calendar_event.CalendarEvent, app.finance.models.expense.Expense, app.finance.models.forecast_snapshot.ForecastSnapshot, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.homework.models.answer.HomeworkAnswer, app.homework.models.answer_link.HomeworkAnswerLink, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.lesson.models.lesson_series.LessonSeries, app.mailing.models.message_template.MessageTemplate, app.messenger.models.sent_message.SentMessage, app.messenger.models.student_invite.StudentMessengerInvite, app.slot.models.slot.Slot, app.student.models.contact.Contact, app.student.models.student_access.StudentAccess, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.task.models.task.Task, app.task.models.task_student.TaskStudent, app.tutor.models.password_reset_token.PasswordResetToken
 
 # app/slot/__init__.py [python]
 
@@ -2888,7 +3131,7 @@ class Contact(Base)
   def __repr__(self) -> str
 
 # app/student/models/student.py [python]
-imports: datetime.UTC, datetime.datetime, uuid.uuid4, sqlalchemy.Boolean, sqlalchemy.CheckConstraint, sqlalchemy.DateTime, sqlalchemy.ForeignKey, sqlalchemy.Integer, sqlalchemy.String, sqlalchemy.Text, sqlalchemy.orm.Mapped, sqlalchemy.orm.mapped_column, app.database.Base
+imports: datetime.UTC, datetime.date, datetime.datetime, uuid.uuid4, sqlalchemy.Boolean, sqlalchemy.CheckConstraint, sqlalchemy.Date, sqlalchemy.DateTime, sqlalchemy.ForeignKey, sqlalchemy.Integer, sqlalchemy.String, sqlalchemy.Text, sqlalchemy.orm.Mapped, sqlalchemy.orm.mapped_column, app.database.Base
 class Student(Base)
   def __repr__(self) -> str
 
@@ -2912,6 +3155,17 @@ def get_owned_contact(db: Session, contact_id: str, tutor_id: str) -> Contact  #
 # app/student/services/activation.py [python]
 imports: sqlalchemy.orm.Session, app.student.models.student.Student
 def activate_on_first_charge(db: Session, student_id: str) -> None  # Переводит «нового» ученика в «Активные»; без коммита, идемпотентно.
+
+# app/student/services/birthdays.py [python]
+imports: datetime.date, sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.student.models.student.Student
+def birthday_students(
+    db: Session,
+    tutor_id: str,
+    day: date,
+    *,
+    include_archived: bool = False,
+) -> list[Student]  # Ученики репетитора, у которых день рождения приходится на `day`.
+def age_on(birth_date: date, day: date) -> int | None  # Сколько лет исполняется в день `day`; `None` — возраст неизвестен.
 
 # app/student/services/contact_lookup.py [python]
 imports: sqlalchemy.select, sqlalchemy.orm.Session, app.student.models.contact.Contact, app.student.models.student_contact.StudentContact, app.student.services.phone.normalize_phone
@@ -2998,7 +3252,7 @@ def is_phone_like(value: str | None) -> bool  # Похоже ли значени
 def format_phone(value: str | None) -> str  # Приводит номер к виду `+7 555 555-55-55`.
 
 # app/student/services/presentation.py [python]
-imports: datetime.date, datetime.datetime, app.common.services.tutor_time.today_local, app.common.services.tutor_time.to_local, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact
+imports: datetime.date, datetime.datetime, app.common.services.tutor_time.today_local, app.common.services.tutor_time.to_local, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.student.services.birthdays.age_on
 def status_label(status: str | None) -> str  # Человекочитаемая подпись статуса (неизвестное значение — как есть).
 def kind_label(kind: str | None) -> str  # Человекочитаемая подпись подтипа ученика.
 def student_full_name(student: Student) -> str  # Имя и фамилия одной строкой.
@@ -3011,6 +3265,8 @@ def empty_student_form() -> dict  # Пустая форма создания: о
 def next_lesson_label(value: datetime | None, tutor) -> str  # «Сегодня в 15:00» / «Завтра в 15:00» / «24 окт. в 15:00»; нет — «».
 def short_date_label(value: datetime | date | None, tutor) -> str  # «15.10.2026» — дата колонки таблицы в зоне педагога; нет значения — «».
 def month_label(month: date) -> str  # «Октябрь 2026 г.» — подпись месяца в отчёте.
+def birth_date_label(value: date | None) -> str  # «17.05.2012» — дата рождения в карточке; нет значения — «».
+def birthday_age_label(birth_date: date | None, day: date) -> str  # «12 лет» — возраст, который исполняется в день `day`; иначе «».
 def register_template_helpers() -> None  # Регистрирует функции отображения в общем Jinja-окружении.
 
 # app/student/services/report.py [python]
@@ -3030,7 +3286,7 @@ def report_context(
 ) -> dict  # Контекст `_report_modal.html`: карточки-итоги и навигация по месяцам.
 
 # app/student/services/student_form.py [python]
-imports: re, collections.abc.Mapping, app.common.services.forms.checked, app.common.services.forms.text_value, app.student.models.student.MAX_GRADE, app.student.models.student.MIN_GRADE, app.student.models.student.STUDENT_KINDS, app.student.models.student.STUDENT_STATUSES, app.student.services.phone.format_phone
+imports: re, collections.abc.Mapping, datetime.date, app.common.services.forms.checked, app.common.services.forms.text_value, app.student.models.student.MAX_GRADE, app.student.models.student.MIN_GRADE, app.student.models.student.STUDENT_KINDS, app.student.models.student.STUDENT_STATUSES, app.student.services.phone.format_phone
 def parse_student_form(form: Mapping) -> tuple[dict, list[str]]  # Разбирает и проверяет поля карточки ученика.
 def parse_contact_rows(form: Mapping) -> list[dict]  # Собирает строки контактов из проиндексированных полей формы.
 def validate_contacts(rows: list[dict]) -> list[str]  # Проверяет строки контактов: ФИО обязательно, email корректен.
@@ -3517,11 +3773,16 @@ imports: re, app.common.services.forms.int_or_none, app.tutor.models.tutor_setti
 def parse_notifications_form(form: dict) -> tuple[dict | None, list[str]]  # Разбирает форму уведомлений: (значения для записи, ошибки).
 
 # app/tutor/services/params.py [python]
-imports: sqlalchemy.orm.Session, app.tutor.models.tutor_param.TutorParam
+imports: sqlalchemy.select, sqlalchemy.orm.Session, app.tutor.models.tutor_param.TutorParam
 def get_param(db: Session, tutor_id: str, key: str) -> str | None  # Значение параметра или `None`, если репетитор его не задавал.
+def save_param(db: Session, tutor_id: str, key: str, value: str) -> None  # Сохраняет параметр в текущей транзакции, без коммита (upsert).
 def set_param(db: Session, tutor_id: str, key: str, value: str) -> None  # Сохраняет параметр, создавая строку при первом наличии (upsert).
 def delete_param(db: Session, tutor_id: str, key: str) -> None  # Удаляет параметр; отсутствие строки — не ошибка.
+def forget_param(db: Session, tutor_id: str, key: str) -> None  # Удаляет параметр в текущей транзакции, без коммита.
 def all_params(db: Session, tutor_id: str) -> dict[str, str]  # Все параметры репетитора одним запросом, словарём «ключ → значение».
+def all_params_by_tutors(
+    db: Session, tutor_ids: list[str]
+) -> dict[str, dict[str, str]]  # Параметры пачки репетиторов одним запросом: «id → ключ → значение».
 
 # app/tutor/services/password_hasher.py [python]
 imports: hashlib, hmac, secrets
@@ -3549,7 +3810,7 @@ def _parse_hourly_rate(raw: str) -> tuple[Decimal | None, bool]  # Стоимо�
 def parse_profile_form(form: dict) -> tuple[dict | None, list[str]]  # Разбирает форму профиля: (значения для записи, ошибки).
 
 # app/tutor/services/profile_page.py [python]
-imports: sqlalchemy.orm.Session, app.common.services.timezones.timezone_options_json, app.messenger.services.binding.channels_block_context, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_settings.REMINDER_OFFSETS, app.tutor.models.tutor_settings.REMINDER_OFFSET_LABELS, app.tutor.services.settings.get_settings
+imports: sqlalchemy.orm.Session, app.common.services.timezones.timezone_options_json, app.gcalendar.services.presentation.google_calendar_context, app.messenger.services.binding.channels_block_context, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_settings.REMINDER_OFFSETS, app.tutor.models.tutor_settings.REMINDER_OFFSET_LABELS, app.tutor.services.settings.get_settings
 def normalize_tab(raw: str | None) -> str  # Ключ вкладки из query-параметра; неизвестное значение — «Профиль».
 def _form_defaults(tutor: Tutor, settings, tab: str) -> dict  # Значения полей активной вкладки из текущего состояния карточки.
 def profile_page_context(
@@ -3560,6 +3821,8 @@ def profile_page_context(
     errors: list[str] | None = None,
     form: dict | None = None,
     channels_block: dict | None = None,
+    google_calendar: dict | None = None,
+    google_error: str = "",
 ) -> dict  # Контекст шаблона настроек: вкладки, карточка, настройки и форма.
 
 # app/tutor/services/security_form.py [python]
@@ -3602,7 +3865,7 @@ imports: re
 def is_valid_email(value: str) -> bool  # True, если `value` похож на email (есть локальная часть, @ и домен).
 
 # app/tutor/views/__init__.py [python]
-imports: fastapi.APIRouter, app.tutor.views.home, app.tutor.views.login, app.tutor.views.logout, app.tutor.views.profile, app.tutor.views.profile_calendar, app.tutor.views.profile_channels, app.tutor.views.profile_notifications, app.tutor.views.profile_save, app.tutor.views.profile_security, app.tutor.views.register, app.tutor.views.remember_password, app.tutor.views.reset_password, app.tutor.views.settings, app.tutor.views.settings_messengers
+imports: fastapi.APIRouter, app.tutor.views.home, app.tutor.views.login, app.tutor.views.logout, app.tutor.views.profile, app.tutor.views.profile_calendar, app.tutor.views.profile_channels, app.tutor.views.profile_google_callback, app.tutor.views.profile_google_connect, app.tutor.views.profile_google_disconnect, app.tutor.views.profile_notifications, app.tutor.views.profile_save, app.tutor.views.profile_security, app.tutor.views.register, app.tutor.views.remember_password, app.tutor.views.reset_password, app.tutor.views.settings, app.tutor.views.settings_messengers
 
 # app/tutor/views/home.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.dashboard.dashboard_context
@@ -3628,12 +3891,13 @@ imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.
 def logout(request: Request, db: Session = Depends(get_db))  # Удаляет сессию, сбрасывает cookie и возвращает на страницу входа.
 
 # app/tutor/views/profile.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.messenger.services.binding.BINDING_FAILED_HINT, app.messenger.services.binding.channels_block_context, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.profile_page.profile_page_context
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.gcalendar.services.presentation.google_error_message, app.messenger.services.binding.BINDING_FAILED_HINT, app.messenger.services.binding.channels_block_context, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.profile_page.profile_page_context
 def profile(
     request: Request,
     tab: str = "",
     saved: str = "",
     bind_error: str = "",
+    google_error: str = "",
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 )  # Страница настроек; без сессии — редирект на вход (LoginRequired).
@@ -3683,6 +3947,33 @@ def _channels_response(
     tutor: Tutor,
     errors: list[str] | None = None,
 ) -> HTMLResponse  # Ответ с обновлённым состоянием каналов: htmx — фрагмент, иначе
+
+# app/tutor/views/profile_google_callback.py [python]
+imports: logging, fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.gcalendar.services.connection, app.gcalendar.services.initial_sync, app.gcalendar.services.oauth, app.gcalendar.services.errors.GoogleError, app.gcalendar.services.redirect.redirect_uri, app.tutor.models.tutor.Tutor
+def google_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+)  # Завершает подключение: токены, email аккаунта, выгрузка занятий.
+
+# app/tutor/views/profile_google_connect.py [python]
+imports: secrets, fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.gcalendar.services.connection, app.gcalendar.services.oauth, app.gcalendar.services.redirect.redirect_uri, app.tutor.models.tutor.Tutor
+def connect_google(
+    request: Request,
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+)  # Готовит `state` и уводит на страницу согласия Google.
+
+# app/tutor/views/profile_google_disconnect.py [python]
+imports: logging, fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.gcalendar.services.connection, app.gcalendar.services.mapping, app.gcalendar.services.oauth, app.tutor.models.tutor.Tutor
+def disconnect_google(
+    request: Request,
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+)  # Забывает подключение: токены, состояние и связи с событиями.
 
 # app/tutor/views/profile_notifications.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.notifications_form.parse_notifications_form, app.tutor.services.profile_page.profile_page_context, app.tutor.services.settings.save_settings
@@ -4008,6 +4299,51 @@ def _manifest_version() -> str
 def test_openapi_version_matches_manifest()  # info.version` в OpenAPI совпадает с версией из манифеста проекта.
 def test_app_version_matches_manifest()  # app.version` совпадает с версией из манифеста проекта.
 
+# tests/test_birthday_digest.py [python]
+imports: io, json, urllib, datetime.UTC, datetime.date, datetime.datetime, app, app.database.SessionLocal, app.messenger.services.binding.chat_id_key, app.messenger.services.birthday_digest.BIRTHDAY_SENT_KEY, app.messenger.services.birthday_digest.birthday_message, app.messenger.services.birthday_digest.notify_birthday_digest, app.messenger.services.messengers.token_key, app.student.services.birthdays.age_on, app.student.services.birthdays.birthday_students, app.student.services.presentation.birthday_age_label, app.tutor.models.tutor_settings.TutorSettings, app.tutor.services.params.get_param, app.tutor.services.params.set_param
+class _FakeResponse
+  def __init__(self, payload)
+  def read(self)
+  def __enter__(self)
+  def __exit__(self, *exc)
+def _patch_urlopen(monkeypatch, calls, *, fail_messenger=None)  # Подменяет urlopen; каждый вызов дописывается в `calls`.
+def _connect(db, tutor_id, messenger, chat_id)  # Подключает канал: токен бота + привязанный чат.
+def _settings(tutor_id, **values)  # Создаёт строку настроек репетитора с нужными полями.
+def _run(now=NOON) -> int  # Прогон задания как у runner'а: сессия + коммит.
+def _texts(calls)  # Тексты отправленных сообщений.
+def test_registry_contains_birthday_digest()  # В реестре заданий cron зарегистрирована рассылка дней рождения.
+def test_birthday_students_selection(tutor_factory, student_factory)  # Попадает свой именинник; чужие, без даты и архивные — нет.
+def test_birthday_students_include_adults(tutor_factory, student_factory)  # Взрослый ученик с днём рождения сегодня попадает в выборку.
+def test_birthday_students_sorted_by_last_name(tutor_factory, student_factory)  # Порядок — по фамилии; ученик без фамилии встаёт по имени.
+def test_leap_day_is_not_sent_in_common_year(tutor_factory, student_factory)  # 29 февраля в невисокосный год в рассылку не попадает.
+def test_age_on_and_plural()  # Возраст считается от даты рождения, подпись склоняется по-русски.
+def test_message_text(tutor_factory, student_factory)  # Текст сообщения: заголовок с датой и строки «• Имя Фамилия — N лет».
+def test_sends_after_digest_time_to_all_channels(
+    monkeypatch, tutor_factory, student_factory
+)  # После времени отправки сообщение уходит во все привязанные каналы.
+def test_silent_before_digest_time(monkeypatch, tutor_factory, student_factory)  # До времени из профиля рассылки нет и день не помечается.
+def test_custom_digest_time_is_respected(
+    monkeypatch, tutor_factory, student_factory
+)  # Время отправки берётся из профиля (то же поле, что у дневной сводки).
+def test_disabled_birthday_is_silent(monkeypatch, tutor_factory, student_factory)  # Флаг «День рождения» выключен — сообщений нет и маркера нет.
+def test_second_run_same_day_is_silent(
+    monkeypatch, tutor_factory, student_factory
+)  # Повторный прогон в тот же день ничего не отправляет.
+def test_next_day_sends_again(monkeypatch, tutor_factory, student_factory)  # На следующий день рассылка снова отправляется (для новых именинников).
+def test_channel_without_chat_id_is_skipped(
+    monkeypatch, tutor_factory, student_factory
+)  # Канал без привязанного чата в отправке не участвует.
+def test_no_bound_channel_is_silent(monkeypatch, tutor_factory, student_factory)  # Нет привязанных каналов — ни сети, ни маркера.
+def test_empty_list_sends_nothing_but_marks_day(
+    monkeypatch, tutor_factory, student_factory
+)  # Нет именинников — сообщения нет, день помечен обработанным.
+def test_channel_failure_does_not_raise(
+    monkeypatch, tutor_factory, student_factory
+)  # Сбой единственного канала не поднимает исключение и не мешает второму.
+def test_tutor_timezone_shifts_sending_time(
+    monkeypatch, tutor_factory, student_factory
+)  # Отправка идёт по настенному времени зоны педагога, а не по UTC.
+
 # tests/test_booking_models.py [python]
 imports: datetime.UTC, datetime.datetime, pytest, app.booking.models.booking.ACTIVE_BOOKING_STATUSES, app.booking.models.booking.BOOKING_STATUSES, app.booking.models.booking.BOOKING_STATUS_LABELS, app.booking.models.booking.Booking, app.database.SessionLocal, app.slot.models.slot.Slot
 def _slot(tutor_id: str, **overrides) -> Slot  # Валидное окно: 14.10.2026 14:00 UTC, 40 минут.
@@ -4092,6 +4428,48 @@ def test_dialog_shows_cancel_for_confirmed_booking(client, owner, slot_factory, 
 def test_booking_forms_are_not_nested_in_slot_form(client, owner, slot_factory, booking_factory)  # Формы брони — соседи формы окна, а не её потомки.
 def test_dialog_offers_student_choice_for_several_matches(client, owner, student_factory, slot_factory, booking_factory)  # При двух совпадениях диалог показывает селект выбора ученика.
 
+# tests/test_cabinet_calendar.py [python]
+imports: datetime.UTC, datetime.date, datetime.datetime, datetime.timedelta, pytest, sqlalchemy.event, app.cabinet.services.calendar.LESSON_LABEL, app.cabinet.services.calendar.homework_by_lesson, app.cabinet.services.calendar.student_calendar_context, app.cabinet.services.calendar.student_week_lessons, app.cabinet.services.sessions.create_session, app.database.SessionLocal, app.database.engine, app.homework.models.homework.Homework, app.student.models.student.Student, app.tutor.models.tutor.Tutor
+def owner(tutor_factory)  # Репетитор задачи: его зона (UTC) задаёт границы недели.
+def _login(client, student_id: str) -> None
+def _make_homework(lesson_id: str, status: str) -> None
+def _context(student_id: str, tutor_id: str, monday: date) -> dict
+def _events(context: dict) -> list[dict]
+def test_week_lessons_only_own_lessons(owner, student_factory, lesson_factory)  # В неделю ученика попадают только его уроки, чужие не видны.
+def test_week_lessons_include_past_and_completed(
+    owner, student_factory, lesson_factory
+)  # Прошедшие и проведённые уроки остаются в неделе — они показываются серыми.
+def test_week_lessons_use_tutor_week_bounds(owner, student_factory, lesson_factory)  # Окно недели — [пн 00:00, следующий пн 00:00): вс 23:00 входит, пн 00:00 — нет.
+def test_group_lesson_uses_group_name(
+    owner, student_factory, lesson_factory, group_factory, group_member_factory
+)  # Групповой урок подписан названием группы, индивидуальный — «Урок».
+def test_homework_map_hides_not_assigned(owner, student_factory, lesson_factory)  # «Не задано» — отсутствие ДЗ: в карту статусов не попадает.
+def test_homework_map_is_single_query(owner, student_factory, lesson_factory)  # Число запросов не растёт с числом уроков недели (нет N+1).
+def test_context_marks_homework_status_and_label(
+    owner, student_factory, lesson_factory
+)  # В представлении карточки есть статус и подпись ДЗ; без ДЗ — пусто.
+def test_context_marks_past_lessons(owner, student_factory, lesson_factory)  # Прошедший урок серый, будущий — цветом цели.
+def test_context_does_not_show_price_or_unavailability(
+    owner, student_factory, lesson_factory
+)  # Цена урока и отметки недоступности репетитора ученику не показываются.
+def test_calendar_page_is_read_only(client, owner, student_factory, lesson_factory)  # Календарь нельзя редактировать: нет скрипта, форм и данных для drag.
+def test_calendar_page_has_week_navigation(
+    client, owner, student_factory, lesson_factory
+)  # Листание недель: ссылки `?start=` и «Сегодня» без параметра.
+def test_calendar_htmx_fragment_has_no_shell(client, owner, student_factory)  # HTMX-фрагмент — только содержимое области, без каркаса страницы.
+def test_calendar_shows_homework_badge_by_status(
+    client, owner, student_factory, lesson_factory
+)  # Значок ДЗ: класс зависит от статуса, подпись — в title и aria-label.
+def test_calendar_hides_badge_for_not_assigned(
+    client, owner, student_factory, lesson_factory
+)  # Без ДЗ (статус «Не задано») значка в карточке нет.
+def test_calendar_bad_week_falls_back_to_current(
+    client, owner, student_factory
+)  # Кривой `?start=` — не ошибка, а текущая неделя.
+def test_calendar_week_outside_limits_is_empty(
+    client, owner, student_factory, lesson_factory
+)  # Урок другой недели в текущую не попадает.
+
 # tests/test_cabinet_homework.py [python]
 imports: datetime.UTC, datetime.datetime, pytest, sqlalchemy.select, app.cabinet.services.sessions.create_session, app.database.SessionLocal, app.homework.models.answer.HomeworkAnswer, app.homework.models.answer_link.HomeworkAnswerLink, app.homework.models.homework.Homework
 def owner(client, tutor_factory)  # Репетитор, вошедший в клиент; возвращает его id.
@@ -4143,10 +4521,11 @@ def test_login_wrong_password_generic_error(client, owner, student_factory)
 def test_cabinet_requires_session(client)  # Без сессии ученика кабинет недоступен — редирект на вход.
 def test_cabinet_uses_crm_shell(client, owner, student_factory)  # Кабинет построен как кабинет репетитора (решение владельца 2026-10-30):
 def test_login_page_has_no_sidebar(client)  # Вход и регистрация — поверхности «до входа», как у репетитора: без сайдбара.
-def test_cabinet_shows_my_lessons(client, owner, student_factory, lesson_factory)  # «Мои уроки»: ближайшее занятие и список; чужие уроки не видны (6.1).
+def test_cabinet_shows_my_lessons(client, owner, student_factory, lesson_factory)  # «Мои уроки»: недельный календарь; чужие уроки не видны (6.1).
 def test_cabinet_group_lesson_visible(client, owner, student_factory, lesson_factory,
-                                       group_factory, group_member_factory)  # Групповой урок показан наравне с индивидуальными.
-def test_cabinet_empty_when_all_lessons_past(client, owner, student_factory, lesson_factory)  # Все уроки в прошлом — список пуст, прошедшие не показываются.
+                                      group_factory, group_member_factory)  # Групповой урок показан в календаре названием группы.
+def test_cabinet_past_lesson_is_grey(client, owner, student_factory, lesson_factory)  # Прошедший урок остаётся в своей неделе, но приглушённым.
+def test_cabinet_empty_week_shows_hint(client, owner, student_factory)  # Неделя без уроков: пояснение вместо пустой сетки.
 def test_logout_revokes_session(client, owner, student_factory)  # Выход: сессия отозвана, повторное открытие кабинета ведёт на вход.
 def test_student_and_tutor_sessions_coexist(client, owner, student_factory)  # Вход ученика не затрагивает сессию репетитора и наоборот.
 
@@ -4337,10 +4716,13 @@ def test_assign_color_falls_back_to_full_palette(
 )  # При исчерпании палитры возвращается цвет из полной палитры.
 
 # tests/test_cron.py [python]
-imports: cron, datetime.timedelta, app, app.database.SessionLocal, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.services.clock.utcnow
+imports: urllib, datetime.date, datetime.timedelta, cron, app, app.database.SessionLocal, app.lesson.models.lesson.Lesson, app.messenger.models.sent_message.SentMessage, app.messenger.services.binding.chat_id_key, app.messenger.services.birthday_digest.BIRTHDAY_SENT_KEY, app.messenger.services.messengers.token_key, app.student.models.student.Student, app.tutor.services.clock.utcnow, app.tutor.services.params.get_param, app.tutor.services.params.set_param
 def test_registry_contains_auto_complete()  # В реестре зарегистрировано задание автозавершения уроков.
+def test_registry_contains_daily_digest()  # В реестре зарегистрировано задание дневной сводки в мессенджеры.
+def test_registry_contains_birthday_digest()  # В реестре зарегистрировано задание рассылки дней рождения.
 def test_run_tasks_commits_changes(tutor_factory, student_factory, lesson_factory)  # Прогон runner'а завершает просроченный урок и коммитит изменение.
 def test_failing_task_isolated(monkeypatch, tutor_factory)  # Упавшее задание откатывается, остальные выполняются и коммитятся.
+def test_run_tasks_commits_birthday_digest(monkeypatch, tutor_factory, student_factory)  # Прогон runner'а коммитит и маркер дня, и журнал отправки.
 def test_cron_entry_point_wiring()  # cron.py` — тонкая обёртка: берёт `run_tasks` из общего модуля.
 
 # tests/test_css_styles.py [python]
@@ -4373,6 +4755,64 @@ def test_mobile_tap_targets_are_44px()  # WCAG 2.5.5: на телефоне це
 def test_mobile_sidebar_toggle_is_hidden_with_closed_sidebar()  # Скрытая панель не оставляет на экране 11px кружка сворачивания.
 def test_desktop_density_is_untouched()  # Плотность десктопа не поехала: базовые размеры остались прежними.
 def test_lessons_table_density_is_desktop_first()  # Таблица уроков не раздувается на десктопе ради мобильных целей.
+
+# tests/test_daily_digest.py [python]
+imports: io, json, urllib, datetime.UTC, datetime.datetime, app, app.database.SessionLocal, app.messenger.services.binding.chat_id_key, app.messenger.services.daily_digest.DIGEST_SENT_KEY, app.messenger.services.daily_digest.run_daily_digests, app.messenger.services.messengers.token_key, app.tutor.models.tutor_settings.TutorSettings, app.tutor.services.params.get_param, app.tutor.services.params.set_param
+class _FakeResponse
+  def __init__(self, payload)
+  def read(self)
+  def __enter__(self)
+  def __exit__(self, *exc)
+def _patch_urlopen(monkeypatch, calls, *, fail_messenger=None)  # Подменяет urlopen; каждый вызов дописывается в `calls`.
+def _connect(db, tutor_id, messenger, chat_id)  # Подключает канал: токен бота + привязанный чат.
+def _settings(tutor_id, **values)  # Создаёт строку настроек репетитора с нужными полями.
+def _run(now=NOON) -> int  # Прогон задания как у runner'а: сессия + коммит.
+def _texts(calls)  # Тексты отправленных сообщений.
+def test_registry_contains_daily_digest()  # В реестре заданий cron зарегистрирована дневная сводка.
+def test_sends_after_digest_time_to_all_channels(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # После времени сводки сообщение уходит во все привязанные каналы.
+def test_silent_before_digest_time(monkeypatch, tutor_factory, student_factory, lesson_factory)  # До времени из профиля сводка не отправляется и день не помечается.
+def test_second_run_same_day_is_silent(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Повторный прогон в тот же день ничего не отправляет.
+def test_next_day_sends_again(monkeypatch, tutor_factory, student_factory, lesson_factory)  # На следующий день сводка отправляется снова.
+def test_disabled_digest_is_silent(monkeypatch, tutor_factory, student_factory, lesson_factory)  # Флаг «Дневная сводка» выключен — сообщений нет.
+def test_custom_digest_time_is_respected(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Время отправки берётся из профиля, а не из дефолта.
+def test_group_lesson_shows_group_name(
+    monkeypatch, tutor_factory, group_factory, group_member_factory, student_factory,
+    lesson_factory,
+)  # Групповой урок подписан именем группы, участники — по цене группы.
+def test_shortfall_note_when_balance_is_low(
+    monkeypatch, tutor_factory, student_factory, lesson_factory, operation_factory
+)  # Баланс меньше цены урока — в строке появляется пометка о нехватке.
+def test_no_shortfall_note_when_balance_is_enough(
+    monkeypatch, tutor_factory, student_factory, lesson_factory, operation_factory
+)  # Денег хватает — пометки нет, строка остаётся только временем и именем.
+def test_shortfall_note_can_be_disabled(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Флаг «Не хватает средств» выключен — сводка без пометок.
+def test_completed_lessons_are_not_in_digest(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Сводка — план дня: проведённые уроки в неё не попадают.
+def test_no_lessons_no_message(monkeypatch, tutor_factory)  # Уроков на день нет — сообщения нет, но день помечен обработанным.
+def test_tutor_without_channels_is_skipped(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Нет привязанных чатов — сеть не дёргается вовсе.
+def test_other_tutor_lessons_are_isolated(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Чужие уроки в сводку не попадают.
+def test_timezone_shifts_send_moment(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Время сводки — настенное время педагога, а не UTC.
+def test_one_channel_failure_does_not_block_another(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Ошибка Telegram не мешает доставке в MAX; маркер дня всё равно ставится.
+def test_long_digest_is_truncated(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Длинный день обрезается под лимит сообщения Telegram.
 
 # tests/test_dropdown.py [python]
 imports: pathlib.Path
@@ -4559,6 +4999,7 @@ def test_forecast_partial_refresh_endpoint(
 
 # tests/test_finance_invoice.py [python]
 imports: datetime.UTC, datetime.date, datetime.datetime, pathlib.Path, pytest, app.database.SessionLocal, app.finance.services.balance.balance, app.finance.services.invoice.invoice_context, app.finance.services.invoice.invoice_text, app.finance.services.invoice.next_month_period, app.finance.services.invoice.parse_period, app.finance.services.invoice.priced_lessons, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.models.tutor.Tutor
+def _frozen_today(monkeypatch)  # Фиксирует «сегодня» в сервисе счёта: 24.10.2026 → период 01–30.11.2026.
 def owner(client, tutor_factory)  # Репетитор с зоной UTC, вошедший в клиент; возвращает его id.
 def student_id(student_factory, owner)  # Ученик вошедшего репетитора.
 def _student(session, student_id: str) -> Student  # Карточка ученика для сервиса счёта.
@@ -4920,6 +5361,177 @@ def test_hidden_tab_is_revealed_before_focus()  # Панель раскрыва�
 def test_student_form_panels_point_to_their_tabs(client, owner)
 def test_group_form_panels_point_to_their_tabs(client, owner, student_factory, group_factory)
 def test_group_form_is_one_form_for_all_panels(client, owner, group_factory)  # Форма группы одна на пять панелей: невалидное поле может быть скрыто.
+
+# tests/test_gcalendar_oauth.py [python]
+imports: json, urllib, io.BytesIO, app, app.database.SessionLocal, app.gcalendar.services.connection, app.gcalendar.services.oauth, app.gcalendar.services.errors.GoogleApiError, app.gcalendar.services.errors.GoogleReauthRequired, app.tutor.services.params.get_param, app.tutor.services.params.set_param
+class _FakeResponse
+  def __init__(self, payload)
+  def read(self)
+  def __enter__(self)
+  def __exit__(self, *exc)
+def _patch_urlopen(monkeypatch, responder, calls)  # Подменяет urlopen; каждый вызов (URL, метод, тело) — в `calls`.
+def _body(raw)  # Тело запроса: JSON, urlencoded-форма или None — без исключений.
+def _routes(routes)  # Ответ по подстроке URL; значение — payload или исключение.
+def _configure(monkeypatch, *, client_id=CLIENT_ID, secret=CLIENT_SECRET)  # Креды OAuth в настройках: по умолчанию пустые, тест их задаёт явно.
+def _register_and_login(client, email)
+def _tutor_id(email)
+def _param(tutor_id, key)
+def _set_param(tutor_id, key, value)
+def test_not_configured_by_default()  # Без кредов в окружении интеграция выключена.
+def test_configured_needs_both_values(monkeypatch)
+def test_auth_url_contains_client_scope_and_state(monkeypatch)
+def test_auth_url_without_credentials_raises(monkeypatch)
+def test_exchange_code_sends_redirect_uri(monkeypatch)  # Обмен идёт с тем же redirect_uri, что был в ссылке согласия.
+def test_refresh_token_invalid_grant_requires_reauth(monkeypatch)  # invalid_grant` — не общая ошибка, а требование подключиться заново.
+def test_token_endpoint_error_is_api_error(monkeypatch)
+def test_network_failure_is_api_error(monkeypatch)
+def test_access_token_refreshes_expired(tutor_factory, monkeypatch)  # Истёкший access_token обновляется по refresh_token.
+def test_access_token_reused_while_valid(tutor_factory, monkeypatch)  # Действующий токен не обновляется — лишнего запроса нет.
+def test_access_token_none_without_connection(tutor_factory)
+def test_clear_removes_all_google_params(tutor_factory)
+def test_take_oauth_state_is_one_time(tutor_factory)
+
+# tests/test_gcalendar_reconcile.py [python]
+imports: json, urllib, datetime.timedelta, app, app.database.SessionLocal, app.gcalendar.models.calendar_event.CalendarEvent, app.gcalendar.services.connection, app.gcalendar.services.mapping, app.gcalendar.services.reconcile.RECONCILE_FUTURE_DAYS, app.gcalendar.services.reconcile.reconcile_all, app.lesson.models.lesson.Lesson, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow
+class _FakeResponse
+  def __init__(self, payload)
+  def read(self)
+  def __enter__(self)
+  def __exit__(self, *exc)
+def _patch_api(monkeypatch, calls, *, insert_id="event-new", remote_ids=())  # Подменяет urlopen: POST создаёт, GET отдаёт список событий календаря.
+def _configure(monkeypatch)
+def _connect(tutor_id, *, access="access-1")
+def _future(days=3, hour=10)
+def test_registry_contains_reconcile()  # В реестре заданий зарегистрирована сверка Google Календаря.
+def test_reconcile_is_registered_callable()  # Регистрация указывает именно на сервис сверки.
+def test_reconcile_creates_missing_events(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Урок без события (хук не сработал) получает событие при сверке.
+def test_reconcile_is_idempotent(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Повторный прогон ничего не меняет и не ходит в API создания.
+def test_reconcile_skips_disconnected_tutors(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Репетитор без подключённого календаря не попадает в сверку.
+def test_reconcile_ignores_lessons_outside_window(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Занятия за пределами окна сверки не выгружаются.
+def test_reconcile_deletes_orphaned_events(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Событие урока, которого уже нет в БД, удаляется из календаря.
+def test_reconcile_tutor_failure_isolated(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Сбой одного репетитора не мешает сверке остальных.
+def test_reconcile_reauth_clears_connection(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Отозванный доступ сбрасывает подключение и не роняет задание.
+class _ErrorBody
+  def __init__(self, raw)
+  def read(self)
+  def close(self)  # HTTPError закрывает тело как файл — заглушка не должна падать.
+
+# tests/test_gcalendar_sync.py [python]
+imports: json, urllib, datetime.UTC, datetime.datetime, datetime.timedelta, io.BytesIO, app, app.database.SessionLocal, app.gcalendar.models.calendar_event.CalendarEvent, app.gcalendar.services.connection, app.gcalendar.services.mapping, app.gcalendar.services.sync.OUTCOME_CREATED, app.gcalendar.services.sync.OUTCOME_FAILED, app.gcalendar.services.sync.OUTCOME_SKIPPED, app.gcalendar.services.sync.OUTCOME_UPDATED, app.gcalendar.services.sync.sync_lesson, app.lesson.models.lesson.Lesson, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow
+class _FakeResponse
+  def __init__(self, payload)
+  def read(self)
+  def __enter__(self)
+  def __exit__(self, *exc)
+def _patch_api(monkeypatch, calls, *, insert_id="event-1", error=None)  # Подменяет urlopen: пишет вызовы, отвечает по методу запроса.
+def _configure(monkeypatch, *, client_id=CLIENT_ID, secret=CLIENT_SECRET, sync=True)
+def _connect(tutor_id, *, access="access-1", refresh="refresh-1")  # Сохраняет «подключённый» календарь: действующий access_token.
+def _lesson(lesson_id)
+def _tutor(tutor_id)
+def _event_row(lesson_id)
+def _register_and_login(client, email)
+def _future(days=1, hour=10)  # Будущий момент в UTC: урок не должен зависеть от даты прогона.
+def test_sync_creates_event_with_local_time(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Создание урока создаёт событие; время — настенное в зоне педагога.
+def test_sync_patches_event_on_time_change(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Смена времени урока правит существующее событие, а не создаёт новое.
+def test_sync_without_changes_makes_no_requests(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Повторная синхронизация неизменённого урока не ходит в Google.
+def test_sync_skips_without_connection(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # При неподключённом календаре запросов к API нет вовсе.
+def test_sync_disabled_by_flag(monkeypatch, tutor_factory, student_factory, lesson_factory)  # Флаг GOOGLE_CALENDAR_SYNC=false выключает синхронизацию целиком.
+def test_sync_api_error_does_not_raise(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Недоступность Google не ломает сохранение и пишет текст в карточку.
+def test_sync_unauthorized_refreshes_token(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # 401 от API: токен обновляется по refresh_token и запрос повторяется.
+def test_delete_lesson_event_removes_row_and_event(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Удаление события урока чистит и Google, и строку соответствия.
+def _tutor_by_email(email)
+def test_create_lesson_view_syncs_event(
+    monkeypatch, client, tutor_factory, student_factory
+)  # Создание урока через форму создаёт событие в Google.
+def test_create_lesson_view_survives_google_error(
+    monkeypatch, client, tutor_factory, student_factory
+)  # Ошибка Google не мешает созданию урока через форму.
+def test_update_lesson_view_patches_event(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Правка урока (смена времени) правит событие, а не создаёт новое.
+def test_move_lesson_view_patches_event(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Перенос урока перетаскиванием правит событие.
+def test_delete_lesson_view_deletes_event_before_lesson(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Удаление урока сначала удаляет событие — иначе id теряется каскадом.
+def test_delete_series_view_deletes_all_events(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Удаление серии удаляет события всех её уроков.
+def test_delete_group_view_deletes_lesson_events(
+    monkeypatch, client, tutor_factory, group_factory, lesson_factory
+)  # Удаление группы удаляет события её уроков до каскада.
+def test_foreign_lesson_is_not_synced(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Чужой урок недоступен: 404 и ни одного запроса к Google.
+
+# tests/test_gcalendar_views.py [python]
+imports: json, urllib, datetime.UTC, datetime.datetime, datetime.timedelta, io.BytesIO, app, app.database.SessionLocal, app.gcalendar.models.calendar_event.CalendarEvent, app.gcalendar.services.connection, app.lesson.models.lesson.Lesson, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow, app.tutor.services.params.get_param
+class _FakeResponse
+  def __init__(self, payload)
+  def read(self)
+  def __enter__(self)
+  def __exit__(self, *exc)
+def _patch_urlopen(monkeypatch, routes, calls)  # Ответ по подстроке URL; каждый вызов — в `calls`.
+def _body(raw)  # Тело запроса: JSON, urlencoded-форма или None — без исключений.
+def _configure(monkeypatch, *, client_id=CLIENT_ID, secret=CLIENT_SECRET)
+def _register_and_login(client, email)
+def _tutor_id(email)
+def _param(tutor_id, key)
+def _connect(tutor_id, *, access="access-1", refresh="refresh-1")
+def _future(days=1, hour=10)
+def test_connect_redirects_to_login_without_session(client)
+def test_callback_redirects_to_login_without_session(client)
+def test_disconnect_redirects_to_login_without_session(client)
+def test_tab_shows_google_block_with_connect_button(client, monkeypatch)
+def test_tab_without_credentials_shows_hint(client, monkeypatch)  # Без кредов на сервере кнопка неактивна и объясняет причину.
+def test_tab_shows_connected_state(client, monkeypatch)
+def test_tab_shows_last_error(client, monkeypatch)
+def test_connect_redirects_to_google_with_state(client, monkeypatch)
+def test_connect_without_credentials_returns_hint(client, monkeypatch)
+def test_tab_renders_error_from_query(client, monkeypatch)
+def test_callback_with_wrong_state_saves_nothing(client, monkeypatch)
+def test_callback_state_is_one_time(client, monkeypatch)  # Второй callback с тем же state отклоняется.
+def test_callback_access_denied_saves_nothing(client, monkeypatch)
+def test_callback_saves_tokens_and_email(client, monkeypatch)
+def test_callback_exchanges_code_with_same_redirect_uri(client, monkeypatch)
+def test_callback_uploads_future_lessons_only(
+    client, monkeypatch, student_factory, lesson_factory
+)  # Первичная выгрузка: будущие занятия — да, прошедшие — нет.
+def test_callback_exchange_failure_keeps_disconnected(client, monkeypatch)  # Неудачный обмен кода не оставляет полуподключения.
+def test_disconnect_clears_tokens_and_mappings(
+    client, monkeypatch, student_factory, lesson_factory
+)
+def test_disconnect_survives_revoke_failure(client, monkeypatch)  # Недоступность Google не мешает локальному отключению.
+def test_disconnect_keeps_lessons(client, monkeypatch, student_factory, lesson_factory)  # Отключение не удаляет занятия в CRM — только связь с Google.
 
 # tests/test_group_create.py [python]
 imports: html, json, re, pytest, app.database.SessionLocal, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.group.services.members.MAX_MEMBERS, app.student.models.student.Student
@@ -5825,7 +6437,7 @@ def test_observer_watches_htmx_swaps()  # Диалоги появляются с
 def test_autofocus_is_not_overridden()  # Если фокус уже в диалоге (клик по полю), его не перебиваем.
 
 # tests/test_models.py [python]
-imports: datetime.UTC, datetime.datetime, datetime.timedelta, sqlalchemy.delete, sqlalchemy.select, sqlalchemy.text, sqlalchemy.exc.IntegrityError, app.database.SessionLocal, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_session.TutorSession
+imports: datetime.UTC, datetime.date, datetime.datetime, datetime.timedelta, sqlalchemy.delete, sqlalchemy.select, sqlalchemy.text, sqlalchemy.exc.IntegrityError, app.database.SessionLocal, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_session.TutorSession
 def test_sqlite_foreign_keys_pragma_is_enabled()  # PRAGMA foreign_keys` включена на каждом соединении (слушатель connect).
 def test_insert_with_missing_foreign_key_is_rejected()  # Строка с несуществующим FK отклоняется на уровне БД.
 def test_create_and_read_student(student_factory)  # Минимальная карточка: имя + признак ребёнок, остальное пусто.
@@ -6063,6 +6675,7 @@ def test_password_never_rendered(client)  # Ни открытый пароль, 
 def _notifications_page(client, **params)
 def test_notifications_defaults(client)  # До первого сохранения: всё включено, напоминание за 1 час, 09:00, порог 0.
 def test_notifications_save(client)
+def test_notifications_birthday_toggle_is_saved(client)  # «День рождения» сохраняется и показывается; отдельного поля времени нет.
 def test_notifications_invalid_time_shows_error(client)
 def test_notifications_negative_threshold_shows_error(client)
 def _calendar_page(client, **params)
@@ -6445,6 +7058,10 @@ def test_non_numeric_grade_is_rejected()
 def test_adult_does_not_keep_grade_and_school()  # Для взрослого класс и школа не сохраняются, даже если пришли.
 def test_child_keeps_grade_and_school()
 def test_invalid_email_is_rejected()
+def test_birth_date_is_parsed_as_date()
+def test_empty_birth_date_is_none()
+def test_invalid_birth_date_is_rejected(raw)
+def test_adult_keeps_birth_date()  # Дата рождения есть и у взрослого: ограничение «только ребёнок» не действует.
 def test_reminders_are_parsed_independently()
 def test_contact_rows_are_parsed_by_index()
 def test_empty_contact_row_is_skipped()
@@ -6474,6 +7091,7 @@ def test_find_contact_does_not_cross_tutors(tutor_factory)  # Контакт д�
 def test_lookup_reports_already_linked(tutor_factory, student_factory)
 def test_lookup_returns_none_without_matches(tutor_factory)
 def test_update_changes_fields_but_not_id_or_tutor(tutor_factory, student_factory)
+def test_create_and_update_store_birth_date(tutor_factory, student_factory)  # Дата рождения записывается при создании и очищается пустым значением.
 def test_update_reuses_contact_and_updates_it_for_all_students(
     tutor_factory, student_factory
 )  # Изменение контакта видно у всех учеников, к которым он привязан.
@@ -6533,6 +7151,7 @@ def test_modal_actions_are_outside_scrolled_body(client, owner)  # «Отмен�
 def test_validation_feedback_lives_in_common_module()  # Форма ученика не держит своей логики валидации — её ведёт общий модуль.
 def test_default_tab_is_general()  # Вкладка по умолчанию «Общее»; её же подставляет сервер без `?tab=`.
 def test_grade_and_school_depend_on_kind(client, owner)
+def test_birth_date_is_date_input_without_kind_dependency(client, owner)  # Дата рождения — обычный `type="date"`, доступный и ребёнку, и взрослому.
 def test_modal_uses_alpine_and_closes_by_escape(client, owner)  # Escape закрывает только верхний слой: счёт поверх карточки — первым.
 def test_pages_have_second_modal_layer(client, owner, student_factory)  # #modal-payment` — сосед `#modal` на обеих страницах учеников.
 def test_edit_with_tab_payments_opens_on_payments(client, owner, student_factory)  # ?tab=payments` открывает карточку сразу на вкладке «Платежи».
@@ -6609,7 +7228,7 @@ def test_report_month_arrows_return_content_not_modal(client, owner, student_fac
 def test_modal_isolation(modal, client, owner, tutor_factory, student_factory)  # Модалки чужого ученика отвечают 404, как несуществующие.
 
 # tests/test_students_pages.py [python]
-imports: pytest, app.database.SessionLocal, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact
+imports: datetime.date, pytest, app.database.SessionLocal, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact
 def owner(client, tutor_factory)  # Репетитор, вошедший в клиент; возвращает его id.
 def _create_payload(**overrides) -> dict
 def test_operations_require_login(client, method, url)  # Без сессии изменения не применяются, а запрос уходит на вход.
@@ -6632,6 +7251,10 @@ def test_create_ignores_tutor_id_from_form(client, owner, tutor_factory)  # tuto
 def test_create_with_contacts_and_payer(client, owner)
 def test_edit_form_shows_existing_values(client, owner, student_factory)
 def test_update_changes_last_name_and_level(client, owner, student_factory)
+def test_update_saves_birth_date(client, owner, student_factory)  # Дата рождения сохраняется и возвращается в форму редактирования.
+def test_empty_birth_date_clears_value(client, owner, student_factory)  # Пустое поле в форме очищает сохранённую дату до NULL.
+def test_invalid_birth_date_shows_error(client, owner, student_factory)  # Некорректная дата — сообщение об ошибке, а не 500.
+def test_card_shows_birth_date(client, owner, student_factory)  # Карточка ученика показывает дату рождения в формате ДД.ММ.ГГГГ.
 def test_update_changes_payer(client, owner, student_factory)
 def test_update_rejects_unlinked_payer(client, owner, student_factory)
 def test_archive_hides_student_from_default_list(client, owner, student_factory)  # Архив отдаёт обновлённую карточку и просит список перезапроситься.
