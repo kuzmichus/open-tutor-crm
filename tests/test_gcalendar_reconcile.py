@@ -19,6 +19,7 @@ from app.gcalendar.services.reconcile import (
     reconcile_all,
 )
 from app.lesson.models.lesson import Lesson
+from app.student.models.student import Student
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.clock import utcnow
 
@@ -49,7 +50,12 @@ def _patch_api(monkeypatch, calls, *, insert_id="event-new", remote_ids=()):
 
     def fake_urlopen(request, timeout=None, context=None):
         method = request.get_method()
-        calls.append({"method": method, "url": request.full_url})
+        raw = request.data
+        calls.append({
+            "method": method,
+            "url": request.full_url,
+            "data": json.loads(raw.decode()) if raw else None,
+        })
         if method == "POST":
             return _FakeResponse({"id": insert_id})
         if method == "GET":
@@ -148,6 +154,75 @@ def test_reconcile_is_idempotent(
     with SessionLocal() as db:
         assert reconcile_all(db) == 0
     assert calls == []
+
+def test_reconcile_patches_event_on_target_color_change(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Смена цвета ученика: сверка правит событие, второго не появляется."""
+    _configure(monkeypatch)
+    calls = []
+    _patch_api(monkeypatch, calls, insert_id="event-color")
+    tutor_id = tutor_factory()
+    _connect(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id, color="#dd3c3c")
+    lesson_id = lesson_factory(
+        student_id=student_id,
+        status="planned",
+        starts_at=_future(),
+    )
+
+    with SessionLocal() as db:
+        assert reconcile_all(db) == 1
+    assert calls[0]["data"]["colorId"] == "11"
+    calls.clear()
+
+    with SessionLocal() as db:
+        db.get(Student, student_id).color = "#3cdddd"  # бирюзовый → Peacock
+        db.commit()
+        assert reconcile_all(db) == 1
+
+    assert [call["method"] for call in calls if "calendar" in call["url"]] == ["PATCH"]
+    assert calls[-1]["data"]["colorId"] == "7"
+    with SessionLocal() as db:
+        row = mapping.get(db, lesson_id)
+    assert row.event_id == "event-color"
+
+def test_reconcile_colors_existing_event_without_migration(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Событие, созданное до появления цвета, получает цвет при сверке.
+
+    Миграции БД нет: у прежних событий в `content_hash` нет `colorId`,
+    поэтому первый же прогон сверки видит расхождение и шлёт PATCH.
+    """
+    from app.gcalendar.models.calendar_event import CalendarEvent
+
+    _configure(monkeypatch)
+    calls = []
+    _patch_api(monkeypatch, calls, remote_ids=("event-old",))
+    tutor_id = tutor_factory()
+    _connect(tutor_id)
+    lesson_id = lesson_factory(
+        student_id=student_factory(tutor_id=tutor_id, color="#3cdddd"),
+        status="planned",
+        starts_at=_future(),
+    )
+    with SessionLocal() as db:
+        db.add(
+            CalendarEvent(
+                lesson_id=lesson_id,
+                event_id="event-old",
+                calendar_id="primary",
+                content_hash="0" * 64,  # хеш тела без colorId
+            )
+        )
+        db.commit()
+
+    with SessionLocal() as db:
+        assert reconcile_all(db) == 1
+
+    assert [call["method"] for call in calls if "calendar" in call["url"]] == ["PATCH"]
+    assert calls[-1]["data"]["colorId"] == "7"
 
 def test_reconcile_skips_disconnected_tutors(
     monkeypatch, tutor_factory, student_factory, lesson_factory
