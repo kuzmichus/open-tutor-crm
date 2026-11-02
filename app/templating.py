@@ -11,6 +11,8 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
+from app import __repository_url__, __version__
+
 _APP_DIR = Path(__file__).resolve().parent
 
 TEMPLATE_DIRS = [
@@ -32,6 +34,15 @@ TEMPLATE_DIRS = [
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
+
+# Подпись сервиса в подвале (`_footer_signature.html`): версия и адрес
+# исходников. Версия берётся из манифеста (`app.__version__`), адрес — из
+# `app.__repository_url__`, поэтому в шаблонах нет литералов, которые
+# пришлось бы править при смене версии или переезде репозитория.
+templates.env.globals.update(
+    app_version=__version__,
+    app_repository_url=__repository_url__,
+)
 
 # Функции отображения модуля учеников (подписи статусов, инициалы, полное
 # имя). Регистрируются здесь, чтобы шаблоны работали и без импорта вьюх.

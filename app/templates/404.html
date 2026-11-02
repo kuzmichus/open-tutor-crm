@@ -51,5 +51,9 @@
             <a class="btn btn--primary" href="/">На главную</a>
             <a class="btn btn--ghost" href="/tutor/login">Войти</a>
         </div>
+
+        {# Подпись сервиса: на 404 версия особенно полезна — по ней видно,
+           не устарел ли образ, из-за чего страница могла не найтись. #}
+        {% include "_footer_signature.html" %}
     </main>
 {% endblock %}

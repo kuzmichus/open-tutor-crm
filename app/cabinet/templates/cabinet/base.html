@@ -21,5 +21,10 @@
         <span class="sidebar__brand">{% block cabinet_brand %}Кабинет ученика{% endblock %}</span>
     </header>
     {% block cabinet_content %}{% endblock %}
+    {# Подпись сервиса — та же, что в подвале CRM: страницы входа кабинетов
+       тоже должны показывать работающую версию (задача «подпись в подвале»). #}
+    <div class="cabinet__signature">
+        {% include "_footer_signature.html" %}
+    </div>
 </main>
 {% endblock %}
