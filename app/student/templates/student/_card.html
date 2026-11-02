@@ -11,7 +11,7 @@
                 {{ student_full_name(student) }}
             </a>
             <span class="student-meta">
-                {{ kind_label(student.kind) }}{% if student.kind == 'child' and student.grade %}, {{ student.grade }} класс{% endif %}
+                {{ student_age_label(student.birth_date, tutor) or kind_label(student.kind) }}{% if student.kind == 'child' and student.grade %}, {{ student.grade }} класс{% endif %}
             </span>
         </div>
         <span class="chip chip--{{ student.status }}">{{ status_label(student.status) }}</span>
