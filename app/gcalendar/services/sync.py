@@ -155,20 +155,30 @@ def delete_lesson_event(db: Session, tutor, lesson: Lesson) -> bool:
     return ok
 
 def build_payload(db: Session, lesson: Lesson, tutor) -> dict:
-    """Тело события из урока и имён его цели."""
+    """Тело события из урока, имён его цели и цвета цели.
+
+    Цвет берётся у той же цели, что и имя: отдельного запроса не нужно,
+    объекты `Student`/`Group` уже загружены. `color` может быть NULL (старые
+    записи) — тогда событие получит цвет по умолчанию.
+    """
     student_name = None
+    student_color = None
     group_name = None
+    group_color = None
     if lesson.student_id:
         student = db.get(Student, lesson.student_id)
         student_name = student_full_name(student) if student is not None else None
+        student_color = student.color if student is not None else None
     if lesson.group_id:
         group = db.get(Group, lesson.group_id)
         group_name = group.name if group is not None else None
+        group_color = group.color if group is not None else None
     return event_payload.build_event(
         lesson,
         tutor,
         student_name=student_name,
         group_name=group_name,
+        target_color=group_color if lesson.group_id else student_color,
     )
 
 def _call(db: Session, tutor_id: str, action):

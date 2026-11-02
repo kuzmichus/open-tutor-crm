@@ -24,6 +24,7 @@ from app.gcalendar.services.sync import (
     sync_lesson,
 )
 from app.lesson.models.lesson import Lesson
+from app.student.models.student import Student
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.clock import utcnow
 
@@ -140,7 +141,9 @@ def test_sync_creates_event_with_local_time(
     tutor_id = tutor_factory(timezone="Europe/Moscow")
     _connect(tutor_id)
     lesson_id = lesson_factory(
-        student_id=student_factory(tutor_id=tutor_id, first_name="Иван", last_name="Петров"),
+        student_id=student_factory(
+            tutor_id=tutor_id, first_name="Иван", last_name="Петров", color="#dd3c3c"
+        ),
         status="planned",
         starts_at=datetime(2027, 3, 10, 7, 0, tzinfo=UTC),  # 10:00 MSK
         duration_min=60,
@@ -160,6 +163,8 @@ def test_sync_creates_event_with_local_time(
     assert body["start"]["timeZone"] == "Europe/Moscow"
     assert body["end"]["dateTime"] == "2027-03-10T11:00:00"
     assert "Стоимость: 2000 ₽" in body["description"]
+    # Цвет цели (#dd3c3c — красный) красит карточку в Tomato.
+    assert body["colorId"] == "11"
 
     row = _event_row(lesson_id)
     assert row is not None
@@ -237,6 +242,110 @@ def test_sync_skips_without_connection(
     assert outcome == OUTCOME_SKIPPED
     assert calls == []
     assert _event_row(lesson_id) is None
+
+def test_sync_patches_event_on_target_color_change(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Смена цвета ученика правит событие: второго события не появляется."""
+    _configure(monkeypatch)
+    calls = []
+    _patch_api(monkeypatch, calls, insert_id="event-color-1")
+    tutor_id = tutor_factory()
+    _connect(tutor_id)
+    student_id = student_factory(tutor_id=tutor_id, color="#dd3c3c")
+    lesson_id = lesson_factory(
+        student_id=student_id,
+        status="planned",
+        starts_at=datetime(2027, 3, 10, 10, 0, tzinfo=UTC),
+    )
+
+    with SessionLocal() as db:
+        sync_lesson(db, db.get(Tutor, tutor_id), db.get(Lesson, lesson_id))
+        before = _event_row(lesson_id).content_hash
+    assert calls[0]["data"]["colorId"] == "11"
+    calls.clear()
+
+    with SessionLocal() as db:
+        db.get(Student, student_id).color = "#3cdddd"  # бирюзовый → Peacock
+        db.commit()
+        outcome = sync_lesson(db, db.get(Tutor, tutor_id), db.get(Lesson, lesson_id))
+
+    assert outcome == OUTCOME_UPDATED
+    assert len(calls) == 1
+    assert calls[0]["method"] == "PATCH"
+    assert "/events/event-color-1" in calls[0]["url"]
+    assert calls[0]["data"]["colorId"] == "7"
+    row = _event_row(lesson_id)
+    assert row.event_id == "event-color-1"
+    assert row.content_hash != before
+
+def test_sync_uses_group_color_for_group_lesson(
+    monkeypatch, tutor_factory, group_factory, lesson_factory
+):
+    """Групповое занятие красится в цвет группы, а не ученика."""
+    _configure(monkeypatch)
+    calls = []
+    _patch_api(monkeypatch, calls, insert_id="event-group-1")
+    tutor_id = tutor_factory()
+    _connect(tutor_id)
+    group_id = group_factory(tutor_id=tutor_id, name="Английский", color="#50dd3c")
+    lesson_id = lesson_factory(
+        group_id=group_id,
+        status="planned",
+        starts_at=datetime(2027, 3, 10, 10, 0, tzinfo=UTC),
+    )
+
+    with SessionLocal() as db:
+        outcome = sync_lesson(db, db.get(Tutor, tutor_id), db.get(Lesson, lesson_id))
+
+    assert outcome == OUTCOME_CREATED
+    assert calls[0]["data"]["colorId"] == "10"  # Basil
+
+def test_sync_without_target_color_uses_default(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """У цели без цвета (NULL у старой записи) событие получает default."""
+    _configure(monkeypatch)
+    calls = []
+    _patch_api(monkeypatch, calls, insert_id="event-default-1")
+    tutor_id = tutor_factory()
+    _connect(tutor_id)
+    lesson_id = lesson_factory(
+        student_id=student_factory(tutor_id=tutor_id, color=None),
+        status="planned",
+        starts_at=datetime(2027, 3, 10, 10, 0, tzinfo=UTC),
+    )
+
+    with SessionLocal() as db:
+        sync_lesson(db, db.get(Tutor, tutor_id), db.get(Lesson, lesson_id))
+
+    # DEFAULT_TARGET_COLOR (#3b82f6) — Blueberry, как цвет по умолчанию в CRM.
+    assert calls[0]["data"]["colorId"] == "9"
+
+def test_sync_without_color_change_makes_no_requests(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Повторная синхронизация с тем же цветом цели в Google не ходит."""
+    _configure(monkeypatch)
+    calls = []
+    _patch_api(monkeypatch, calls, insert_id="event-stable-1")
+    tutor_id = tutor_factory()
+    _connect(tutor_id)
+    lesson_id = lesson_factory(
+        student_id=student_factory(tutor_id=tutor_id, color="#8c3cdd"),
+        status="planned",
+        starts_at=datetime(2027, 3, 10, 10, 0, tzinfo=UTC),
+    )
+
+    with SessionLocal() as db:
+        sync_lesson(db, db.get(Tutor, tutor_id), db.get(Lesson, lesson_id))
+    calls.clear()
+
+    with SessionLocal() as db:
+        outcome = sync_lesson(db, db.get(Tutor, tutor_id), db.get(Lesson, lesson_id))
+
+    assert outcome == OUTCOME_SKIPPED
+    assert calls == []
 
 def test_sync_disabled_by_flag(monkeypatch, tutor_factory, student_factory, lesson_factory):
     """Флаг GOOGLE_CALENDAR_SYNC=false выключает синхронизацию целиком."""
