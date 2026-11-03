@@ -77,9 +77,13 @@ def test_shift_moment_respects_dst_per_row():
     # фиксированным смещением.
     assert summer == datetime(2026, 7, 1, 4, 0, tzinfo=UTC)
     assert winter == datetime(2026, 1, 1, 3, 0, tzinfo=UTC)
-    # Настенное время в каждой сроке сохранилось: 11:00 летом, 10:00 зимой.
-    assert summer.astimezone(OLD_ZONE).replace(tzinfo=None).time() == datetime(2026, 7, 1, 11, 0).time()
-    assert winter.astimezone(OLD_ZONE).replace(tzinfo=None).time() == datetime(2026, 1, 1, 10, 0).time()
+    # Настенное время сохраняется в новой зоне: 11:00 летом, 10:00 зимой.
+    assert summer.astimezone(NEW_ZONE).replace(tzinfo=None).time() == datetime(
+        2026, 7, 1, 11, 0
+    ).time()
+    assert winter.astimezone(NEW_ZONE).replace(tzinfo=None).time() == datetime(
+        2026, 1, 1, 10, 0
+    ).time()
 
 
 def test_shift_moment_old_equals_new_is_identity():
