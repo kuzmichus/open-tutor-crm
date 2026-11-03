@@ -233,3 +233,18 @@ def test_empty_city_clears_it(client, owner, student_factory):
 
     with SessionLocal() as db:
         assert db.get(Student, student_id).city is None
+
+
+def test_city_survives_validation_error(client, owner):
+    """После ошибки валидации форма показывает введённый город, а не пустое поле."""
+    response = client.post(
+        "/tutor/students",
+        data=_create_payload(first_name=" ", city="Новый Уренгой"),
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 200
+    assert "Укажите имя ученика." in response.text
+
+    start = response.text.index('id="student-city"')
+    tag = response.text[response.text.rindex("<", 0, start) : response.text.index(">", start) + 1]
+    assert 'value="Новый Уренгой"' in tag
