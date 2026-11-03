@@ -11,6 +11,7 @@ import re
 from app.database import SessionLocal
 from app.tutor.models.tutor import Tutor
 from app.tutor.models.tutor_settings import TutorSettings
+from app.tutor.services.settings import save_settings
 
 PASSWORD = "Секретный-Пароль-1"
 
@@ -428,6 +429,44 @@ def test_workday_defaults_without_settings_row(client):
 
     assert settings.workday_start == "06:00"
     assert settings.workday_end == "23:00"
+    # Флаг «Показывать цену» тоже приходит из дефолтов и по умолчанию
+    # включён: до появления флага цены на карточках календаря были видны.
+    assert settings.show_calendar_price is True
+
+
+def test_calendar_tab_save_keeps_show_price_flag(client):
+    """Сохранение вкладки «Календарь» не сбрасывает флаг показа цены.
+
+    `save_settings` перезаписывает только присланные поля, поэтому форма
+    профиля (у неё нет чекбокса «Показывать цену») не трогает флаг
+    календаря.
+    """
+    _login(client)
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        save_settings(db, tutor.id, {"show_calendar_price": False})
+
+    response = client.post(
+        "/tutor/profile/calendar",
+        data={
+            "timezone": "UTC",
+            "quarter1_end": "10-25",
+            "quarter2_end": "12-25",
+            "quarter3_end": "03-20",
+            "quarter4_end": "05-25",
+            "workday_start": "09:00",
+            "workday_end": "18:00",
+            "default_lesson_duration": "60",
+            "default_lesson_price": "",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with SessionLocal() as db:
+        settings = db.get(TutorSettings, tutor.id)
+    assert settings.workday_start == "09:00"
+    assert settings.show_calendar_price is False
 
 
 # ---------------------------------------------------------------------------
