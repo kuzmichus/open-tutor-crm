@@ -151,6 +151,69 @@ def test_card_hides_grade_and_school_for_adult(client, owner, student_factory):
     card = _card_article(client.get("/tutor/students").text)
     assert "Школа" not in card
 
+
+# --------------------------------------------------------------------------
+# Город в карточках (change add-student-city)
+# --------------------------------------------------------------------------
+
+
+def test_card_shows_city_with_icon(client, owner, student_factory):
+    """Миникарточка списка показывает город с иконкой."""
+    student_factory(tutor_id=owner, first_name="Маша", city="Москва")
+    card = _card_article(client.get("/tutor/students").text)
+
+    assert "Москва" in card
+    assert 'data-lucide="map-pin"' in card
+
+
+def test_card_without_city_has_no_city_icon(client, owner, student_factory):
+    """Без города иконки города в карточке нет (и блок контактов не пустует)."""
+    student_factory(tutor_id=owner, first_name="Одинокий")
+    card = _card_article(client.get("/tutor/students").text)
+
+    assert 'data-lucide="map-pin"' not in card
+    assert "student-contacts" not in card
+
+
+def test_card_shows_city_for_adult(client, owner, student_factory):
+    """Город виден и у взрослого: ограничение «только ребёнок» к нему не относится."""
+    student_factory(
+        tutor_id=owner,
+        first_name="Взрослый",
+        kind="adult",
+        city="Казань",
+        school="Школа",
+    )
+    card = _card_article(client.get("/tutor/students").text)
+
+    assert "Казань" in card
+    assert 'data-lucide="map-pin"' in card
+    assert "Школа" not in card
+
+
+def test_card_page_shows_city_with_icon(client, owner, student_factory):
+    """Большая карточка ученика показывает город с иконкой перед школой."""
+    student_id = student_factory(
+        tutor_id=owner, first_name="Маша", city="Москва", school="Гимназия №1"
+    )
+    html = client.get(f"/tutor/students/{student_id}").text
+
+    assert "Москва" in html
+    city_pos = html.index("Москва")
+    assert 'data-lucide="map-pin"' in html
+    assert city_pos < html.index("Гимназия №1")
+
+
+def test_card_page_shows_city_for_adult(client, owner, student_factory):
+    """У взрослого город в большом профиле виден, хотя школы нет."""
+    student_id = student_factory(
+        tutor_id=owner, first_name="Пётр", kind="adult", city="Казань", school="Школа"
+    )
+    html = client.get(f"/tutor/students/{student_id}").text
+
+    assert "Казань" in html
+    assert "Школа" not in html
+
 # --------------------------------------------------------------------------
 # Возраст вместо подтипа в миникарточке (change show-age-in-minicard)
 # --------------------------------------------------------------------------

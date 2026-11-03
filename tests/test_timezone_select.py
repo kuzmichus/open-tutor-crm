@@ -44,6 +44,7 @@ def _create_payload(**overrides) -> dict:
         "kind": "child",
         "grade": "",
         "birth_date": "",
+        "city": "",
         "school": "",
         "level": "",
         "notes": "",
@@ -56,8 +57,16 @@ def _create_payload(**overrides) -> dict:
 
 
 def _timezone_options_from_html(html: str) -> list[dict]:
-    """Достаёт и разбирает справочник часовых зон из разметки формы."""
-    match = re.search(r'data-options="([^"]*)"', html)
+    """Достаёт и разбирает справочник часовых зон из разметки формы.
+
+    На странице два combobox (город и часовой пояс), поэтому `data-options`
+    ищется внутри блока, в котором есть поле `#student-timezone`, а не как
+    первое вхождение на странице.
+    """
+    anchor = html.index('id="student-timezone"')
+    block_start = html.rindex('class="combobox"', 0, anchor)
+    block = html[block_start : html.index('class="field"', block_start)]
+    match = re.search(r'data-options="([^"]*)"', block)
     assert match, "В форме нет справочника часовых зон (data-options)"
     return json.loads(unescape(match.group(1)))
 

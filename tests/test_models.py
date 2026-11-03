@@ -61,6 +61,7 @@ def test_create_and_read_student(student_factory):
         assert student.phone is None
         assert student.grade is None
         assert student.birth_date is None
+        assert student.city is None
         assert student.school is None
         assert student.level is None
         assert student.notes is None
@@ -99,6 +100,7 @@ def test_full_card_values_are_preserved(tutor_factory, student_factory):
         kind="child",
         grade=5,
         birth_date=date(2012, 5, 17),
+        city="Москва",
         school="Гимназия №1",
         level="B1",
         notes="Любит задачи со звёздочкой",
@@ -114,6 +116,7 @@ def test_full_card_values_are_preserved(tutor_factory, student_factory):
         assert student.email == "Maria@Example.com"
         assert student.grade == 5
         assert student.birth_date == date(2012, 5, 17)
+        assert student.city == "Москва"
         assert student.school == "Гимназия №1"
         assert student.level == "B1"
         assert student.notes == "Любит задачи со звёздочкой"

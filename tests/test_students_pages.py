@@ -33,6 +33,7 @@ def _create_payload(**overrides) -> dict:
         "kind": "child",
         "grade": "",
         "birth_date": "",
+        "city": "",
         "school": "",
         "level": "",
         "notes": "",
@@ -510,6 +511,7 @@ def test_card_page_shows_fields_and_contacts(client, owner, student_factory):
         last_name="Петрова",
         kind="child",
         grade=5,
+        city="Москва",
         school="Гимназия №1",
         level="B1",
         timezone="Europe/Moscow",
@@ -532,7 +534,16 @@ def test_card_page_shows_fields_and_contacts(client, owner, student_factory):
 
     response = client.get(f"/tutor/students/{student_id}")
     assert response.status_code == 200
-    for fragment in ("Маша", "Петрова", "Гимназия №1", "B1", "Europe/Moscow", "Мама Ольга", "мама"):
+    for fragment in (
+        "Маша",
+        "Петрова",
+        "Москва",
+        "Гимназия №1",
+        "B1",
+        "Europe/Moscow",
+        "Мама Ольга",
+        "мама",
+    ):
         assert fragment in response.text
 
 
