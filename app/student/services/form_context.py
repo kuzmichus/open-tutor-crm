@@ -12,6 +12,7 @@ from app.cabinet.services.invites import invite_context
 from app.common.services.timezones import timezone_options_json
 from app.messenger.services.student_invites import invites_context
 from app.student.models.student import Student, STUDENT_STATUSES
+from app.student.services.cities import city_options_json
 from app.student.services.presentation import (
     contact_row,
     empty_student_form,
@@ -125,6 +126,13 @@ def form_context(
         "statuses": STUDENT_STATUSES,
         # Справочник часовых зон (IANA) для селекта с поиском.
         "timezone_options_json": timezone_options_json(),
+        # Города других учеников репетитора — подсказки поля «Город».
+        # Свой город открытой карточки в список не попадает.
+        "city_options_json": city_options_json(
+            db,
+            tutor_id,
+            exclude_student_id=student.id if student is not None else None,
+        ),
         # Блок «Приглашение в мессенджеры» вкладки «Настройки»: есть
         # только у сохранённого ученика — приглашать некого, пока
         # карточка не сохранена. Рендер сетенезависим.

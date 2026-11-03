@@ -22,6 +22,7 @@ _FIRST_NAME_MAX = 100
 _LAST_NAME_MAX = 100
 _PHONE_MAX = 32
 _EMAIL_MAX = 255
+_CITY_MAX = 100
 _SCHOOL_MAX = 255
 _LEVEL_MAX = 100
 _TIMEZONE_MAX = 64
@@ -36,6 +37,7 @@ _TEXT_FIELDS = (
     "email",
     "grade",
     "birth_date",
+    "city",
     "school",
     "level",
     "notes",
@@ -88,6 +90,9 @@ def parse_student_form(form: Mapping) -> tuple[dict, list[str]]:
         len(data["email"]) > _EMAIL_MAX or not _EMAIL_RE.match(data["email"])
     ):
         errors.append("Укажите корректный email.")
+
+    if len(data["city"]) > _CITY_MAX:
+        errors.append(f"Город не длиннее {_CITY_MAX} символов.")
 
     if len(data["school"]) > _SCHOOL_MAX:
         errors.append(f"Школа не длиннее {_SCHOOL_MAX} символов.")

@@ -154,6 +154,43 @@ def test_reminders_are_parsed_independently():
 
 
 # --------------------------------------------------------------------------
+# Город (change add-student-city)
+# --------------------------------------------------------------------------
+
+
+def test_city_is_parsed_and_trimmed():
+    data, errors = parse_student_form(_student_data(city="  Москва "))
+    assert errors == []
+    assert data["city"] == "Москва"
+
+
+def test_empty_city_is_empty_string():
+    data, errors = parse_student_form(_student_data(city=""))
+    assert errors == []
+    assert data["city"] == ""
+
+
+def test_too_long_city_is_rejected():
+    _data, errors = parse_student_form(_student_data(city="я" * 101))
+    assert "Город не длиннее 100 символов." in errors
+
+
+def test_city_at_limit_is_accepted():
+    data, errors = parse_student_form(_student_data(city="я" * 100))
+    assert errors == []
+    assert data["city"] == "я" * 100
+
+
+def test_adult_keeps_city():
+    """Город есть и у взрослого: сброс «только для ребёнка» к нему не применяется."""
+    data, errors = parse_student_form(
+        _student_data(first_name="Ольга", kind="adult", city="Казань")
+    )
+    assert errors == []
+    assert data["city"] == "Казань"
+
+
+# --------------------------------------------------------------------------
 # Строки контактов
 # --------------------------------------------------------------------------
 
@@ -240,6 +277,7 @@ def test_create_student_rejects_unlinked_payer(tutor_factory):
                 "kind": "child",
                 "grade": None,
                 "birth_date": None,
+                "city": "",
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -274,6 +312,7 @@ def test_create_student_accepts_linked_payer(tutor_factory):
                 "kind": "child",
                 "grade": None,
                 "birth_date": None,
+                "city": "",
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -438,6 +477,7 @@ def test_empty_status_does_not_reset_existing_status(tutor_factory):
                 "kind": "child",
                 "grade": None,
                 "birth_date": None,
+                "city": "",
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -464,6 +504,7 @@ def test_empty_status_does_not_reset_existing_status(tutor_factory):
                 "kind": "child",
                 "grade": None,
                 "birth_date": None,
+                "city": "",
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -493,6 +534,7 @@ def test_status_change_is_saved(tutor_factory):
                 "kind": "child",
                 "grade": None,
                 "birth_date": None,
+                "city": "",
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -517,6 +559,7 @@ def test_status_change_is_saved(tutor_factory):
                 "kind": "child",
                 "grade": None,
                 "birth_date": None,
+                "city": "",
                 "school": "",
                 "level": "",
                 "notes": "",
@@ -608,6 +651,7 @@ def _student_data(**overrides):
         "kind": "child",
         "grade": None,
         "birth_date": None,
+        "city": "",
         "school": "",
         "level": "",
         "notes": "",
@@ -664,6 +708,25 @@ def test_create_and_update_store_birth_date(tutor_factory, student_factory):
         )
         assert errors == []
         assert db.get(Student, student.id).birth_date == date(2013, 6, 1)
+
+
+def test_create_and_update_store_city(tutor_factory):
+    """Город записывается при создании и очищается пустым значением."""
+    tutor_id = tutor_factory()
+    with SessionLocal() as db:
+        student, errors = create_student(db, tutor_id, _student_data(city="Москва"), [])
+        assert errors == []
+        assert student.city == "Москва"
+
+        errors = update_student(db, student, tutor_id, _student_data(city="Казань"), [])
+        assert errors == []
+        assert db.get(Student, student.id).city == "Казань"
+
+        errors = update_student(db, student, tutor_id, _student_data(city=""), [])
+        assert errors == []
+        # Пустая строка сохраняется как NULL — «город не указан».
+        assert db.get(Student, student.id).city is None
+
 
 def test_update_reuses_contact_and_updates_it_for_all_students(
     tutor_factory, student_factory

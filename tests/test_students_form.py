@@ -90,6 +90,7 @@ def test_form_has_all_card_fields(client, owner):
         "status",
         "grade",
         "birth_date",
+        "city",
         "school",
         "level",
         "notes",
@@ -342,6 +343,52 @@ def test_birth_date_is_date_input_without_kind_dependency(client, owner):
     field_open = html[field_start : html.index(">", field_start) + 1]
     assert "data-depends-on-kind" not in field_open
     assert "x-show" not in field_open
+
+
+def test_city_field_precedes_school_field(client, owner):
+    """Поле «Город» стоит перед полем «Школа»."""
+    html = client.get("/tutor/students/new").text
+
+    assert html.index('id="student-city"') < html.index('id="student-school"')
+    # И после класса: порядок «Класс → Город → Школа».
+    assert html.index('id="student-grade"') < html.index('id="student-city"')
+
+
+def test_city_field_is_combobox_with_options(client, owner):
+    """Город — текстовый ввод с подсказками (combobox), а не обычное поле."""
+    html = client.get("/tutor/students/new").text
+    start = html.index('id="student-city"')
+    tag = html[html.rindex("<", 0, start) : html.index(">", start) + 1]
+
+    assert 'name="city"' in tag
+    assert 'role="combobox"' in tag
+    assert 'aria-controls="student-city-listbox"' in tag
+    assert 'autocomplete="off"' in tag
+    # Список вариантов и подпись «город будет добавлен» — в блоке поля.
+    block = html[html.index('class="combobox"', 0, start) : html.index("</ul>", start)]
+    assert "data-options=" in block
+    assert 'id="student-city-listbox"' in block
+    assert "город будет добавлен" in block
+
+
+def test_city_field_does_not_depend_on_kind(client, owner):
+    """Город доступен и ребёнку, и взрослому — в отличие от класса и школы."""
+    html = client.get("/tutor/students/new").text
+    start = html.index('id="student-city"')
+    field_start = html.rindex('<div class="field"', 0, start)
+    field_open = html[field_start : html.index(">", field_start) + 1]
+
+    assert "data-depends-on-kind" not in field_open
+    assert "x-show" not in field_open
+
+
+def test_edit_form_preselects_saved_city(client, owner, student_factory):
+    student_id = student_factory(tutor_id=owner, first_name="Маша", city="Казань")
+    html = client.get(f"/tutor/students/{student_id}/edit").text
+    start = html.index('id="student-city"')
+    tag = html[html.rindex("<", 0, start) : html.index(">", start) + 1]
+
+    assert 'value="Казань"' in tag
 
 def test_modal_uses_alpine_and_closes_by_escape(client, owner):
     """Escape закрывает только верхний слой: счёт поверх карточки — первым."""

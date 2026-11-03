@@ -69,6 +69,9 @@ class Student(Base):
     grade: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Дата рождения — календарная дата; часовой пояс к ней не применяется.
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Город — свободный текст без справочника: подсказки в форме собираются
+    # из городов других учеников этого репетитора.
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     school: Mapped[str | None] = mapped_column(String(255), nullable=True)
     level: Mapped[str | None] = mapped_column(String(100), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

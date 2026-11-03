@@ -17,7 +17,7 @@
         <span class="chip chip--{{ student.status }}">{{ status_label(student.status) }}</span>
     </div>
 
-    {% if student.phone or student.email or (student.kind == 'child' and student.school) %}
+    {% if student.phone or student.email or student.city or (student.kind == 'child' and student.school) %}
     <ul class="student-contacts">
         {% if student.phone %}
         <li class="student-contact">
@@ -29,6 +29,12 @@
         <li class="student-contact">
             <i data-lucide="mail"></i>
             <span class="truncate">{{ student.email }}</span>
+        </li>
+        {% endif %}
+        {% if student.city %}
+        <li class="student-contact">
+            <i data-lucide="map-pin"></i>
+            <span class="truncate">{{ student.city }}</span>
         </li>
         {% endif %}
         {% if student.kind == 'child' and student.school %}
