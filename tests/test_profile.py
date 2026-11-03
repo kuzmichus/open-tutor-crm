@@ -574,6 +574,41 @@ def test_calendar_save(client):
     assert end_select and '<option value="18:00" selected>' in end_select.group(0)
 
 
+def test_calendar_save_with_zone_change_keeps_other_settings(client):
+    """Смена часового пояса пересчитывает расписание, но другие настройки целы.
+
+    Сохранение вкладки «Календарь» со сменой зоны не должно затирать
+    учебный год, рабочее время и настройки уроков по умолчанию.
+    """
+    _login(client)
+    data = {
+        "timezone": "Asia/Krasnoyarsk",
+        "quarter1_end": "10-25",
+        "quarter2_end": "12-25",
+        "quarter3_end": "03-20",
+        "quarter4_end": "05-25",
+        "workday_start": "09:00",
+        "workday_end": "18:00",
+        "default_lesson_duration": "90",
+        "default_lesson_price": "1500",
+    }
+    response = client.post("/tutor/profile/calendar", data=data, follow_redirects=False)
+    assert response.status_code == 303
+
+    tutor = _tutor_by_email("profile-user@example.com")
+    assert tutor.timezone == "Asia/Krasnoyarsk"
+    with SessionLocal() as db:
+        settings = db.get(TutorSettings, tutor.id)
+    assert settings.default_lesson_duration == 90
+    assert settings.default_lesson_price == 1500
+    assert settings.workday_start == "09:00"
+    assert settings.workday_end == "18:00"
+    assert (
+        settings.quarter1_end,
+        settings.quarter4_end,
+    ) == ("10-25", "05-25")
+
+
 def test_calendar_workday_defaults_shown_on_tab(client):
     """2.2: до первого сохранения в селектах дефолт 06:00–23:00."""
     _login(client)
