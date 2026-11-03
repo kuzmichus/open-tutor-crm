@@ -26,7 +26,9 @@
 - [x] 3.2 Визуальная сверка `favicon.svg` с растром в headless Chrome:
   расхождение 0.09 % (30 из 33741 пикселей, крайние углы, альфа ≤ 63), лишних
   пикселей нет.
-- [x] 3.3 `uv run pytest tests/test_favicons.py` — 19 passed.
+- [x] 3.3 `uv run pytest tests/test_favicons.py` — 19 passed; смежные наборы
+  (`css_styles`, `ui_polish`, `icons_bundle`, `static_cache`) — 120 passed;
+  полный прогон `uv run pytest -n auto` — 2140 passed.
 
 ## 4. Спецификация и документация
 
