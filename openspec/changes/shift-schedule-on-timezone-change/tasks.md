@@ -62,10 +62,11 @@
 ## 6. Контракт стенда
 
 - [x] 6.1 `.taskdesk/stand.toml` — `up`, `port_env = "PORT"`,
-  `health_path = "/health"`, `[stand.env]` c `TZ`; отдельная БД не нужна
-  (приложение на SQLite).
-- [x] 6.2 `scripts/stand_up.sh` — `alembic upgrade head` на временной
-  SQLite-базе, затем `uvicorn` на `$PORT`; проверено: `/health` → 200.
+  `health_path = "/health"`, `[stand.env]` с `DATABASE_URL` и `TZ`;
+  отдельная БД не нужна (приложение на SQLite).
+- [x] 6.2 `.taskdesk/stand-up.sh` — `uv sync --frozen --no-dev`,
+  `alembic upgrade head`, затем `uvicorn` на `$PORT`; проверено:
+  `/health` → 200.
 
 ## Workflow follow-up
 
