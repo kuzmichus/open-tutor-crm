@@ -1,0 +1,13 @@
+# Контракт тестового стенда TaskDesk (stands/launch).
+# TaskDesk выделяет свободный порт и передаёт его в переменной PORT;
+# скрипт старта поднимает приложение на этом порту.
+#
+# База — SQLite (штатный режим проекта, см. README «Конфигурация»):
+# отдельный PostgreSQL стенду не нужен, файл базы лежит в корне чекаута
+# (tutor.db исключён из git). Схему создаёт только Alembic.
+up = ".taskdesk/stand-up.sh"
+port_env = "PORT"
+health_path = "/health"
+
+[stand.env]
+DATABASE_URL = "sqlite:///./tutor.db"
