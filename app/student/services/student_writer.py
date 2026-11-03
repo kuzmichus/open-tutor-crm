@@ -26,6 +26,7 @@ _STUDENT_FIELDS = (
     "kind",
     "grade",
     "birth_date",
+    "city",
     "school",
     "level",
     "notes",
@@ -35,7 +36,16 @@ _STUDENT_FIELDS = (
     "remind_cancel",
 )
 
-_EMPTY_TO_NONE = ("last_name", "phone", "email", "school", "level", "notes", "timezone")
+_EMPTY_TO_NONE = (
+    "last_name",
+    "phone",
+    "email",
+    "city",
+    "school",
+    "level",
+    "notes",
+    "timezone",
+)
 
 
 def _apply_student_fields(student: Student, data: dict) -> None:

@@ -18,7 +18,8 @@
    Контекст: form, contact_rows, contact_rows_count, contact_rows_open,
    contact_options_json, errors, student, student_id, action, title,
    from_card, statuses, status_label, timezone_options_json,
-   invites_block (NULL у нового ученика), cabinet (NULL у нового ученика). #}
+   city_options_json, invites_block (NULL у нового ученика), cabinet
+   (NULL у нового ученика). #}
 <div class="modal-root"
      x-data="studentForm('{{ form.kind }}', '{{ tab }}')"
      x-show="open"
@@ -157,6 +158,50 @@
                             <label class="label" for="student-grade">Класс</label>
                             <input class="input" id="student-grade" type="number" name="grade"
                                    min="1" max="11" value="{{ form.grade }}">
+                        </div>
+                        {# Город — свободный текст с подсказками из городов других
+                           учеников репетитора. Доступен и ребёнку, и взрослому,
+                           поэтому, в отличие от класса и школы, от подтипа не
+                           зависит. #}
+                        <div class="field">
+                            <label class="label" for="student-city">Город</label>
+                            <div class="combobox"
+                                 x-data="combobox()"
+                                 data-options="{{ city_options_json }}">
+                                <div class="combobox__control">
+                                    <input class="input" id="student-city" type="text" name="city"
+                                           value="{{ form.city }}" placeholder="Москва"
+                                           autocomplete="off" spellcheck="false"
+                                           x-ref="input"
+                                           role="combobox" aria-autocomplete="list"
+                                           aria-controls="student-city-listbox"
+                                           :aria-expanded="open ? 'true' : 'false'"
+                                           @input="onInput($event.target.value)"
+                                           @focus="openList()"
+                                           @blur="closeList()"
+                                           @keydown="onKeydown($event)">
+                                    <button class="combobox__clear" type="button"
+                                            x-show="query !== ''" x-cloak
+                                            @mousedown.prevent @click="clear()"
+                                            aria-label="Очистить город">&times;</button>
+                                </div>
+                                <ul class="combobox__list" id="student-city-listbox"
+                                    role="listbox" x-ref="list" x-show="open" x-cloak>
+                                    <template x-for="(item, index) in shown" :key="item.value">
+                                        <li class="combobox__option" role="option"
+                                            :class="index === active ? 'combobox__option--active' : ''"
+                                            :aria-selected="index === active ? 'true' : 'false'"
+                                            @mousedown.prevent @click="choose(item)">
+                                            <span class="combobox__name" x-text="item.value"></span>
+                                        </li>
+                                    </template>
+                                    <li class="combobox__note" x-show="matches.length === 0" x-cloak>
+                                        Ничего не найдено — город будет добавлен
+                                    </li>
+                                    <li class="combobox__note" x-show="hiddenCount > 0" x-cloak
+                                        x-text="'… и ещё ' + hiddenCount + ': уточните поиск'"></li>
+                                </ul>
+                            </div>
                         </div>
                         <div class="field" data-depends-on-kind="child" x-show="kind === 'child'">
                             <label class="label" for="student-school">Школа</label>

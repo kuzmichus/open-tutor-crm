@@ -89,6 +89,15 @@
                             <span>{{ student.grade }}</span>
                         </div>
                         {% endif %}
+                        {% if student.city %}
+                        <div class="field">
+                            <span class="label">Город</span>
+                            <span class="flex items-center gap-2">
+                                <i data-lucide="map-pin" aria-hidden="true"></i>
+                                {{ student.city }}
+                            </span>
+                        </div>
+                        {% endif %}
                         {% if student.kind == 'child' and student.school %}
                         <div class="field">
                             <span class="label">Школа</span>
