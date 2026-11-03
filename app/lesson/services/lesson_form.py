@@ -45,6 +45,7 @@ from app.lesson.services.presentation import (
 from app.lesson.services.until_presets import until_presets
 from app.student.models.student import Student
 from app.student.services.presentation import student_full_name
+from app.tutor.services.settings import default_lesson_duration
 
 # Дни недели панели расписания: `weekday` 0 = понедельник … 6 = воскресенье.
 WEEKDAY_LABELS = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
@@ -303,7 +304,12 @@ def _input_datetime(value, tutor) -> str:
 
 
 def _form_values(lesson, data: dict | None, tutor) -> dict:
-    """Значения полей формы из урока (правка) или из разбора (ошибка)."""
+    """Значения полей формы из урока (правка) или из разбора (ошибка).
+
+    В создании `duration_min` может остаться `None` (параметр не пришёл):
+    подстановку настройки профиля делает `lesson_form_context` — здесь
+    видно только присланные значения.
+    """
     if lesson is not None:
         return {
             "type": lesson.type,
@@ -390,6 +396,13 @@ def lesson_form_context(
     При ошибке валидации переданные `data` перекрывают значения урока —
     модалка показывает присланные пользователем поля, а не старые.
 
+    В создании без явной длительности (`?duration_min=` из окна не
+    пришёл) селект предвыбирает «Длительность урока по умолчанию (мин)»
+    из вкладки «Календарь» (`default_lesson_duration`). Приоритет
+    источников: присланные `data`, затем настройка профиля. Правка
+    (`lesson is not None`) настройку не смотрит — показывает длительность
+    самого урока.
+
     `unavailable_warning` — баннер предупреждения о постановке в отмеченный
     день (`warning_context`): отдельный ключ контекста, **не** элемент
     `errors` — предупреждение означает «сохранится, если подтвердите», а
@@ -404,6 +417,12 @@ def lesson_form_context(
     подменять окно там же, где оно открыто.
     """
     values = _form_values(lesson, data, tutor)
+
+    # Создание без явной длительности: предвыбираем настройку профиля
+    # (вкладка «Календарь»). Присланное значение (`?duration_min=`, данные
+    # после ошибки валидации) остаётся приоритетным; правку не трогаем.
+    if lesson is None and values.get("duration_min") is None:
+        values["duration_min"] = default_lesson_duration(db, tutor.id)
 
     # Блок «Присутствие»: только у существующего группового урока (в
     # создании блока нет — участников ещё не выбрать). Один расчёт на
