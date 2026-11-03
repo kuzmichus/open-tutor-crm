@@ -227,9 +227,26 @@ uv run pytest -n auto                     # тесты
 uv run alembic upgrade head               # схема БД
 uv run alembic revision --autogenerate -m "..."   # новая миграция
 uv run python scripts/seed_demo.py        # демо-данные в локальную базу
+uv run --with pillow python scripts/build_favicons.py   # пересобрать favicon
 ```
 
 В dev-режиме таблицы создаёт `init_db()` при старте; для воспроизводимой схемы используйте Alembic. Правила разработки — в [AGENTS.md](AGENTS.md), спецификации поведения — в `openspec/specs/`.
+
+### Иконка сайта
+
+Набор favicon в `app/static/favicons/` (ICO, PNG, SVG, `apple-touch-icon`,
+maskable-иконка и `site.webmanifest`) собирается из одного исходника
+`scripts/vendor/favicon-source.png` скриптом `scripts/build_favicons.py`:
+
+```bash
+uv run --with pillow python scripts/build_favicons.py   # пересобрать весь набор
+```
+
+Исходник — 200×200, поэтому 512 px получается апскейлом: если появится PNG
+размером 512 или больше, достаточно заменить `favicon-source.png` и повторить
+команду. Pillow нужен только для пересборки, в зависимостях проекта его нет.
+Ссылки на набор прописаны в `app/templates/base.html` и наследуются всеми
+страницами; `/favicon.ico` отдаёт маршрут `app/common/views/favicon.py`.
 
 ### Демо-данные
 

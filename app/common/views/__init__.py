@@ -2,9 +2,10 @@
 
 from fastapi import APIRouter
 
-from app.common.views import clock, health, index
+from app.common.views import clock, favicon, health, index
 
 router = APIRouter()
 router.include_router(health.router)
 router.include_router(index.router)
 router.include_router(clock.router)
+router.include_router(favicon.router)

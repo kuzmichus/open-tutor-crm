@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="OpenTutorCRM">
+  <title>OpenTutorCRM</title>
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#11A3E9"/>
+      <stop offset="1" stop-color="#895EF6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="94" fill="url(#brand)"/>
+  <path fill="#FFFFFF" fill-rule="nonzero" d="M167.25 100A67.25 32.75 0 1 1 32.75 100A67.25 32.75 0 1 1 167.25 100ZM157.75 100A57.75 23.25 0 1 0 42.25 100A57.75 23.25 0 1 0 157.75 100ZM133.625 158.24A67.25 32.75 60 1 1 66.375 41.7598A67.25 32.75 60 1 1 133.625 158.24ZM128.875 150.013A57.75 23.25 60 1 0 71.125 49.987A57.75 23.25 60 1 0 128.875 150.013ZM66.375 158.24A67.25 32.75 120 1 1 133.625 41.7598A67.25 32.75 120 1 1 66.375 158.24ZM71.125 150.013A57.75 23.25 120 1 0 128.875 49.987A57.75 23.25 120 1 0 71.125 150.013ZM121.5 100A21.5 21.5 0 1 1 78.5 100A21.5 21.5 0 1 1 121.5 100Z"/>
+</svg>
