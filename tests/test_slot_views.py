@@ -14,6 +14,7 @@ import pytest
 
 from app.database import SessionLocal
 from app.slot.models.slot import Slot
+from app.tutor.services.settings import save_settings
 
 PASSWORD = "Секретный-Пароль-1"
 
@@ -325,6 +326,63 @@ def test_dialog_prefills_date_and_time_from_calendar(client, owner):
     assert response.status_code == 200
     assert 'value="2026-10-14"' in response.text
     assert 'value="14:30"' in response.text
+
+
+def _save_duration(tutor_id: str, duration: int) -> None:
+    """Сохранить «Длительность урока по умолчанию» в настройках профиля."""
+    with SessionLocal() as session:
+        save_settings(session, tutor_id, {"default_lesson_duration": duration})
+
+
+def _selected_duration(page: str, select_id: str) -> str | None:
+    """Значение выделенного option в селекте длительности по его id."""
+    select = re.search(
+        rf'<select[^>]*id="{select_id}".*?</select>', page, re.S
+    )
+    assert select is not None, f"Селекта #{select_id} нет в диалоге"
+    option = re.search(r'<option value="(\d+)"[^>]*selected[^>]*>', select.group(0))
+    return option.group(1) if option else None
+
+
+@pytest.mark.parametrize(
+    "select_id", ["slot-new-duration", "slot-batch-duration"]
+)
+def test_dialog_duration_defaults_to_settings(client, owner, select_id):
+    """Оба режима предвыбирают «Длительность урока по умолчанию» (45)."""
+    _save_duration(owner, 45)
+
+    page = client.get("/tutor/slots/new").text
+
+    assert _selected_duration(page, select_id) == "45"
+
+
+@pytest.mark.parametrize(
+    "select_id", ["slot-new-duration", "slot-batch-duration"]
+)
+def test_dialog_duration_defaults_without_settings_row(client, owner, select_id):
+    """Строки настроек нет — действует дефолт профиля 60 минут."""
+    page = client.get("/tutor/slots/new").text
+
+    assert _selected_duration(page, select_id) == "60"
+
+
+def test_dialog_single_duration_keeps_calendar_prefill(client, owner):
+    """`?date=`/`?time=` не сбрасывают длительность из настроек."""
+    _save_duration(owner, 45)
+
+    page = client.get("/tutor/slots/new?date=2026-10-14&time=14:30").text
+
+    assert _selected_duration(page, "slot-new-duration") == "45"
+
+
+def test_dialog_duration_ignores_invalid_settings(client, owner):
+    """Мусор в настройке (ручная правка БД) — селект на дефолте 60."""
+    _save_duration(owner, 61)
+
+    page = client.get("/tutor/slots/new").text
+
+    assert _selected_duration(page, "slot-new-duration") == "60"
+    assert _selected_duration(page, "slot-batch-duration") == "60"
 
 
 def test_batch_preview_counts_windows(client, owner):

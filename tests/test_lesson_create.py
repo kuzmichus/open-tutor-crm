@@ -17,6 +17,7 @@ from sqlalchemy import select
 from app.database import SessionLocal
 from app.lesson.models.lesson import Lesson
 from app.lesson.models.lesson_series import LessonSeries
+from app.tutor.services.settings import save_settings
 
 PASSWORD = "Секретный-Пароль-1"
 ROOT = Path(__file__).resolve().parent.parent
@@ -530,3 +531,53 @@ def test_new_lesson_form_ignores_bad_start(owner, client):
     assert response.status_code == 200
     assert "Новый урок" in response.text
     assert 'value=""' in _starts_input(response.text)
+
+
+# --------------------------------------------------------------------------
+# Длительность по умолчанию из профиля (вкладка «Календарь»)
+# --------------------------------------------------------------------------
+
+def _selected_duration(page: str) -> str | None:
+    """Значение выделенного option селекта «Длительность»."""
+    match = re.search(r'<option value="(\d+)"[^>]*selected[^>]*>', page)
+    return match.group(1) if match else None
+
+
+def _save_duration(tutor_id: str, duration: int) -> None:
+    """Сохранить «Длительность урока по умолчанию» в настройках профиля."""
+    with SessionLocal() as db:
+        save_settings(db, tutor_id, {"default_lesson_duration": duration})
+
+
+def test_new_lesson_form_prefills_duration_from_settings(owner, client):
+    """Без `?duration_min=` селект предвыбирает настройку профиля (45)."""
+    _save_duration(owner, 45)
+
+    page = client.get("/tutor/lessons/new").text
+
+    assert _selected_duration(page) == "45"
+
+
+def test_new_lesson_form_defaults_duration_without_settings_row(owner, client):
+    """Строки настроек нет — действует дефолт профиля 60 минут."""
+    page = client.get("/tutor/lessons/new").text
+
+    assert _selected_duration(page) == "60"
+
+
+def test_new_lesson_form_duration_prefill_beats_settings(owner, client):
+    """`?duration_min=` из окна важнее настройки профиля."""
+    _save_duration(owner, 45)
+
+    page = client.get("/tutor/lessons/new?duration_min=90").text
+
+    assert _selected_duration(page) == "90"
+
+
+def test_new_lesson_form_ignores_invalid_settings_duration(owner, client):
+    """Мусор в настройке (ручная правка БД) — селект на дефолте 60."""
+    _save_duration(owner, 61)
+
+    page = client.get("/tutor/lessons/new").text
+
+    assert _selected_duration(page) == "60"

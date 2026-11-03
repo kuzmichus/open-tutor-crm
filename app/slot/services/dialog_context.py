@@ -22,9 +22,13 @@ from app.slot.models.slot import Slot
 from app.slot.services.busy import SLOT_FREE, slot_states
 from app.slot.services.slot_form import MAX_GAP_MIN, WEEKDAY_LABELS
 from app.slot.services.slot_writer import has_active_booking
+from app.tutor.services.settings import default_lesson_duration
 
 # Значения пачки по умолчанию: рабочий интервал из примера спеки
-# (10:00–18:00, 40 минут, перерыв 15) и будни.
+# (10:00–18:00, перерыв 15) и будни. `DEFAULT_DURATION_MIN` — только
+# аварийное значение: длительность по умолчанию берётся из настроек
+# профиля (`default_lesson_duration`), а константа остаётся на случай,
+# если настройка окажется вне закрытого списка длительностей.
 DEFAULT_DAY_START = time(10, 0)
 DEFAULT_DAY_END = time(18, 0)
 DEFAULT_DURATION_MIN = 40
@@ -33,9 +37,11 @@ DEFAULT_WEEKDAYS = (0, 1, 2, 3, 4)
 DEFAULT_BATCH_DAYS = 28
 
 
-def _single_values(slot: Slot | None, data: dict | None, tutor) -> dict:
+def _single_values(
+    slot: Slot | None, data: dict | None, tutor, default_duration: int
+) -> dict:
     """Значения формы одного окна: присланные важнее сохранённых."""
-    duration = DEFAULT_DURATION_MIN
+    duration = default_duration
     is_public = True
     day = ""
     start = ""
@@ -60,7 +66,9 @@ def _single_values(slot: Slot | None, data: dict | None, tutor) -> dict:
     }
 
 
-def _batch_values(slot: Slot | None, data: dict | None, tutor) -> dict:
+def _batch_values(
+    slot: Slot | None, data: dict | None, tutor, default_duration: int
+) -> dict:
     """Значения формы пачки; по умолчанию — четыре недели с сегодняшнего дня."""
     today = now_local(tutor).date()
     values = {
@@ -69,7 +77,7 @@ def _batch_values(slot: Slot | None, data: dict | None, tutor) -> dict:
         "weekdays": DEFAULT_WEEKDAYS,
         "day_start": DEFAULT_DAY_START,
         "day_end": DEFAULT_DAY_END,
-        "duration_min": DEFAULT_DURATION_MIN,
+        "duration_min": default_duration,
         "gap_min": DEFAULT_GAP_MIN,
         "is_public": True,
     }
@@ -127,11 +135,19 @@ def dialog_context(
     пользователем, а не сброшенные поля (паттерн `lesson_form_context`).
     `preview` — готовый блок отчёта пачки (`preview_context`): предпросмотр
     или результат создания; `None` — блок пуст.
+
+    Длительность нового окна (в обоих режимах) по умолчанию равна
+    «Длительности урока по умолчанию (мин)» из вкладки «Календарь»
+    (`default_lesson_duration`): окно и урок из него должны совпадать по
+    времени. Присланные `data` и длительность существующего окна важнее.
     """
     now = now_utc()
     state = ""
     if slot is not None:
         state = slot_states(db, slot.tutor_id, [slot], now).get(slot.id, SLOT_FREE)
+
+    # Один расчёт на диалог: настройка нужна обоим режимам формы.
+    default_duration = default_lesson_duration(db, tutor.id)
 
     can_delete = slot is not None and not has_active_booking(db, slot)
     # Локальные значения окна для ссылки «Записать ученика» и подзаголовка:
@@ -142,8 +158,10 @@ def dialog_context(
         "slot": slot,
         "slot_mode": mode if slot is None else "single",
         "slot_errors": errors or [],
-        "slot_single": _single_values(slot, data, tutor),
-        "slot_batch": _form_values(_batch_values(slot, data, tutor)),
+        "slot_single": _single_values(slot, data, tutor, default_duration),
+        "slot_batch": _form_values(
+            _batch_values(slot, data, tutor, default_duration)
+        ),
         "slot_durations": LESSON_DURATIONS,
         "slot_weekdays": tuple(enumerate(WEEKDAY_LABELS)),
         "slot_max_gap": MAX_GAP_MIN,

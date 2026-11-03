@@ -7,7 +7,12 @@ D2): чтение без строки возвращает объект с де�
 
 from sqlalchemy.orm import Session
 
-from app.tutor.models.tutor_settings import TutorSettings, default_values
+from app.lesson.models.lesson import LESSON_DURATIONS
+from app.tutor.models.tutor_settings import (
+    DEFAULT_LESSON_DURATION,
+    TutorSettings,
+    default_values,
+)
 
 
 def get_settings(db: Session, tutor_id: str) -> TutorSettings:
@@ -23,6 +28,22 @@ def get_settings(db: Session, tutor_id: str) -> TutorSettings:
     if row is not None:
         return row
     return TutorSettings(tutor_id=tutor_id, **default_values())
+
+
+def default_lesson_duration(db: Session, tutor_id: str) -> int:
+    """Длительность нового урока и окна: настройка профиля, «Календарь».
+
+    Значение берётся из `default_lesson_duration` — поля «Длительность
+    урока по умолчанию (мин)» вкладки «Календарь». Селекты длительности
+    закрытые (`LESSON_DURATIONS`), поэтому значение вне списка (ручная
+    правка БД, старые данные) не выделило бы ни один option: в этом
+    случае возвращается `DEFAULT_LESSON_DURATION`. Форма профиля такое
+    значение не сохранит, так что fallback — страховка, а не правило.
+    """
+    value = get_settings(db, tutor_id).default_lesson_duration
+    if value not in LESSON_DURATIONS:
+        return DEFAULT_LESSON_DURATION
+    return value
 
 
 def save_settings(db: Session, tutor_id: str, values: dict) -> TutorSettings:

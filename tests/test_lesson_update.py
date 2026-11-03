@@ -15,6 +15,7 @@ from app.database import SessionLocal
 from app.lesson.models.lesson import Lesson
 from app.lesson.models.lesson_series import LessonSeries
 from app.student.models.student import Student
+from app.tutor.services.settings import save_settings
 
 PASSWORD = "Секретный-Пароль-1"
 HTMX = {"HX-Request": "true"}
@@ -230,6 +231,27 @@ def test_edit_form_renders(owner, client, student_factory):
     assert re.search(
         r"</form>\s*</div>\s*</div>\s*<div class=\"modal-actions\">", page
     )
+
+
+def test_edit_form_keeps_lesson_duration_over_settings(
+    owner, client, student_factory
+):
+    """Правка показывает длительность урока, а не настройку профиля.
+
+    Настройка «Длительность урока по умолчанию (мин)» относится только к
+    созданию: открытие существующего урока не должно переписывать его
+    длительность значением из профиля.
+    """
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(owner, student_id=student, duration_min=90)
+    with SessionLocal() as db:
+        save_settings(db, owner, {"default_lesson_duration": 45})
+
+    page = client.get(f"/tutor/lessons/{lesson_id}/edit").text
+
+    selected = re.search(r'<option value="(\d+)"[^>]*selected[^>]*>', page)
+    assert selected is not None, "Длительность не выделена в селекте"
+    assert selected.group(1) == "90"
 
 
 def test_list_row_opens_edit_modal(owner, client, student_factory):
