@@ -33,6 +33,8 @@
 (или число строк, если это удобно вызывающему).
 """
 
+from collections.abc import Iterable
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -71,6 +73,40 @@ def group_targets(db: Session, group_id: str) -> list[tuple[str, int | None]]:
         (student_id, price_override if price_override is not None else group_price)
         for student_id, price_override in rows
     ]
+
+
+def group_totals(db: Session, group_ids: Iterable[str]) -> dict[str, int]:
+    """Стоимость группового занятия по каждой группе: сумма цен участников.
+
+    «Общая стоимость группы» считается тем же правилом, что списания и
+    статистика: цена участника — его индивидуальная (`price_override`),
+    иначе цена группы (`price_per_lesson`). Один запрос на все группы:
+    карточка календаря не должна давать N+1 по числу групповых уроков
+    недели.
+
+    Группа, у которой ни у одного участника цена не определима (нет
+    участников или цены не заданы), в результат не попадает — вызывающий
+    отличает «цены нет» от «цена 0 ₽».
+    """
+    ids = [group_id for group_id in group_ids if group_id]
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(
+            GroupMember.group_id,
+            GroupMember.price_override,
+            Group.price_per_lesson,
+        )
+        .join(Group, Group.id == GroupMember.group_id)
+        .where(GroupMember.group_id.in_(ids))
+    ).all()
+    totals: dict[str, int] = {}
+    for group_id, price_override, group_price in rows:
+        price = price_override if price_override is not None else group_price
+        if price is None:
+            continue
+        totals[group_id] = totals.get(group_id, 0) + price
+    return totals
 
 
 def absent_student_ids(db: Session, lesson_id: str) -> set[str]:
