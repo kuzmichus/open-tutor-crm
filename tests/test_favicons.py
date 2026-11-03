@@ -171,7 +171,11 @@ def _assert_favicon_head(markup: str, where: str) -> None:
     }
     for rel, href in EXPECTED_LINKS:
         assert (rel, href) in links, f"{where}: в head нет {rel} → {href}"
-    assert '<meta name="theme-color" content="#3290ED">' in head, where
+    # `theme-color` в head обязан совпадать с манифестом: браузер для темы
+    # вкладки берёт мету, а для установленного PWA — манифест. Рассогласование
+    # даёт «мигание» цвета при установке приложения.
+    theme = json.loads((FAVICONS / "site.webmanifest").read_text(encoding="utf-8"))["theme_color"]
+    assert f'<meta name="theme-color" content="{theme}">' in head, where
     # Набор локальный: любая абсолютная ссылка в head — регрессия «без CDN».
     external = re.findall(r'(?:href|src)="https?://[^"]+"', head)
     assert not external, f"{where}: внешние ссылки в head: {external}"
