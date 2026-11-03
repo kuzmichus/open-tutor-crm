@@ -1,7 +1,7 @@
 """add file uploads
 
 Revision ID: 7ce02b7b728c
-Revises: a7d3e1f42b90
+Revises: 55b9846687b4
 Create Date: 2026-11-02 14:58:45.062639
 
 """
@@ -13,11 +13,11 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '7ce02b7b728c'
-# Предыдущая голова — `a7d3e1f42b90` (флаг «Показывать цену» в календаре):
-# она пришла в main отдельным PR и стоит на той же ветке от `ea9ed99a62d2`.
-# Ревизия не должна висеть на старой голове: две головы в одной ветке
-# ломают `alembic upgrade head` в CI и у всех, кто обновляется.
-down_revision: Union[str, Sequence[str], None] = 'a7d3e1f42b90'
+# Предыдущая голова — `55b9846687b4` (город ученика): она пришла в main
+# отдельным PR и стоит после `a7d3e1f42b90`. Ревизия не должна висеть на
+# устаревшей голове: две головы в одной ветке ломают `alembic upgrade head`
+# в CI и у всех, кто обновляется.
+down_revision: Union[str, Sequence[str], None] = '55b9846687b4'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

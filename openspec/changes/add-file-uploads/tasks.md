@@ -34,8 +34,8 @@
 - [x] 4.2 `app/files/models/homework_file.py`: `HomeworkFile` (таблица
   `homework_files`) — связь файла с ДЗ и порядок.
 - [x] 4.3 `app/models.py`: импорты-регистраторы новых моделей.
-- [x] 4.4 Миграция Alembic (`down_revision='a7d3e1f42b90'` — текущая голова
-  main; `alembic upgrade head` и `alembic check` зелёные).
+- [x] 4.4 Миграция Alembic (`down_revision='55b9846687b4'` — на момент завершения
+  голова main; `alembic upgrade head` и `alembic check` зелёные).
 
 ## 5. Сервисы файлов
 
