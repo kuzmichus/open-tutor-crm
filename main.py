@@ -1,9 +1,12 @@
 """Точка входа приложения.
 
 Запуск:  uv run uvicorn main:app --host 0.0.0.0 --port 8000
+
+Схему базы создаёт только Alembic — перед первым запуском выполните
+`uv run alembic upgrade head` (в Docker миграции идут одноразовым
+контейнером `migrate` до старта приложения).
 """
 
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -16,7 +19,6 @@ from app.calendar.views import router as calendar_router
 from app.common.static_files import RevalidatingStaticFiles
 from app.common.views import router as common_router
 from app.common.views.not_found import not_found
-from app.database import init_db
 from app.finance.views import router as finance_router
 from app.group.views import router as group_router
 from app.homework.views import router as homework_router
@@ -32,16 +34,8 @@ from app.unavailability.views import router as unavailability_router
 _STATIC_DIR = Path(__file__).resolve().parent / "app" / "static"
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Удобно для локальной разработки: создаём таблицы, если их ещё нет.
-    # Для прод-схемы используйте Alembic:  uv run alembic upgrade head
-    init_db()
-    yield
-
-
 def create_app() -> FastAPI:
-    app = FastAPI(title="Open Tutor CRM", version=APP_VERSION, lifespan=lifespan)
+    app = FastAPI(title="Open Tutor CRM", version=APP_VERSION)
     app.include_router(common_router)
     app.include_router(tutor_router)
     app.include_router(calendar_router)

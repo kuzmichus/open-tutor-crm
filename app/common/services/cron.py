@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING
 
 from app.database import SessionLocal
 
-# Регистрация всех моделей на Base.metadata — как в `init_db()`. Доменный
-# сервис тянет только нужную ему модель (например, `Lesson`), а её FK
+# Регистрация всех моделей на Base.metadata — как в alembic/env.py и тестовом
+# conftest. Доменный сервис тянет только нужную ему модель (например, `Lesson`), а её FK
 # (`lessons.series_id` → `lesson_series`) резолвится лишь при импорте
 # второй стороны; вне веб-приложения агрегатор `app.models` никто не
 # импортирует, и первый же flush падал бы с NoReferencedTableError.

@@ -60,13 +60,6 @@ class Base(DeclarativeBase):
     """Декларативная база для всех ORM-моделей."""
 
 
-def init_db() -> None:
-    """Создаёт таблицы, если их ещё нет (удобно для локальной разработки)."""
-    from app import models  # noqa: F401  # регистрация моделей на Base.metadata
-
-    Base.metadata.create_all(bind=engine)
-
-
 def get_db() -> Generator[Session, None, None]:
     """FastAPI-зависимость: сессия на время запроса."""
     db = SessionLocal()

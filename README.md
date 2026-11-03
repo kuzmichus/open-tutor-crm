@@ -78,7 +78,7 @@ docker run -d --name open-tutor-crm \
   kuzmichus/open-tutor-crm:latest
 ```
 
-Миграции — одноразовым контейнером **до** первого старта приложения: иначе таблицы создаст `init_db()` без записи в `alembic_version`, и последующий `alembic upgrade head` упадёт.
+Миграции — одноразовым контейнером **до** первого старта приложения: приложение схему само не создаёт, без миграций оно упадёт на первом же запросе с «no such table».
 
 ### Сборка образа локально
 
@@ -230,7 +230,7 @@ uv run python scripts/seed_demo.py        # демо-данные в локал�
 uv run --with pillow python scripts/build_favicons.py   # пересобрать favicon
 ```
 
-В dev-режиме таблицы создаёт `init_db()` при старте; для воспроизводимой схемы используйте Alembic. Правила разработки — в [AGENTS.md](AGENTS.md), спецификации поведения — в `openspec/specs/`.
+Схему базы создаёт только Alembic — перед первым запуском dev-сервера выполните `uv run alembic upgrade head` (иначе приложение упадёт на первом же запросе с «no such table»). Правила разработки — в [AGENTS.md](AGENTS.md), спецификации поведения — в `openspec/specs/`.
 
 ### Иконка сайта
 
