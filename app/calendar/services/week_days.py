@@ -49,6 +49,9 @@ def build_week_days(db: Session, tutor_id: str, monday: date, tutor) -> list[Sch
             target_id=row.target_id,
             target_color=row.target_color,
             tutor=tutor,
+            # Цена посчитана в недельной выборке: у группового урока это
+            # стоимость всей группы (одно правило с финансами).
+            price=row.price,
         )
         events_by_day.setdefault(event.day, []).append(event)
 

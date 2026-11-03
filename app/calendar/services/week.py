@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.calendar.services.week_lesson import WeekLesson
 from app.common.colors import DEFAULT_TARGET_COLOR
 from app.common.services.tutor_time import local_week_bounds
+from app.finance.services.charges import group_totals
 from app.group.models.group import Group
 from app.lesson.models.lesson import Lesson
 from app.student.models.student import Student
@@ -63,6 +64,11 @@ def week_lessons(
 
     `tutor` — карточка репетитора: её зона задаёт границы окна недели
     (aware UTC), а `starts_at` хранится в UTC (спека tutor-timezone).
+
+    Цена карточки: у индивидуального урока — `lesson.price`, у группового —
+    суммарная стоимость группы (`charges.group_totals`, одно правило с
+    финансами). Стоимость групп собирается одним запросом на всю неделю,
+    а не по уроку: групповых занятий в неделе может быть много.
     """
     start, end = week_bounds(monday, tutor)
     stmt = (
@@ -84,9 +90,14 @@ def week_lessons(
         .order_by(Lesson.starts_at, Lesson.id)
     )
 
+    fetched = db.execute(stmt).all()
+    group_prices = group_totals(
+        db, {lesson.group_id for lesson, *_ in fetched if lesson.group_id}
+    )
+
     rows: list[WeekLesson] = []
     for lesson, first_name, last_name, student_color, group_name, group_color in (
-        db.execute(stmt).all()
+        fetched
     ):
         # CHECK XOR гарантирует ровно одну заполненную цель.
         if lesson.group_id:
@@ -96,6 +107,8 @@ def week_lessons(
                     target_name=group_name or "",
                     target_id=lesson.group_id,
                     target_color=group_color or DEFAULT_TARGET_COLOR,
+                    # Стоимость всей группы, а не цена одного места.
+                    price=group_prices.get(lesson.group_id, 0),
                 )
             )
         else:
@@ -105,6 +118,7 @@ def week_lessons(
                     target_name=_target_name(first_name, last_name),
                     target_id=lesson.student_id or "",
                     target_color=student_color or DEFAULT_TARGET_COLOR,
+                    price=lesson.price or 0,
                 )
             )
     return rows

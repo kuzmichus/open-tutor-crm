@@ -74,12 +74,19 @@ class ScheduleEvent:
         target_id: str,
         target_color: str,
         tutor,
+        price: int | None = None,
     ) -> "ScheduleEvent":
         """Событие из строки БД: цель, цена, цвет и статус урока (D2).
 
         `starts_at` хранится в UTC — нормализуем его в aware UTC (`as_utc`,
         SQLite теряет tzinfo), а локальные `day`/`start`/`end` считаем в
         зоне педагога: раскладка сетки идёт по настенному времени (D3).
+
+        `price` — цена карточки, если она посчитана выше по стеку
+        (`WeekLesson.price`): у группового урока это суммарная стоимость
+        группы, а не `lesson.price` (у группового занятия в поле цены урока
+        цены может не быть вовсе). Переданное значение важнее
+        `lesson.price`; без него поведение прежнее.
         """
         starts_at = as_utc(lesson.starts_at)
         finish = starts_at + timedelta(minutes=lesson.duration_min or 0)
@@ -96,7 +103,7 @@ class ScheduleEvent:
             start=local_start.time(),
             end=end,
             student=target_name,
-            price=lesson.price or 0,
+            price=(lesson.price or 0) if price is None else price,
             color=target_color,
             is_group=lesson.group_id is not None,
             lesson_id=lesson.id,

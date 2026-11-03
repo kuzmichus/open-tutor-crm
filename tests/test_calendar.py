@@ -412,11 +412,12 @@ def test_calendar_refreshes_week_after_lesson_saved(client):
     assert swap, "Область #calendar-swap не найдена"
     tag = swap.group(0)
     assert 'hx-get="/tutor/calendar?start=2026-10-19&color=target"' in tag
-    # Подписки: урок, недоступность и окно для записи перерисовывают неделю
-    # с сервера (спека calendar, «Сохранение окна обновляет неделю»).
+    # Подписки: урок, недоступность, окно для записи и флаг «Показывать
+    # цену» перерисовывают неделю с сервера (спека calendar, «Сохранение
+    # окна обновляет неделю», «Флаг показа цены»).
     assert (
         'hx-trigger="lesson-saved from:body, unavailability-saved from:body, '
-        'slot-saved from:body"' in tag
+        'slot-saved from:body, price-saved from:body"' in tag
     )
     assert 'hx-target="#calendar-swap"' in tag
 
@@ -2580,3 +2581,197 @@ def test_calendar_drag_clamps_to_markup_bounds():
     prefill = js[js.index("prefillMoment: function"):js.index("openForm: function")]
     assert "gridBounds(this.$root)" in prefill
     assert "Math.max(bounds.start, Math.min(minutes, bounds.end))" in prefill
+
+# --------------------------------------------------------------------------
+# 11. Флаг «Показывать цену» (change add-calendar-show-price): цена на
+#     карточках, стоимость всей группы, переключатель в панели календаря
+# --------------------------------------------------------------------------
+
+def _set_show_price(tutor_id: str, value: bool) -> None:
+    """Флаг «Показывать цену» напрямую в БД (минуя переключатель панели)."""
+    from app.database import SessionLocal
+    from app.tutor.services.settings import save_settings
+
+    with SessionLocal() as db:
+        save_settings(db, tutor_id, {"show_calendar_price": value})
+
+def _show_price_checkbox(page: str) -> str:
+    """Разметка чекбокса «Показывать цену» (пустая строка — нет)."""
+    match = re.search(
+        r'<input type="checkbox" name="show_price".*?>', page, re.S
+    )
+    return match.group(0) if match else ""
+
+def test_calendar_card_shows_price_when_flag_on(
+    client, calendar_owner, student_factory
+):
+    """Флаг включён (дефолт): цена есть и в карточке, и в подсказке."""
+    student_id = student_factory(
+        tutor_id=calendar_owner, first_name="Иван", last_name="Иванов"
+    )
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id, price=1200,
+        starts_at=datetime(2099, 2, 3, 10, 0), duration_min=40,
+    )
+    card = _card(client.get("/tutor/calendar?start=2099-02-02").text, lesson_id)
+
+    assert 'class="cal-event__price">1\u00a0200\u00a0₽<' in card
+    assert 'title="Иван И. · 1\u00a0200\u00a0₽ · 10:00 – 10:40"' in card
+
+def test_calendar_card_hides_price_when_flag_off(
+    client, calendar_owner, student_factory
+):
+    """Флаг выключен: цены нет ни в карточке, ни в подсказке.
+
+    Имя цели и интервал времени остаются: флаг скрывает только стоимость,
+    а не всё содержимое карточки.
+    """
+    student_id = student_factory(
+        tutor_id=calendar_owner, first_name="Иван", last_name="Иванов"
+    )
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id, price=1200,
+        starts_at=datetime(2099, 2, 3, 10, 0), duration_min=40,
+    )
+    _set_show_price(calendar_owner, False)
+    card = _card(client.get("/tutor/calendar?start=2099-02-02").text, lesson_id)
+
+    assert card, "Карточка урока пропала из сетки"
+    assert "cal-event__price" not in card
+    assert "₽" not in card
+    assert "cal-event__title\">Иван И.</span>" in card
+    assert "10:00 – 10:40" in card
+    assert 'title="Иван И. · 10:00 – 10:40"' in card
+
+def test_calendar_group_lesson_shows_total_group_price(
+    client, calendar_owner, group_factory, group_member_factory, student_factory
+):
+    """Групповой урок: на карточке стоимость всей группы, а не цена места.
+
+    Группа 1000 ₽ за человека, у одного из двух участников индивидуальная
+    цена 1200 ₽ — итог 2200 ₽: то же правило, что у списаний и статистики.
+    """
+    group_id = group_factory(
+        tutor_id=calendar_owner, name="Группа 8Б", price_per_lesson=1000
+    )
+    group_member_factory(group_id=group_id)
+    overridden = student_factory(tutor_id=calendar_owner, first_name="Пётр")
+    group_member_factory(group_id=group_id, student_id=overridden, price_override=1200)
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=None, group_id=group_id, type="group",
+        starts_at=datetime(2099, 2, 4, 16, 0), duration_min=60,
+    )
+    card = _card(client.get("/tutor/calendar?start=2099-02-02").text, lesson_id)
+
+    assert "Группа 8Б" in card
+    assert 'class="cal-event__price">2\u00a0200\u00a0₽<' in card
+
+def test_calendar_group_without_prices_has_no_price(
+    client, calendar_owner, group_factory, group_member_factory
+):
+    """Группа без цен у участников: блока цены нет, «0 ₽» не показывается."""
+    group_id = group_factory(tutor_id=calendar_owner, name="Группа без цены")
+    group_member_factory(group_id=group_id)
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=None, group_id=group_id, type="group",
+        starts_at=datetime(2099, 2, 4, 16, 0), duration_min=60,
+    )
+    card = _card(client.get("/tutor/calendar?start=2099-02-02").text, lesson_id)
+
+    assert "cal-event__price" not in card
+    assert "0\u00a0₽" not in card
+
+def test_group_totals_sums_members_and_skips_unknown_prices(
+    calendar_owner, group_factory, group_member_factory
+):
+    """`group_totals`: сумма цен участников; группа без цен — не в словаре.
+
+    Одно правило цены с финансами: `price_override ?? group.price_per_lesson`.
+    """
+    from app.database import SessionLocal
+    from app.finance.services.charges import group_totals
+
+    priced = group_factory(tutor_id=calendar_owner, price_per_lesson=1000)
+    group_member_factory(group_id=priced)
+    group_member_factory(group_id=priced, price_override=1500)
+    unpriced = group_factory(tutor_id=calendar_owner)
+
+    with SessionLocal() as db:
+        totals = group_totals(db, [priced, unpriced, "", None])
+
+    assert totals == {priced: 2500}
+    assert group_totals(db, []) == {}
+
+def test_calendar_show_price_toggle_saves_flag(client, calendar_owner):
+    """POST переключателя сохраняет флаг и просит htmx перерисовать неделю."""
+    from app.database import SessionLocal
+    from app.tutor.models.tutor_settings import TutorSettings
+
+    response = client.post(
+        "/tutor/calendar/show-price",
+        data={"start": "2099-02-02"},
+        headers=_HTMX,
+    )
+    assert response.status_code == 200
+    assert response.headers.get("HX-Trigger") == "price-saved"
+    assert response.text == ""
+
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, calendar_owner).show_calendar_price is False
+
+    # Повторное включение: чекбокс присылает show_price=1.
+    client.post(
+        "/tutor/calendar/show-price",
+        data={"show_price": "1", "start": "2099-02-02"},
+        headers=_HTMX,
+    )
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, calendar_owner).show_calendar_price is True
+
+def test_calendar_show_price_toggle_without_htmx_redirects_to_week(
+    client, calendar_owner
+):
+    """Без HX-Request — 303 на ту же неделю, а не пустой ответ POST."""
+    response = client.post(
+        "/tutor/calendar/show-price",
+        data={"start": "2099-02-05"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    # Любая дата недели нормализуется к понедельнику.
+    assert response.headers["location"] == "/tutor/calendar?start=2099-02-02"
+
+def test_calendar_show_price_toggle_isolated_between_tutors(
+    client, calendar_owner, tutor_factory
+):
+    """Переключатель чужого репетитора не меняет флаг этого."""
+    from app.database import SessionLocal
+    from app.tutor.models.tutor_settings import TutorSettings
+
+    other_id = tutor_factory()
+    client.post(
+        "/tutor/calendar/show-price",
+        data={"start": "2099-02-02"},
+        headers=_HTMX,
+    )
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, calendar_owner).show_calendar_price is False
+        assert db.get(TutorSettings, other_id) is None
+
+def test_calendar_show_price_checkbox_markup(client, calendar_owner):
+    """Чекбокс панели: POST на флаг, состояние из настроек, неделя в запросе."""
+    page = client.get("/tutor/calendar?start=2099-02-02").text
+    checkbox = _show_price_checkbox(page)
+
+    assert checkbox, "В панели календаря нет чекбокса «Показывать цену»"
+    assert "checked" in checkbox
+    assert 'hx-post="/tutor/calendar/show-price"' in checkbox
+    assert 'hx-trigger="change"' in checkbox
+    assert 'hx-swap="none"' in checkbox
+    assert 'hx-vals=\'{"start": "2099-02-02"}\'' in checkbox
+    assert "Показывать цену" in page
+
+    # Выключенный флаг отражается в разметке после перерисовки недели.
+    _set_show_price(calendar_owner, False)
+    page = client.get("/tutor/calendar?start=2099-02-02").text
+    assert "checked" not in _show_price_checkbox(page)
