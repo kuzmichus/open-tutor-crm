@@ -15,12 +15,22 @@ maskable-вариант для установки как PWA-приложени�
 достаточно заменить `favicon-source.png` и перегенерировать набор,
 код скрипта менять не придётся.
 
+Про знак. Это «сквиркл» — квадрат 188×188 с непрерывными (не круговыми)
+углами, залитый диагональным градиентом оранжевый → розовый. Внутри —
+белое облако сообщения с розовым солнцем: кольцо, точка в центре и
+восемь лучей с полукруглыми концами. Все числа ниже сняты с растра
+(переход «белое/розовое — фон» по 50 % альфы) и подобраны минимизацией
+расхождения с ним: для углов — кубическая кривая с параметрами `radius`
+и `control`, ошибка аппроксимации < 0.3 px; для градиента — линейная
+регрессия по фону, остаток ≤ 2 из 255 на канал.
+
 Про SVG. Векторная версия — реконструкция по замерам исходника, а не
-трассировка растра: круг r=94 с диагональным градиентом, три белых
-эллипса (rx=62.5, ry=28, штрих 9.5) под 0/60/120° и белый центр r=21.5.
-Параметры подобраны минимизацией расхождения с растром по маске белого.
-Пересборка SVG из скрипта не нужна — он пишется здесь же, чтобы все
-файлы набора появлялись одной командой.
+трассировка растра. Фон, облако и солнце описаны `path`: у сквиркла и
+облака углы — кубические кривые с непрерывной кривизной, у лучей —
+капсулы (отрезок с полукруглыми концами). Всё заливается `fill` с
+`fill-rule: nonzero`, поэтому картинка не зависит от поддержки `stroke`
+и одинаково масштабируется. Трассировка растра дала бы десятки
+килобайт узлов и «дрожащие» края на 16 px.
 
 Почему не ImageMagick. У `convert` на этой машине SVG рендерит встроенный
 MSVG-рендерер: `linearGradient` он теряет и заливает фигуру чёрным,
@@ -39,7 +49,7 @@ import math
 import sys
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "scripts" / "vendor" / "favicon-source.png"
@@ -47,30 +57,44 @@ OUTPUT = ROOT / "app" / "static" / "favicons"
 
 # Геометрия знака в системе координат исходника (200×200).
 VIEWBOX = 200
-CIRCLE_R = 94
-ELLIPSE_RX = 62.5
-ELLIPSE_RY = 28
-ELLIPSE_STROKE = 9.5
-ELLIPSE_ANGLES = (0, 60, 120)
-CORE_R = 21.5
 
-# Градиент фона: сэмплы исходника по диагонали круга, крайние точки
-# экстраполированы на (6, 6) и (194, 194).
-GRADIENT_START = "#11A3E9"
-GRADIENT_END = "#895EF6"
+# Фон: квадрат 5.7…194.3 с непрерывными углами. `radius` — вылет угла от
+# края, `control` — смещение опорных точек кубической кривой (у круга было
+# бы radius * 0.5523); 26.2/46 дают расхождение с растром < 0.3 px.
+BACKGROUND = (5.7, 5.7, 188.6, 188.6)  # x, y, ширина, высота
+BACKGROUND_RADIUS = 46.0
+BACKGROUND_CONTROL = 26.2
 
-# Цвет акцента для `theme-color` и `mask-icon`: сэмпл исходника в точке
-# (100, 20) — верх круга.
-THEME_COLOR = "#3290ED"
+# Облако сообщения: скруглённый прямоугольник плюс хвостик вниз-влево.
+BUBBLE = (43.1, 43.1, 112.9, 88.0)  # x, y, ширина, высота
+BUBBLE_RADIUS = 25.25
+BUBBLE_CONTROL = 16.8
+TAIL = ((74.2, 131.1), (93.4, 131.1), (68.0, 156.0))  # три вершины
+
+# Солнце: кольцо (средняя линия + толщина), точка в центре и восемь лучей.
+SUN_CENTER = (99.5, 87.0)
+SUN_RING_RADIUS = 18.7
+SUN_STROKE = 9.4
+SUN_CORE_RADIUS = 6.2
+SUN_RAY_INNER = 28.5  # центры полукруглых концов лучей
+SUN_RAY_OUTER = 33.6
+SUN_RAYS = 8
+
+# Градиент фона: концы растяжки в углах знака (5.7, 5.7) и (194.3, 194.3).
+GRADIENT_START = "#F97316"
+GRADIENT_END = "#EC4899"
+
+# Облако не чисто белое: с растра снимается (254, 248, 246).
+BUBBLE_COLOR = "#FEF8F6"
+# Солнце того же цвета, что и конец градиента.
+ACCENT = "#EC4899"
 
 APP_NAME = "OpenTutorCRM"
 APP_DESCRIPTION = "CRM для репетитора: ученики, занятия, финансы и напоминания"
 
-# Порог «белое против фона» для маски знака: у белого min(r, g, b) = 255,
-# у синего и фиолетового градиента — 17…94. Растяжка 110…235 сохраняет
-# сглаженные края растра как полупрозрачность.
-_MASK_LOW = 110
-_MASK_HIGH = 235
+# `theme-color` — цвет верхней точки знака: адресная строка мобильного
+# браузера выглядит продолжением иконки.
+THEME_COLOR = "#F66838"
 
 
 def _load_source() -> Image.Image:
@@ -92,50 +116,69 @@ def _resize(image: Image.Image, size: int) -> Image.Image:
     return image.resize((size, size), Image.LANCZOS)
 
 
-def _on_white(image: Image.Image) -> Image.Image:
-    """Свести прозрачность на белый.
+def _gradient(
+    size: int, box: tuple[float, float, float, float] | None = None
+) -> Image.Image:
+    """Диагональный градиент знака: от левого верхнего угла к правому нижнему.
 
-    iOS не поддерживает прозрачность в `apple-touch-icon` и заливает её
-    чёрным — иконка на домашнем экране становится чёрным квадратом.
+    `box` — прямоугольник исходника, на который ложится вся растяжка
+    (по умолчанию — весь холст). За его пределами цвет продолжается
+    крайним значением: так под знак подкладывается фон, когда прозрачные
+    углы сквиркла надо чем-то залить.
     """
-    background = Image.new("RGBA", image.size, (255, 255, 255, 255))
-    background.alpha_composite(image)
-    return background.convert("RGB")
-
-
-def _mark_mask(image: Image.Image) -> Image.Image:
-    """Маска белого знака: 255 — знак, 0 — фон.
-
-    Нужна только для maskable-иконки: там знак переносится на градиент
-    без прозрачности и в safe zone, а значит его надо отрезать от
-    исходного круга.
-    """
-    mask = Image.new("L", image.size, 0)
-    src = image.load()
-    dst = mask.load()
-    span = _MASK_HIGH - _MASK_LOW
-    for y in range(image.size[1]):
-        for x in range(image.size[0]):
-            r, g, b, a = src[x, y]
-            value = (min(r, g, b) - _MASK_LOW) * 255 / span
-            dst[x, y] = max(0, min(255, round(value * a / 255)))
-    return mask
-
-
-def _gradient(size: int) -> Image.Image:
-    """Диагональный градиент знака: от левого верхнего угла к правому нижнему."""
+    x0, y0, x1, y1 = box or (0, 0, size - 1, size - 1)
     start = tuple(int(GRADIENT_START[i : i + 2], 16) for i in (1, 3, 5))
     end = tuple(int(GRADIENT_END[i : i + 2], 16) for i in (1, 3, 5))
+    span = max(1e-6, (x1 - x0) + (y1 - y0))
     image = Image.new("RGB", (size, size))
     pixels = image.load()
-    span = 2 * (size - 1)
+    scale = (size - 1) / (VIEWBOX - 1)
     for y in range(size):
+        dy = y / scale - y0
         for x in range(size):
-            t = (x + y) / span
+            t = ((x / scale - x0) + dy) / span
+            t = min(1.0, max(0.0, t))
             pixels[x, y] = tuple(
                 round(start[i] + (end[i] - start[i]) * t) for i in range(3)
             )
     return image
+
+
+def _on_gradient(image: Image.Image) -> Image.Image:
+    """Свести прозрачные углы на продолжение градиента.
+
+    iOS не поддерживает прозрачность в `apple-touch-icon` и заливает её
+    чёрным — иконка на домашнем экране становится чёрным квадратом.
+    Заливать белым тоже нельзя: сквиркл скруглён, и в углах остались бы
+    белые клинья. Поэтому прозрачное заменяется тем же градиентом:
+    иконка получается «в обрез», а скругление iOS рисует сам.
+    """
+    x, y, w, h = BACKGROUND
+    background = _gradient(image.size[0], box=(x, y, x + w, y + h))
+    return Image.alpha_composite(background.convert("RGBA"), image).convert("RGB")
+
+
+def _mark_mask(size: int) -> Image.Image:
+    """Маска знака для maskable-иконки: облако с хвостиком, без фона.
+
+    Нужна только для maskable: там знак переносится на градиент без
+    прозрачности и в safe zone, а значит его надо отрезать от фона
+    сквиркла. Контур строится по той же геометрии, что и SVG. Рисуем в
+    четырёхкратном размере и уменьшаем LANCZOS: у `ImageDraw` нет
+    сглаживания, иначе край облака на 512 px был бы зубчатым.
+    """
+    scale = 4
+    big = Image.new("L", (size * scale, size * scale), 0)
+    draw = ImageDraw.Draw(big)
+    k = size * scale / VIEWBOX
+    x, y, w, h = BUBBLE
+    draw.rounded_rectangle(
+        (x * k, y * k, (x + w) * k, (y + h) * k),
+        radius=BUBBLE_RADIUS * k,
+        fill=255,
+    )
+    draw.polygon([(px * k, py * k) for px, py in TAIL], fill=255)
+    return big.resize((size, size), Image.LANCZOS)
 
 
 def _maskable(source: Image.Image, size: int = 512) -> Image.Image:
@@ -143,56 +186,111 @@ def _maskable(source: Image.Image, size: int = 512) -> Image.Image:
 
     Android обрезает maskable-иконку по своей форме (круг, «сквиркл»,
     суперэллипс) и оставляет видимой только центральную область. Поэтому
-    знак занимает 80% холста, а фон залит тем же градиентом: при обрезке
+    облако занимает 80% холста, а фон залит тем же градиентом: при обрезке
     по любому контуру не остаётся прозрачных углов.
     """
     inner = round(size * 0.8)
     canvas = _gradient(size)
-    mark = Image.new("RGB", (inner, inner), (255, 255, 255))
+    mark = _resize(source, inner)
     offset = (size - inner) // 2
-    canvas.paste(mark, (offset, offset), _mark_mask(_resize(source, inner)))
+    canvas.paste(mark, (offset, offset), _mark_mask(inner))
     return canvas
 
 
-def _ellipse_path(cx: float, cy: float, rx: float, ry: float, angle: float, clockwise: bool) -> str:
-    """Эллипс одним контуром: две дуги между концами большой оси.
+def _rounded_rect_path(
+    x: float, y: float, w: float, h: float, radius: float, control: float
+) -> str:
+    """Скруглённый прямоугольник одним контуром с непрерывными углами.
 
-    `clockwise` задаёт направление обхода — оно нужно, чтобы `fill-rule:
-    nonzero` складывал кольца и центр в объединение, а не вычитал их.
+    Угол — кубическая кривая от конца одной стороны до начала другой;
+    `control` задаёт смещение опорных точек вдоль сторон. У круга оно
+    равно radius * 0.5523, у знака — больше, поэтому угол «мягче»: именно
+    так выглядит сквиркл в исходнике.
     """
-    a = math.radians(angle)
-    dx, dy = rx * math.cos(a), rx * math.sin(a)
-    sweep = 1 if clockwise else 0
-    x0, y0 = cx + dx, cy + dy
-    x1, y1 = cx - dx, cy - dy
+    x1, y1 = x + w, y + h
+    r, a = radius, control
     return (
-        f"M{x0:g} {y0:g}"
-        f"A{rx:g} {ry:g} {angle:g} 1 {sweep} {x1:g} {y1:g}"
-        f"A{rx:g} {ry:g} {angle:g} 1 {sweep} {x0:g} {y0:g}Z"
+        f"M{x + r:g} {y:g}"
+        f"H{x1 - r:g}"
+        f"C{x1 - r + a:g} {y:g} {x1:g} {y + r - a:g} {x1:g} {y + r:g}"
+        f"V{y1 - r:g}"
+        f"C{x1:g} {y1 - r + a:g} {x1 - r + a:g} {y1:g} {x1 - r:g} {y1:g}"
+        f"H{x + r:g}"
+        f"C{x + r - a:g} {y1:g} {x:g} {y1 - r + a:g} {x:g} {y1 - r:g}"
+        f"V{y + r:g}"
+        f"C{x:g} {y + r - a:g} {x + r - a:g} {y:g} {x + r:g} {y:g}Z"
     )
 
 
-def _circle_path(cx: float, cy: float, r: float) -> str:
+def _circle_path(cx: float, cy: float, r: float, clockwise: bool = True) -> str:
+    """Окружность одним контуром из двух полудуг.
+
+    `clockwise` задаёт направление обхода: при `fill-rule: nonzero`
+    внешнее кольцо и внутреннее должны идти в разные стороны, иначе
+    середина кольца останется залитой.
+    """
+    sweep = 1 if clockwise else 0
     return (
         f"M{cx + r:g} {cy:g}"
-        f"A{r:g} {r:g} 0 1 1 {cx - r:g} {cy:g}"
-        f"A{r:g} {r:g} 0 1 1 {cx + r:g} {cy:g}Z"
+        f"A{r:g} {r:g} 0 1 {sweep} {cx - r:g} {cy:g}"
+        f"A{r:g} {r:g} 0 1 {sweep} {cx + r:g} {cy:g}Z"
     )
 
 
-def _mark_path() -> str:
-    """Один path знака: три кольца (внешний и внутренний контур) и центр.
+def _capsule_path(
+    x1: float, y1: float, x2: float, y2: float, radius: float
+) -> str:
+    """Капсула — луч солнца: отрезок с полукруглыми концами, одним контуром."""
+    dx, dy = x2 - x1, y2 - y1
+    length = math.hypot(dx, dy)
+    nx, ny = -dy / length * radius, dx / length * radius
+    return (
+        f"M{x1 - nx:g} {y1 - ny:g}"
+        f"L{x2 - nx:g} {y2 - ny:g}"
+        f"A{radius:g} {radius:g} 0 0 1 {x2 + nx:g} {y2 + ny:g}"
+        f"L{x1 + nx:g} {y1 + ny:g}"
+        f"A{radius:g} {radius:g} 0 0 1 {x1 - nx:g} {y1 - ny:g}Z"
+    )
 
-    Кольцо — это не «обводка»: контур внешнего эллипса обходится по
-    часовой, внутреннего — против. При `nonzero` полоса между ними
-    получает заливку, а середина кольца остаётся пустой.
+
+def _background_path() -> str:
+    return _rounded_rect_path(*BACKGROUND, BACKGROUND_RADIUS, BACKGROUND_CONTROL)
+
+
+def _bubble_path() -> str:
+    """Облако: скруглённый прямоугольник и хвостик отдельными подконтурами.
+
+    Хвостик начинается на нижней кромке облака и заканчивается остриём
+    ниже и левее — как в исходнике. Оба подконтура идут по часовой,
+    поэтому при `nonzero` складываются в одну фигуру без шва.
     """
-    half = ELLIPSE_STROKE / 2
-    parts: list[str] = []
-    for angle in ELLIPSE_ANGLES:
-        parts.append(_ellipse_path(100, 100, ELLIPSE_RX + half, ELLIPSE_RY + half, angle, True))
-        parts.append(_ellipse_path(100, 100, ELLIPSE_RX - half, ELLIPSE_RY - half, angle, False))
-    parts.append(_circle_path(100, 100, CORE_R))
+    parts = [_rounded_rect_path(*BUBBLE, BUBBLE_RADIUS, BUBBLE_CONTROL)]
+    (ax, ay), (bx, by), (cx, cy) = TAIL
+    parts.append(f"M{ax:g} {ay:g}L{bx:g} {by:g}L{cx:g} {cy:g}Z")
+    return "".join(parts)
+
+
+def _sun_path() -> str:
+    """Солнце: кольцо (внешний и внутренний контур), точка и восемь лучей."""
+    cx, cy = SUN_CENTER
+    half = SUN_STROKE / 2
+    parts = [
+        _circle_path(cx, cy, SUN_RING_RADIUS + half),
+        _circle_path(cx, cy, SUN_RING_RADIUS - half, clockwise=False),
+        _circle_path(cx, cy, SUN_CORE_RADIUS),
+    ]
+    for index in range(SUN_RAYS):
+        angle = 2 * math.pi * index / SUN_RAYS
+        cos, sin = math.cos(angle), math.sin(angle)
+        parts.append(
+            _capsule_path(
+                cx + SUN_RAY_INNER * cos,
+                cy + SUN_RAY_INNER * sin,
+                cx + SUN_RAY_OUTER * cos,
+                cy + SUN_RAY_OUTER * sin,
+                half,
+            )
+        )
     return "".join(parts)
 
 
@@ -206,8 +304,9 @@ def _favicon_svg() -> str:
       <stop offset="1" stop-color="{GRADIENT_END}"/>
     </linearGradient>
   </defs>
-  <circle cx="100" cy="100" r="{CIRCLE_R}" fill="url(#brand)"/>
-  <path fill="#FFFFFF" fill-rule="nonzero" d="{_mark_path()}"/>
+  <path fill="url(#brand)" d="{_background_path()}"/>
+  <path fill="{BUBBLE_COLOR}" fill-rule="nonzero" d="{_bubble_path()}"/>
+  <path fill="{ACCENT}" fill-rule="nonzero" d="{_sun_path()}"/>
 </svg>
 """
 
@@ -216,11 +315,12 @@ def _pinned_tab_svg() -> str:
     """Монохромный силуэт для `rel="mask-icon"` (Safari, закреплённые вкладки).
 
     Safari берёт из файла только форму и красит её в `color` из разметки,
-    поэтому фон-круг здесь не рисуется: он превратил бы иконку в сплошную
-    заливку. Остаётся знак — тот же path, что и в `favicon.svg`.
+    поэтому фона-сквиркла здесь нет: он превратил бы иконку в сплошную
+    заливку. Остаётся солнце — тот же path, что и в `favicon.svg`: на
+    вкладке в 16 px кольцо с лучами читается, а облако вокруг него — нет.
     """
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {VIEWBOX} {VIEWBOX}" width="{VIEWBOX}" height="{VIEWBOX}">
-  <path fill="currentColor" fill-rule="nonzero" d="{_mark_path()}"/>
+  <path fill="currentColor" fill-rule="nonzero" d="{_sun_path()}"/>
 </svg>
 """
 
@@ -284,7 +384,7 @@ def build(output: Path = OUTPUT) -> list[Path]:
 
     save_png("favicon-16x16.png", _resize(source, 16))
     save_png("favicon-32x32.png", _resize(source, 32))
-    save_png("apple-touch-icon.png", _on_white(_resize(source, 180)))
+    save_png("apple-touch-icon.png", _resize(_on_gradient(source), 180))
     save_png("android-chrome-192x192.png", _resize(source, 192))
     save_png("android-chrome-512x512.png", _resize(source, 512))
     save_png("android-chrome-maskable-512x512.png", _maskable(source, 512))
