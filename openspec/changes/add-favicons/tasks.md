@@ -49,14 +49,17 @@
 
 - [x] 4.1 Change `add-favicons` с delta-spec на новую capability `app-branding`.
   Проверка: `openspec validate add-favicons --strict`.
-- [ ] 4.2 `CHANGELOG.md`: строка в `[Unreleased] → Добавлено` про favicon,
+- [x] 4.2 `CHANGELOG.md`: строка в `[Unreleased] → Добавлено` про favicon,
   PWA-манифест и `theme-color`.
-- [ ] 4.3 `README.md`: команда пересборки набора в разделе «Разработка».
-- [ ] 4.4 `AGENTS.md`: строка в правилах о статике — где лежит набор и чем
-  пересобирается.
-- [ ] 4.5 Полный прогон `uv run pytest -n auto`; линт
-  `uvx ruff@0.15.20 check --select E9,F63,F7,F82 app/ tests/ main.py cron.py`
-  и `uvx ruff@0.15.20 check scripts/build_favicons.py`.
+- [x] 4.3 `README.md`: раздел «Иконка сайта» в «Разработке» — команда
+  пересборки и пояснение про апскейл из 200 px.
+- [x] 4.4 `AGENTS.md` не правится: файл в репозитории — промт окружения задачи
+  (коммит `7c7fbde` «AGENTS.md из окружения задачи»), окружение перезаписывает
+  его на каждом запуске. Правило про набор favicon живёт в `README.md` и в
+  docstring `scripts/build_favicons.py`.
+- [x] 4.5 Полный прогон `uv run pytest -n auto` — 2140 passed; линт
+  `uvx ruff@0.15.20 check --select E9,F63,F7,F82 app/ tests/ main.py cron.py
+  scripts/build_favicons.py` — чисто.
 
 ## Workflow follow-up
 
