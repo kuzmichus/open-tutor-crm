@@ -32,6 +32,10 @@ QUARTER_DEFAULTS = ("10-25", "12-25", "03-20", "05-25")
 DEFAULT_LESSON_DURATION = 60
 DEFAULT_LOW_BALANCE_THRESHOLD = 0
 
+# Показывать ли стоимость занятий на карточках календаря. По умолчанию
+# включено: до появления флага цены на карточках были видны всегда.
+DEFAULT_SHOW_CALENDAR_PRICE = True
+
 # Значения полей по умолчанию — один источник истины для column-defaults
 # и для объекта-заглушки, пока строка в БД не создана (column-defaults
 # применяются только при INSERT, у transient-объекта поля были бы None).
@@ -49,6 +53,7 @@ DEFAULTS = {
     "digest_time": DEFAULT_DIGEST_TIME,
     "workday_start": DEFAULT_WORKDAY_START,
     "workday_end": DEFAULT_WORKDAY_END,
+    "show_calendar_price": DEFAULT_SHOW_CALENDAR_PRICE,
     "low_balance_threshold": DEFAULT_LOW_BALANCE_THRESHOLD,
     "default_lesson_duration": DEFAULT_LESSON_DURATION,
     "default_lesson_price": None,
@@ -137,6 +142,13 @@ class TutorSettings(Base):
     )
     workday_end: Mapped[str] = mapped_column(
         String(5), nullable=False, default=DEFAULTS["workday_end"]
+    )
+
+    # Флаг «Показывать цену» на странице «Календарь»: при выключенном
+    # значении карточки занятий не показывают стоимость. Хранится в
+    # настройках, потому что это выбор отображения, а не свойство занятия.
+    show_calendar_price: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=DEFAULTS["show_calendar_price"]
     )
 
     # Порог «низкого баланса»: уведомление при уходе баланса ниже суммы.
