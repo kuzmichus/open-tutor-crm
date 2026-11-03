@@ -54,10 +54,18 @@
 
 - [x] 5.1 `uv run pytest tests/test_timezone_shift.py tests/test_gcalendar_sync.py
   tests/test_profile.py tests/test_lesson_pages.py` — зелёные.
-- [ ] 5.2 `uv run pytest -n auto` — весь набор зелёный.
-- [ ] 5.3 `openspec validate shift-schedule-on-timezone-change --strict`.
-- [ ] 5.4 Линт `uvx ruff@0.15.20 check --select E9,F63,F7,F82 app/ tests/
+- [x] 5.2 `uv run pytest -n auto` — весь набор зелёный (2158 passed).
+- [x] 5.3 `openspec validate shift-schedule-on-timezone-change --strict`.
+- [x] 5.4 Линт `uvx ruff@0.15.20 check --select E9,F63,F7,F82 app/ tests/
   main.py cron.py` — без новых ошибок.
+
+## 6. Контракт стенда
+
+- [x] 6.1 `.taskdesk/stand.toml` — `up`, `port_env = "PORT"`,
+  `health_path = "/health"`, `[stand.env]` c `TZ`; отдельная БД не нужна
+  (приложение на SQLite).
+- [x] 6.2 `scripts/stand_up.sh` — `alembic upgrade head` на временной
+  SQLite-базе, затем `uvicorn` на `$PORT`; проверено: `/health` → 200.
 
 ## Workflow follow-up
 

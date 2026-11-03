@@ -62,11 +62,12 @@ def test_shift_moment_naive_value_treated_as_utc():
 def test_shift_moment_respects_dst_per_row():
     """Зона с переходом на летнее время: смещение зависит от даты.
 
-    Europe/Berlin летом — UTC+2, зимой — UTC+1. Одно и то же настенное
-    время 10:00 (по «Начало» формы) сохраняется, но UTC-значения
-    различаются на час: лето 08:00 UTC→10:00 CEST→03:00 UTC след. день
-    нет — оба сдвига. Для сравнения возьмём фиксированный UTC 09:00:
-    летом это 11:00 настенных, зимой 10:00.
+    Europe/Berlin летом — UTC+2, зимой — UTC+1. Один и тот же настенный
+    момент переводится по правилу «зашитое в строке смещение», поэтому для
+    сравнения берём фиксированный UTC 09:00: летом это 11:00 настенных,
+    зимой 10:00. Смещение в новой зоне (UTC+7) фиксировано, значит летом
+    UTC-результат 04:00, зимой 03:00 — разница на час из-за перевода ломки
+    в старой зоне.
     """
     berlin = ZoneInfo("Europe/Berlin")
     summer = shift_moment(datetime(2026, 7, 1, 9, 0, tzinfo=UTC), berlin, NEW_ZONE)
@@ -76,6 +77,9 @@ def test_shift_moment_respects_dst_per_row():
     # фиксированным смещением.
     assert summer == datetime(2026, 7, 1, 4, 0, tzinfo=UTC)
     assert winter == datetime(2026, 1, 1, 3, 0, tzinfo=UTC)
+    # Настенное время в каждой сроке сохранилось: 11:00 летом, 10:00 зимой.
+    assert summer.astimezone(OLD_ZONE).replace(tzinfo=None).time() == datetime(2026, 7, 1, 11, 0).time()
+    assert winter.astimezone(OLD_ZONE).replace(tzinfo=None).time() == datetime(2026, 1, 1, 10, 0).time()
 
 
 def test_shift_moment_old_equals_new_is_identity():
