@@ -1,0 +1,30 @@
+{
+  "name": "OpenTutorCRM",
+  "short_name": "OpenTutorCRM",
+  "description": "CRM для репетитора: ученики, занятия, финансы и напоминания",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#3290ED",
+  "icons": [
+    {
+      "src": "/static/favicons/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicons/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicons/android-chrome-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
