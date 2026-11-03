@@ -10,7 +10,8 @@
   должно «съедать» или «дарить» час;
 - `content_hash` — sha256 канонического JSON тела: сравнение хешей решает
   «создать / обновить / ничего не делать» без запроса к Google, когда
-  урок не менялся (design D4).
+  урок не менялся (design D4). Цвет входит в хеш: смена цвета цели даёт
+  PATCH события, а неизменный цвет — ни одного запроса.
 """
 
 import hashlib
@@ -18,6 +19,7 @@ import json
 from datetime import timedelta
 
 from app.common.services.tutor_time import to_local, tutor_zone_name
+from app.gcalendar.services import event_color
 from app.lesson.models.lesson import LESSON_TYPE_LABELS
 
 # Заголовок события: «Занятие — Иван Петров», «Занятие — Группа: X».
@@ -25,7 +27,7 @@ SUMMARY_PREFIX = "Занятие — "
 
 # Ключи, которые участвуют в хеше: всё, что уходит в Google. Служебные
 # поля ответа (id, etag, htmlLink) в тело запроса не попадают.
-_HASH_FIELDS = ("summary", "description", "location", "start", "end")
+_HASH_FIELDS = ("summary", "description", "location", "start", "end", "colorId")
 
 def build_event(
     lesson,
@@ -33,12 +35,15 @@ def build_event(
     *,
     student_name: str | None = None,
     group_name: str | None = None,
+    target_color: str | None = None,
 ) -> dict:
     """Тело события Calendar API из урока.
 
-    `student_name`/`group_name` передаёт вызывающая сторона (у неё уже
-    есть связанные записи): сервис не ходит в БД и не зависит от ленивых
-    связей ORM.
+    `student_name`/`group_name`/`target_color` передаёт вызывающая сторона
+    (у неё уже есть связанные записи): сервис не ходит в БД и не зависит
+    от ленивых связей ORM. `target_color` — hex-цвет цели урока
+    (`students.color`/`groups.color`); событие красится в ближайший к нему
+    цвет Google, а без цвета — в цвет по умолчанию.
     """
     start = to_local(lesson.starts_at, tutor)
     # Локальная арифметика: `+ timedelta` к aware-значению в зоне педагога
@@ -57,6 +62,9 @@ def build_event(
             "dateTime": end.replace(tzinfo=None).isoformat(timespec="seconds"),
             "timeZone": tutor_zone_name(tutor),
         },
+        # Цвет карточки в Google: colorId из палитры API, а не hex —
+        # произвольный hex API не принимает.
+        "colorId": event_color.color_id(target_color),
     }
     return payload
 
