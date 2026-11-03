@@ -26,6 +26,46 @@ from app.tutor.services.settings import get_settings
 router = APIRouter()
 
 
+def week_response(
+    request: Request, db: Session, tutor, tutor_id: str, start: str | None, color: str | None
+):
+    """Ответ недели: полная страница или HTMX-фрагмент области календаря.
+
+    Один хелпер на GET календаря и на переключение флага «Показывать
+    цену»: после сохранения флага неделя перерисовывается ровно той же
+    разметкой, что и при листании, — иначе две точки рендера разъехались
+    бы. `start` — любая дата недели (нормализуется к понедельнику),
+    `color` — режим раскраски.
+    """
+    try:
+        monday = week_start(start) if start else week_start(today_local(tutor))
+    except ValueError:
+        monday = week_start(today_local(tutor))
+
+    # Рабочее время — границы сетки (дизайн D6): читается один раз рядом
+    # с остальным контекстом; `get_settings` сам даёт дефолт 06:00–23:00,
+    # пока репетитор не сохранил настройку. Оттуда же флаг «Показывать
+    # цену» (по умолчанию включён).
+    settings = get_settings(db, tutor_id)
+
+    context = build_calendar_context(
+        build_week_days(db, tutor_id, monday, tutor),
+        now=now_local(tutor),
+        tutor=tutor,
+        color_mode=parse_color_mode(color),
+        show_price=settings.show_calendar_price,
+        grid_start_min=clock_to_minutes(settings.workday_start),
+        grid_end_min=clock_to_minutes(settings.workday_end),
+    )
+    context["timezone_label"] = tutor_zone_name(tutor)
+    # Локальный момент для клиента: `calendar.js` берёт «сегодня» и
+    # предзаполнение отсюда, а не от часов устройства (design D7).
+    context["now_iso"] = now_local(tutor).isoformat()
+    if is_htmx(request):
+        return templates.TemplateResponse(request, "calendar/_area.html", context)
+    return templates.TemplateResponse(request, "calendar/index.html", context)
+
+
 @router.get("/tutor/calendar", response_class=HTMLResponse)
 def calendar(
     request: Request,
@@ -46,29 +86,4 @@ def calendar(
     открывается по его календарю, а не по календарю сервера.
     """
     tutor = db.get(Tutor, tutor_id)
-
-    try:
-        monday = week_start(start) if start else week_start(today_local(tutor))
-    except ValueError:
-        monday = week_start(today_local(tutor))
-
-    # Рабочее время — границы сетки (дизайн D6): читается один раз рядом
-    # с остальным контекстом; `get_settings` сам даёт дефолт 06:00–23:00,
-    # пока репетитор не сохранил настройку.
-    settings = get_settings(db, tutor_id)
-
-    context = build_calendar_context(
-        build_week_days(db, tutor_id, monday, tutor),
-        now=now_local(tutor),
-        tutor=tutor,
-        color_mode=parse_color_mode(color),
-        grid_start_min=clock_to_minutes(settings.workday_start),
-        grid_end_min=clock_to_minutes(settings.workday_end),
-    )
-    context["timezone_label"] = tutor_zone_name(tutor)
-    # Локальный момент для клиента: `calendar.js` берёт «сегодня» и
-    # предзаполнение отсюда, а не от часов устройства (design D7).
-    context["now_iso"] = now_local(tutor).isoformat()
-    if is_htmx(request):
-        return templates.TemplateResponse(request, "calendar/_area.html", context)
-    return templates.TemplateResponse(request, "calendar/index.html", context)
+    return week_response(request, db, tutor, tutor_id, start, color)

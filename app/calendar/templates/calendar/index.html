@@ -57,7 +57,7 @@
                      data-public-url="{{ public_prefix }}/{{ tutor_id }}"
                      data-color-mode="{{ color_mode }}"
                      hx-get="/tutor/calendar?start={{ current_start }}&color={{ color_mode }}"
-                     hx-trigger="lesson-saved from:body, unavailability-saved from:body, slot-saved from:body"
+                     hx-trigger="lesson-saved from:body, unavailability-saved from:body, slot-saved from:body, price-saved from:body"
                      hx-target="#calendar-swap"
                      hx-swap="innerHTML">
                     {% include "calendar/_area.html" %}

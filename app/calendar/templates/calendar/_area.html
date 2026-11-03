@@ -33,6 +33,22 @@
 
     <h2 class="cal-toolbar__title">{{ range_title }}</h2>
 
+    {# Флаг «Показывать цену» (спека calendar, «Флаг показа цены»): живёт в
+       настройках репетитора, поэтому после переключения неделя
+       перерисовывается с сервера — подписка `price-saved` на #calendar-swap.
+       `hx-vals` передаёт видимую неделю: перерисовка не должна возвращать
+       к первой открытой. Снятый чекбокс браузер не отправляет — сервер
+       читает отсутствие поля как «выключено». #}
+    <label class="checkbox">
+        <input type="checkbox" name="show_price" value="1"
+               {% if show_price %}checked{% endif %}
+               hx-post="/tutor/calendar/show-price"
+               hx-trigger="change"
+               hx-vals='{"start": "{{ current_start }}"}'
+               hx-swap="none">
+        <span>Показывать цену</span>
+    </label>
+
     <span class="cal-toolbar__spacer"></span>
 
     {# Бейдж часового пояса: показывается всегда — это подпись, в какой зоне

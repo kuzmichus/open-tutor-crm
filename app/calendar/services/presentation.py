@@ -186,6 +186,7 @@ def build_event_view(
     columns: int = 1,
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
+    show_price: bool = True,
     grid_start_min: int = DEFAULT_GRID_START_MIN,
     grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> dict:
@@ -195,6 +196,8 @@ def build_event_view(
     свою долю ширины (спека «Пересекающиеся занятия накладываются»).
     `color_mode` — активный режим раскраски (design.md D5): акцент урока
     считается тем же правилом, что и точки в шапке дня.
+    `show_price` — флаг «Показывать цену» из настроек: при `False` цена не
+    попадает ни в карточку, ни во всплывающую подсказку.
     `grid_start_min`/`grid_end_min` — рабочее время репетитора (минуты
     суток): `top_h` считается от начала сетки, а края карточки зажимаются
     её границами (дизайн D3).
@@ -232,16 +235,23 @@ def build_event_view(
     if event.is_slot:
         view.update(_slot_fields(event))
     else:
-        view.update(_lesson_fields(event, now=now, color_mode=color_mode))
+        view.update(
+            _lesson_fields(
+                event, now=now, color_mode=color_mode, show_price=show_price
+            )
+        )
     return view
 
 
 def _lesson_fields(
-    event: ScheduleEvent, *, now: datetime, color_mode: str
+    event: ScheduleEvent, *, now: datetime, color_mode: str, show_price: bool = True
 ) -> dict:
     """Поля карточки урока: цель, цена, акцент и признаки состояния."""
     overdue = is_overdue(event, now=now)
-    price_label = format_price(event.price)
+    # Выключенный флаг «Показывать цену» гасит цену целиком: подпись и
+    # подсказка собираются из одного значения, поэтому «₽» не остаётся
+    # нигде (спека calendar, «Флаг показа цены»).
+    price_label = format_price(event.price) if show_price else ""
     # Имя цели — обязательная часть карточки; цена дописывается только
     # когда она задана, иначе заголовок кончался бы бесполезным «0 ₽».
     title = f"{event.student} · {price_label}" if price_label else event.student
@@ -331,6 +341,7 @@ def build_day_view(
     *,
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
+    show_price: bool = True,
     grid_start_min: int = DEFAULT_GRID_START_MIN,
     grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> dict:
@@ -339,6 +350,8 @@ def build_day_view(
     `unavailable` — подпись причины отметки для шапки дня (`""` — день
     доступен), `unavailable_title` — все причины дня для всплывающей
     подсказки (design.md D4: периода важнее выходного).
+    `show_price` — флаг «Показывать цену» из настроек (см.
+    `build_event_view`).
 
     Флага «выходной» нет: выходные задаёт только таблица отметок, поэтому
     суббота и воскресенье выглядят как обычные дни, пока репетитор не
@@ -348,6 +361,7 @@ def build_day_view(
         day.events,
         now=now,
         color_mode=color_mode,
+        show_price=show_price,
         grid_start_min=grid_start_min,
         grid_end_min=grid_end_min,
     )
@@ -382,6 +396,7 @@ def build_calendar_context(
     now: datetime,
     tutor=None,
     color_mode: str = DEFAULT_COLOR_MODE,
+    show_price: bool = True,
     grid_start_min: int = DEFAULT_GRID_START_MIN,
     grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> dict:
@@ -390,6 +405,8 @@ def build_calendar_context(
     `grid_start_min`/`grid_end_min` — рабочее время репетитора (минуты
     суток): из них строятся часовые строки, конечная метка и `data-`-
     атрибуты границ для клиентского скрипта (дизайн D3, D4).
+    `show_price` — флаг «Показывать цену»: попадает в карточки и в
+    состояние чекбокса панели управления.
     """
     monday, sunday = days[0].date, days[-1].date
     views = [
@@ -397,6 +414,7 @@ def build_calendar_context(
             day,
             now=now,
             color_mode=color_mode,
+            show_price=show_price,
             grid_start_min=grid_start_min,
             grid_end_min=grid_end_min,
         )
@@ -429,6 +447,9 @@ def build_calendar_context(
         # (design.md D5).
         "color_mode": color_mode,
         "color_target": color_mode != STATUS,
+        # Флаг «Показывать цену»: состояние чекбокса панели управления.
+        # Цена карточек считается выше по этому же значению.
+        "show_price": show_price,
         # Пустая неделя: ни уроков, ни отметок недоступности (спека
         # «Пустая неделя»: пояснение не должно называть неделю свободной,
         # если в ней есть отметка).
@@ -441,6 +462,7 @@ def layout_events(
     *,
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
+    show_price: bool = True,
     grid_start_min: int = DEFAULT_GRID_START_MIN,
     grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> list[dict]:
@@ -464,6 +486,7 @@ def layout_events(
                     columns=total,
                     now=now,
                     color_mode=color_mode,
+                    show_price=show_price,
                     grid_start_min=grid_start_min,
                     grid_end_min=grid_end_min,
                 )
