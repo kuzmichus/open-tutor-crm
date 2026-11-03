@@ -520,10 +520,13 @@ def test_lessons_list_partial_requires_session(client):
 def test_changing_timezone_changes_display_but_not_stored_value(
     client, tutor_factory, student_factory
 ):
-    """Спека: смена зоны меняет только показ, данные не переписываются.
+    """Показ времени идёт в зоне карточки: зона меняется мимо формы.
 
-    Урок хранится как `06:00 UTC`. При зоне UTC+04 он показан как 10:00,
-    после смены зоны на UTC+07 — как 13:00, а в БД остаётся `06:00`.
+    Пересчёт расписания делает форма вкладки «Календарь» профиля (см.
+    `tests/test_timezone_shift.py`), поэтому при прямой записи зоны в БД
+    хранимый момент не меняется. Урок хранится как `06:00 UTC`: при зоне
+    UTC+04 он показан как 10:00, после смены зоны на UTC+07 — как 13:00,
+    а в БД остаётся `06:00`.
     """
     email = "lessons-pages-zone-shift@example.com"
     owner = tutor_factory(
