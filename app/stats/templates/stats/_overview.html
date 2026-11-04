@@ -1,10 +1,66 @@
-{# Вкладка «Обзор»: KPI-карточки, панель риска, прогноз по запросу. #}
+{# Вкладка «Обзор»: период, загрузка, KPI-карточки, карта загрузки, риск, прогноз. #}
+{% include "stats/_period.html" %}
+
 <div class="stats-toolbar">
     <a class="btn btn--outline btn--sm"
-       href="/tutor/stats?tab=overview{% if not overview.forecast %}&forecast=1{% endif %}">
+       href="/tutor/stats?tab=overview&period={{ period.key }}{% if not overview.forecast %}&forecast=1{% endif %}">
         Прогноз на месяц
     </a>
 </div>
+
+{# Загрузка: факт к комфортной цели и факт к доступному максимуму. #}
+<section class="card stats-util" aria-label="Загрузка">
+    <h2 class="stats-util__title">Загрузка</h2>
+    <p class="stats-hint">Фактические часы — длительность проведённых занятий за
+        период (пробные входят: это реально потраченное время). Цель — «Желаемая
+        нагрузка в неделю» из профиля, пересчитанная на длину периода.
+        Жёлтый — недогруз, зелёный — норма, красный — риск выгорания.</p>
+    <div class="stats-util__rows">
+        <div class="stats-util__row">
+            <div class="stats-util__head">
+                <span class="stats-util__label">Факт к цели</span>
+                <span class="stats-util__value">{{ percent_or_dash(overview.utilization.fact_to_target) }}</span>
+            </div>
+            <div class="stats-util__bar stats-util__bar--{{ overview.utilization.target_tone }}"
+                 role="progressbar" aria-valuenow="{{ overview.utilization.target_bar }}"
+                 aria-valuemin="0" aria-valuemax="100"
+                 aria-label="Фактические часы к комфортной цели">
+                <span class="stats-util__fill"
+                      style="width: {{ overview.utilization.target_bar }}%"></span>
+            </div>
+            <p class="stats-util__sub">
+                {%- if overview.utilization.target_missing -%}
+                Цель не задана — укажите «Желаемую нагрузку в неделю» в
+                <a href="/tutor/profile?tab=calendar">настройках профиля</a>.
+                {%- else -%}
+                {{ hours_label(overview.utilization.actual_hours) }} из
+                {{ hours_label(overview.utilization.target_hours) }} комфортных
+                {%- endif -%}
+            </p>
+        </div>
+        <div class="stats-util__row">
+            <div class="stats-util__head">
+                <span class="stats-util__label">Факт к максимуму</span>
+                <span class="stats-util__value">{{ percent_or_dash(overview.utilization.fact_to_max) }}</span>
+            </div>
+            <div class="stats-util__bar stats-util__bar--{{ overview.utilization.max_tone }}"
+                 role="progressbar" aria-valuenow="{{ overview.utilization.max_bar }}"
+                 aria-valuemin="0" aria-valuemax="100"
+                 aria-label="Фактические часы к доступным часам календаря">
+                <span class="stats-util__fill"
+                      style="width: {{ overview.utilization.max_bar }}%"></span>
+            </div>
+            <p class="stats-util__sub">
+                {{ hours_label(overview.utilization.actual_hours) }} из
+                {{ hours_label(overview.utilization.available_hours) }} доступных
+            </p>
+        </div>
+    </div>
+    <p class="stats-util__hint" title="{{ overview.utilization.hint }}">
+        <i data-lucide="info" aria-hidden="true"></i>
+        {{ overview.utilization.hint }}
+    </p>
+</section>
 
 {% if overview.forecast %}
 <section class="card stats-forecast" aria-label="Прогноз на месяц">
@@ -20,6 +76,7 @@
         <div class="stats-duo__item">
             <p class="stats-duo__label">Запланировано занятий</p>
             <p class="stats-duo__value">{{ overview.forecast.lessons }}</p>
+            <p class="stats-duo__sub stats-kpi__sub--hours">{{ hours_phrase(overview.forecast.hours) }}</p>
         </div>
     </div>
 </section>
@@ -28,15 +85,15 @@
 <div class="stats-kpis">
     <section class="card stats-kpi">
         <div class="stats-kpi__head">
-            <span class="stats-kpi__title">LTV (Сред. чек)</span>
+            <span class="stats-kpi__title">Выручка на час</span>
             <span class="stats-kpi__icon stats-kpi__icon--up" aria-hidden="true">
                 <i data-lucide="trending-up"></i>
             </span>
         </div>
         <p class="stats-kpi__value">
-            {%- if overview.ltv is not none %}{{ money(overview.ltv) }}{% else %}—{% endif -%}
+            {%- if overview.revenue_per_hour is not none %}{{ money(overview.revenue_per_hour) }}{% else %}—{% endif -%}
         </p>
-        <p class="stats-kpi__sub">Выручка на одного ученика</p>
+        <p class="stats-kpi__sub">Выручка за период ÷ фактические часы</p>
     </section>
 
     <section class="card stats-kpi">
@@ -59,7 +116,7 @@
         </div>
         <p class="stats-kpi__value">{{ overview.active_count }}</p>
         <p class="stats-kpi__sub">Занятие за последние 14 дней (не пробное)</p>
-        <a class="stats-kpi__link" href="/tutor/stats?tab=students&activity=active">Показать список</a>
+        <a class="stats-kpi__link" href="/tutor/stats?tab=students&activity=active&sort=hours">Показать список по времени</a>
     </section>
 
     <section class="card stats-kpi">
@@ -75,15 +132,75 @@
     </section>
 </div>
 
+{# Карта загрузки: день недели × час рабочего дня на текущую неделю. #}
+<section class="card stats-heat" aria-label="Карта загрузки">
+    <h2 class="stats-heat__title">Карта загрузки</h2>
+    {% if not overview.heatmap.has_workday %}
+    <p class="stats-hint">{{ overview.heatmap.insight }}</p>
+    {% else %}
+    <div class="stats-heat__scroll">
+        <table class="stats-heat__table">
+            <caption class="sr-only">Загрузка по дням недели и часам рабочего дня</caption>
+            <thead>
+                <tr>
+                    <th class="stats-heat__corner" scope="col"><span class="sr-only">День и время</span></th>
+                    {% for hour in overview.heatmap.hours %}
+                    <th class="stats-heat__hour" scope="col">{{ hour.short_label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in overview.heatmap.rows %}
+                <tr class="stats-heat__row{% if row.is_today %} stats-heat__row--today{% endif %}">
+                    <th class="stats-heat__day" scope="row">
+                        {{ row.weekday_short }}
+                        <span class="stats-heat__day-num">{{ row.day_number }}</span>
+                    </th>
+                    {% for cell in row.cells %}
+                    <td class="stats-heat__cell stats-heat__cell--{{ cell.state }}" title="{{ cell.title }}">
+                        <span class="sr-only">{{ cell.label }}</span>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <ul class="stats-heat__legend">
+        <li><span class="stats-heat__swatch stats-heat__cell--busy" aria-hidden="true"></span>Занято</li>
+        <li><span class="stats-heat__swatch stats-heat__cell--free" aria-hidden="true"></span>Свободно</li>
+        <li><span class="stats-heat__swatch stats-heat__cell--unavailable" aria-hidden="true"></span>Недоступно</li>
+    </ul>
+    <p class="stats-heat__insight">{{ overview.heatmap.insight }}</p>
+    {% endif %}
+</section>
+
 <section class="card stats-risk" aria-label="Риск потери">
     <h2 class="stats-risk__head">
         <i data-lucide="alert-triangle" aria-hidden="true"></i>
-        Риск потери: {{ overview.risk_rows | length }}
+        Риск потери: {{ overview.risk_total }}
     </h2>
     <p class="stats-risk__text">Занимались, но больше 14 дней нет занятий и ничего не
         запланировано, а статус карточки не менялся — тихо перестали ходить. Отмеченные
-        статусом «В архиве» — в «Потерянных».</p>
+        статусом «В архиве» — в «Потерянных». Красный флаг «нагрузка −N%» — у ученика
+        регулярные занятия, но фактические часы за последние 2 недели сократились
+        не меньше чем вдвое (сравнение с предыдущими двумя неделями).</p>
+    {% if overview.risk_rows or overview.declining_rows %}
+    {% if overview.declining_rows %}
+    <h3 class="stats-risk__subhead">Ученики со снижением нагрузки</h3>
+    <ul class="stats-risk__list">
+        {% for row in overview.declining_rows %}
+        <li>
+            {{ student_full_name(row.student) }} —
+            <span class="stats-flag">нагрузка −{{ row.decline_percent }}%</span>
+            {{ hours_label(row.hours_recent) }} за 2 недели против
+            {{ hours_label(row.hours_prev) }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
     {% if overview.risk_rows %}
+    <h3 class="stats-risk__subhead">Больше 14 дней без занятий</h3>
     <ul class="stats-risk__list">
         {% for row in overview.risk_rows %}
         <li>
@@ -92,6 +209,7 @@
         </li>
         {% endfor %}
     </ul>
+    {% endif %}
     {% else %}
     <p class="stats-risk__ok">Все активные ученики посещают занятия регулярно!</p>
     {% endif %}

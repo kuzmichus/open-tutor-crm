@@ -1,0 +1,36 @@
+{# Период статистики: чипы пресетов и форма произвольного диапазона.
+
+   Общий партиал вкладок «Обзор» и «Новые и пробные»: раньше разметка
+   периода дублировалась, и правки расходились. `tab` и `period` приходят
+   из контекста вкладки; на «Обзоре» открытый прогноз сохраняется скрытым
+   полем, чтобы смена периода его не закрывала. #}
+<div class="stats-period">
+    <span class="stats-period__caption">Период</span>
+    <nav class="tabs" aria-label="Период статистики">
+        <a class="tab{% if period.key == 'all' %} tab--active{% endif %}"
+           href="/tutor/stats?tab={{ tab }}&period=all">Всё время</a>
+        <a class="tab{% if period.key == 'today' %} tab--active{% endif %}"
+           href="/tutor/stats?tab={{ tab }}&period=today">Сегодня</a>
+        <a class="tab{% if period.key == '7d' %} tab--active{% endif %}"
+           href="/tutor/stats?tab={{ tab }}&period=7d">7 дней</a>
+        <a class="tab{% if period.key == '30d' %} tab--active{% endif %}"
+           href="/tutor/stats?tab={{ tab }}&period=30d">30 дней</a>
+    </nav>
+    <form class="stats-period__custom" method="get" action="/tutor/stats">
+        <input type="hidden" name="tab" value="{{ tab }}">
+        <input type="hidden" name="period" value="custom">
+        {% if tab == 'overview' %}
+        <input type="hidden" name="forecast" value="1">
+        {% endif %}
+        <label class="sr-only" for="stats-date-from">С даты</label>
+        <input class="input" id="stats-date-from" type="date" name="date_from"
+               value="{{ period.date_from_input }}">
+        <label class="sr-only" for="stats-date-to">По дату</label>
+        <input class="input" id="stats-date-to" type="date" name="date_to"
+               value="{{ period.date_to_input }}">
+        <button class="btn btn--outline btn--sm" type="submit">
+            <i data-lucide="calendar" aria-hidden="true"></i>
+            Период
+        </button>
+    </form>
+</div>

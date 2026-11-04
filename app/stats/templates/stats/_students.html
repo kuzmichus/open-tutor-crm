@@ -34,16 +34,24 @@
             <input type="checkbox" name="no_future" value="1"{% if filters.no_future %} checked{% endif %}>
             Без будущих занятий
         </label>
+        <label class="sr-only" for="stats-sort">Сортировка</label>
+        <select class="input" id="stats-sort" name="sort">
+            <option value="date"{% if filters.sort != 'hours' %} selected{% endif %}>По дате занятия</option>
+            <option value="hours"{% if filters.sort == 'hours' %} selected{% endif %}>По часам в неделю</option>
+        </select>
         <button class="btn btn--outline btn--sm" type="submit">Применить</button>
     </form>
 
     <p class="stats-hint">«Занятий/нед» — среднее по проведённым обычным занятиям за
         последние 4 недели (индивидуальные и групповые, где ученик был участником;
-        пробные не считаются). «Активен» — у ученика было проведённое обычное занятие
-        за последние 14 дней. «Отвалился» — занимался, но последнее занятие было больше
-        14 дней назад, впереди ничего не запланировано, а статус карточки не менялся —
-        тихо перестали ходить. «Ушёл» — уход отмечен статусом «В архиве». Список
-        отсортирован по дате последнего занятия. «Без будущих занятий» — не ушедшие
+        пробные не считаются). «Часов/нед» — астрономическое время с учеником за те же
+        4 недели: 45 минут — это 0,75 часа. «Активен» — у ученика было проведённое
+        обычное занятие за последние 14 дней. «Отвалился» — занимался, но последнее
+        занятие было больше 14 дней назад, впереди ничего не запланировано, а статус
+        карточки не менялся — тихо перестали ходить. «Ушёл» — уход отмечен статусом
+        «В архиве». Список по умолчанию отсортирован по дате последнего занятия; режим
+        «По часам в неделю» ставит самых «тяжёлых» по времени учеников сверху — так
+        открывается список из карточки «Активных». «Без будущих занятий» — не ушедшие
         ученики, у которых впереди нет ни одного запланированного занятия.</p>
 
     {% if rows %}
@@ -58,6 +66,7 @@
                     <th class="stats-table__th" scope="col">Цена занятия</th>
                     <th class="stats-table__th" scope="col">Баланс</th>
                     <th class="stats-table__th stats-table__th--num" scope="col">Занятий/нед</th>
+                    <th class="stats-table__th stats-table__th--num" scope="col">Часов/нед</th>
                     <th class="stats-table__th" scope="col">Последнее</th>
                     <th class="stats-table__th" scope="col">Следующее</th>
                     <th class="stats-table__th" scope="col">Email</th>
@@ -86,6 +95,7 @@
                         </span>
                     </td>
                     <td class="stats-table__cell stats-table__cell--num">{{ week_rate_label(row.week_count) }}</td>
+                    <td class="stats-table__cell stats-table__cell--num">{{ hours_label(row.hours_week) }}</td>
                     <td class="stats-table__cell">
                         {% if row.last_lesson_at %}{{ short_date_label(row.last_lesson_at, tutor) }}{% else %}—{% endif %}
                     </td>
