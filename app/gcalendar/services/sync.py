@@ -118,6 +118,36 @@ def sync_lessons(db: Session, tutor, lessons: list[Lesson]) -> list[str]:
     """Синхронизирует пачку уроков (серия); исходы по каждому."""
     return [sync_lesson(db, tutor, lesson) for lesson in lessons]
 
+def resync_tutor_events(db: Session, tutor) -> tuple[int, int, int]:
+    """Приводит события уже выгруженных уроков репетитора к состоянию БД.
+
+    Нужна после смены часового пояса: настенное время урока не изменилось,
+    но `starts_at` в UTC пересчитан, поэтому тело события стало другим и
+    Google должен получить PATCH. Обходятся только уроки, у которых уже
+    есть строка `calendar_events`: новых событий не создаётся — это забота
+    первичной выгрузки и сверки. Прошедшие уроки обновляются наравне с
+    будущими: событие осталось в календаре, и старое время в нём неверно.
+
+    Возвращает `(обновлено, без изменений, ошибок)` для лога вызывающей
+    стороны. Без подключённого календаря — нули и ни одного запроса к API.
+    """
+    if not enabled(db, tutor.id):
+        return 0, 0, 0
+
+    updated = skipped = failed = 0
+    for row in mapping.event_ids_of_tutor(db, tutor.id).values():
+        lesson = db.get(Lesson, row.lesson_id)
+        if lesson is None:  # строка соответствия уходит каскадом вместе с уроком
+            continue
+        outcome = sync_lesson(db, tutor, lesson)
+        if outcome == OUTCOME_UPDATED:
+            updated += 1
+        elif outcome == OUTCOME_FAILED:
+            failed += 1
+        else:
+            skipped += 1
+    return updated, skipped, failed
+
 def delete_lesson_event(db: Session, tutor, lesson: Lesson) -> bool:
     """Удаляет событие урока в Google.
 

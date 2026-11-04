@@ -712,3 +712,152 @@ def test_foreign_lesson_is_not_synced(
 
     assert response.status_code == 404
     assert calls == []
+
+# ---------------------------------------------------------------------------
+# Смена часового пояса: события обновляются после сохранения профиля
+# ---------------------------------------------------------------------------
+
+def _calendar_form(timezone):
+    """Поля вкладки «Календарь»: без них форма профиля не сохранится."""
+    return {
+        "timezone": timezone,
+        "quarter1_end": "10-25",
+        "quarter2_end": "12-25",
+        "quarter3_end": "03-20",
+        "quarter4_end": "05-25",
+        "workday_start": "09:00",
+        "workday_end": "18:00",
+        "default_lesson_duration": "60",
+        "default_lesson_price": "1500",
+    }
+
+def _set_timezone(tutor_id, timezone):
+    with SessionLocal() as db:
+        db.get(Tutor, tutor_id).timezone = timezone
+        db.commit()
+
+def test_timezone_change_patches_event_with_new_zone(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+):
+    """Смена зоны сохраняет настенное время, но шлёт PATCH с новой зоной.
+
+    Урок хранится как 07:00 UTC (10:00 MSK). После смены зоны на
+    UTC+07 он становится 03:00 UTC, настенное время остаётся 10:00, а
+    `timeZone` в событии меняется — поэтому тело события другое и
+    Google получает PATCH, а не «не изменилось».
+    """
+    _configure(monkeypatch)
+    calls = []
+    _patch_api(monkeypatch, calls, insert_id="event-zone-1")
+    _register_and_login(client, "sync-zone@example.com")
+    tutor_id = _tutor_by_email("sync-zone@example.com")
+    _set_timezone(tutor_id, "Europe/Moscow")
+    _connect(tutor_id)
+    lesson_id = lesson_factory(
+        student_id=student_factory(tutor_id=tutor_id),
+        status="planned",
+        starts_at=datetime(2027, 3, 10, 7, 0, tzinfo=UTC),
+    )
+    with SessionLocal() as db:
+        sync_lesson(db, db.get(Tutor, tutor_id), db.get(Lesson, lesson_id))
+    assert calls[0]["data"]["start"]["timeZone"] == "Europe/Moscow"
+    assert calls[0]["data"]["start"]["dateTime"] == "2027-03-10T10:00:00"
+    calls.clear()
+
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_form("Asia/Krasnoyarsk"),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert [call["method"] for call in calls] == ["PATCH"]
+    assert "/events/event-zone-1" in calls[0]["url"]
+    assert calls[0]["data"]["start"]["timeZone"] == "Asia/Krasnoyarsk"
+    # Настенное время не изменилось — сдвинулось только UTC.
+    assert calls[0]["data"]["start"]["dateTime"] == "2027-03-10T10:00:00"
+    with SessionLocal() as db:
+        assert db.get(Lesson, lesson_id).starts_at.replace(tzinfo=UTC) == datetime(
+            2027, 3, 10, 3, 0, tzinfo=UTC
+        )
+
+def test_timezone_change_patches_past_lesson_event(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+):
+    """Прошедший урок тоже обновляется: его событие осталось в календаре."""
+    _configure(monkeypatch)
+    calls = []
+    _patch_api(monkeypatch, calls, insert_id="event-past-1")
+    _register_and_login(client, "sync-zone-past@example.com")
+    tutor_id = _tutor_by_email("sync-zone-past@example.com")
+    _set_timezone(tutor_id, "Europe/Moscow")
+    _connect(tutor_id)
+    lesson_id = lesson_factory(
+        student_id=student_factory(tutor_id=tutor_id),
+        status="completed",
+        starts_at=datetime(2020, 3, 10, 7, 0, tzinfo=UTC),
+    )
+    with SessionLocal() as db:
+        sync_lesson(db, db.get(Tutor, tutor_id), db.get(Lesson, lesson_id))
+    calls.clear()
+
+    client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_form("Asia/Krasnoyarsk"),
+        follow_redirects=False,
+    )
+
+    assert [call["method"] for call in calls] == ["PATCH"]
+
+def test_timezone_change_makes_no_requests_when_sync_disabled(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+):
+    """Флаг GOOGLE_CALENDAR_SYNC=false: смена зоны не ходит в Google."""
+    _configure(monkeypatch, sync=False)
+    calls = []
+    _patch_api(monkeypatch, calls, insert_id="event-disabled-1")
+    _register_and_login(client, "sync-zone-off@example.com")
+    tutor_id = _tutor_by_email("sync-zone-off@example.com")
+    _set_timezone(tutor_id, "Europe/Moscow")
+    _connect(tutor_id)
+    lesson_factory(
+        student_id=student_factory(tutor_id=tutor_id), status="planned"
+    )
+
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_form("Asia/Krasnoyarsk"),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert calls == []
+
+def test_timezone_change_survives_google_error(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+):
+    """Ошибка Google не отменяет сохранение профиля и пересчёт расписания."""
+    _configure(monkeypatch)
+    _patch_api(monkeypatch, [], error=urllib.error.URLError("нет сети"))
+    _register_and_login(client, "sync-zone-err@example.com")
+    tutor_id = _tutor_by_email("sync-zone-err@example.com")
+    _set_timezone(tutor_id, "Europe/Moscow")
+    _connect(tutor_id)
+    lesson_id = lesson_factory(
+        student_id=student_factory(tutor_id=tutor_id),
+        status="planned",
+        starts_at=datetime(2027, 3, 10, 7, 0, tzinfo=UTC),
+    )
+
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_form("Asia/Krasnoyarsk"),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    with SessionLocal() as db:
+        assert db.get(Tutor, tutor_id).timezone == "Asia/Krasnoyarsk"
+        assert db.get(Lesson, lesson_id).starts_at.replace(tzinfo=UTC) == datetime(
+            2027, 3, 10, 3, 0, tzinfo=UTC
+        )
