@@ -32,6 +32,11 @@ QUARTER_DEFAULTS = ("10-25", "12-25", "03-20", "05-25")
 DEFAULT_LESSON_DURATION = 60
 DEFAULT_LOW_BALANCE_THRESHOLD = 0
 
+# Верхняя граница «Желаемой нагрузки в неделю» (астрономические часы):
+# 168 — число часов в неделе. Значение — ориентир комфортной занятости,
+# верх заглушает ошибки ввода (нагрузка больше недели невозможна).
+WEEKLY_LOAD_MAX_HOURS = 168
+
 # Показывать ли стоимость занятий на карточках календаря. По умолчанию
 # включено: до появления флага цены на карточках были видны всегда.
 DEFAULT_SHOW_CALENDAR_PRICE = True
@@ -57,6 +62,7 @@ DEFAULTS = {
     "low_balance_threshold": DEFAULT_LOW_BALANCE_THRESHOLD,
     "default_lesson_duration": DEFAULT_LESSON_DURATION,
     "default_lesson_price": None,
+    "weekly_load_hours": None,
     "quarter1_end": QUARTER_DEFAULTS[0],
     "quarter2_end": QUARTER_DEFAULTS[1],
     "quarter3_end": QUARTER_DEFAULTS[2],
@@ -165,6 +171,13 @@ class TutorSettings(Base):
     default_lesson_price: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )
+
+    # «Желаемая нагрузка в неделю» — число рабочих астрономических часов
+    # (60 минут) для комфортной работы, целое, 1..168 (см.
+    # WEEKLY_LOAD_MAX_HOURS). nullable=True: до первого сохранения параметр
+    # не задан (NULL), отдельный флаг «включено» не нужен. Значение пока
+    # нигде не участвует в расчётах — это заявка на комфортную занятость.
+    weekly_load_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Учебный год: даты окончания четвертей, строки «ММ-ДД».
     quarter1_end: Mapped[str] = mapped_column(
