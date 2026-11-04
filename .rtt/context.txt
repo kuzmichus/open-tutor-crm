@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-03 01:38 | 616 files | 175264 tokens
+# rtt index | generated 2026-11-04 21:36 | 650 files | 190130 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -33,6 +33,16 @@ def _shift(bind, zone: ZoneInfo, *, to_utc: bool) -> None  # Построчны�
 def upgrade() -> None  # Сдвиг данных в UTC и заполнение часов пояса репетиторов.
 def downgrade() -> None  # Обратный перевод в настенное время зоны-источника и сброс зоны.
 
+# alembic/versions/55b9846687b4_add_student_city.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
+# alembic/versions/5b38b6d8c1a1_add_tutor_weekly_load.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
 # alembic/versions/6220456610f7_add_lessons.py [python]
 imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def upgrade() -> None  # Upgrade schema.
@@ -63,9 +73,19 @@ imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
 
+# alembic/versions/7ce02b7b728c_add_file_uploads.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
 # alembic/versions/8f92cc9baa31_add_tasks.py [python]
 imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def _has_table(bind, name: str) -> bool  # True, если таблица уже есть (create_all мог создать её до миграции).
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
+# alembic/versions/a7d3e1f42b90_add_calendar_show_price.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
 
@@ -454,7 +474,7 @@ class ChildFinance
 def finance_overview(db: Session, contact_id: str) -> tuple[list[ChildFinance], int]  # Блоки по детям и общий итог (сумма балансов), в порядке навигации.
 
 # app/cabinet/services/child_homework.py [python]
-imports: dataclasses.dataclass, datetime.datetime, sqlalchemy.select, sqlalchemy.orm.Session, app.group.models.group_member.GroupMember, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson
+imports: dataclasses.dataclass, dataclasses.field, datetime.datetime, sqlalchemy.select, sqlalchemy.orm.Session, app.files.services.presentation.file_size_label, app.files.services.removal.files_of_homeworks, app.group.models.group_member.GroupMember, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson
 class ChildHomeworkCard
 def child_homework(db: Session, student_id: str) -> list[ChildHomeworkCard]  # Домашние задания ребёнка, свежие сверху, не больше `HOMEWORK_LIMIT`.
 
@@ -490,7 +510,8 @@ def set_contact_cookie(response: Response, token: str) -> None  # Выставл
 def clear_contact_cookie(response: Response) -> None  # Удаляет cookie кабинета родителя (выход).
 
 # app/cabinet/services/homework.py [python]
-imports: dataclasses.dataclass, dataclasses.field, sqlalchemy.select, sqlalchemy.orm.Session, app.group.models.group_member.GroupMember, app.homework.models.answer.HomeworkAnswer, app.homework.models.answer_link.HomeworkAnswerLink, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson
+imports: dataclasses.dataclass, dataclasses.field, sqlalchemy.select, sqlalchemy.orm.Session, app.files.services.presentation.file_size_label, app.files.services.removal.files_of_homeworks, app.group.models.group_member.GroupMember, app.homework.models.answer.HomeworkAnswer, app.homework.models.answer_link.HomeworkAnswerLink, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson
+def _file_rows(files) -> list[dict]  # Строки списка файлов: id, имя, подпись размера, адрес скачивания.
 class HomeworkCard
 def _visible_rows(db: Session, student_id: str) -> list[tuple[Homework, Lesson]]  # Пары (ДЗ, урок) ученика: индивидуальные и групповые уроки.
 def _answers_map(
@@ -500,7 +521,7 @@ def _links_map(db: Session, answer_ids: list[str]) -> dict[str, list[str]]  # С
 def _assemble(
     db: Session,
     rows: list[tuple[Homework, Lesson]],
-) -> list[HomeworkCard]  # Карточки списка: добирает ответы и ссылки двумя массовыми SELECT.
+) -> list[HomeworkCard]  # Карточки списка: добирает ответы, ссылки и файлы массовыми SELECT.
 def student_homework(db: Session, student_id: str) -> list[HomeworkCard]  # Список «Домашних заданий» ученика — карточки для страницы кабинета.
 def homework_card(
     db: Session, homework: Homework, lesson: Lesson
@@ -729,11 +750,12 @@ def build_event_view(
     columns: int = 1,
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
+    show_price: bool = True,
     grid_start_min: int = DEFAULT_GRID_START_MIN,
     grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> dict  # Словарь одного блока события для шаблона — урока или окна.
 def _lesson_fields(
-    event: ScheduleEvent, *, now: datetime, color_mode: str
+    event: ScheduleEvent, *, now: datetime, color_mode: str, show_price: bool = True
 ) -> dict  # Поля карточки урока: цель, цена, акцент и признаки состояния.
 def _slot_fields(event: ScheduleEvent) -> dict  # Поля карточки окна: подпись состояния, приглушение, акцент токена.
 def is_overdue(event: ScheduleEvent, *, now: datetime) -> bool  # Запланированный урок, время которого уже прошло (design.md D5).
@@ -743,6 +765,7 @@ def build_day_view(
     *,
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
+    show_price: bool = True,
     grid_start_min: int = DEFAULT_GRID_START_MIN,
     grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> dict  # Словарь одного столбца сетки: шапка дня и его события.
@@ -752,6 +775,7 @@ def build_calendar_context(
     now: datetime,
     tutor=None,
     color_mode: str = DEFAULT_COLOR_MODE,
+    show_price: bool = True,
     grid_start_min: int = DEFAULT_GRID_START_MIN,
     grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> dict  # Полный контекст шаблона календаря по семи дням недели.
@@ -760,6 +784,7 @@ def layout_events(
     *,
     now: datetime,
     color_mode: str = DEFAULT_COLOR_MODE,
+    show_price: bool = True,
     grid_start_min: int = DEFAULT_GRID_START_MIN,
     grid_end_min: int = DEFAULT_GRID_END_MIN,
 ) -> list[dict]  # Блоки дня с колонками наложения для пересекающихся уроков.
@@ -781,11 +806,12 @@ class ScheduleEvent
         target_id: str,
         target_color: str,
         tutor,
+        price: int | None = None,
     ) -> "ScheduleEvent"  # Событие из строки БД: цель, цена, цвет и статус урока (D2).
   def from_slot(cls, slot, *, slot_state: str, tutor) -> "ScheduleEvent"  # Событие-окно: интервал, состояние занятости и id для диалога.
 
 # app/calendar/services/week.py [python]
-imports: datetime.date, datetime.datetime, datetime.timedelta, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.calendar.services.week_lesson.WeekLesson, app.common.colors.DEFAULT_TARGET_COLOR, app.common.services.tutor_time.local_week_bounds, app.group.models.group.Group, app.lesson.models.lesson.Lesson, app.student.models.student.Student
+imports: datetime.date, datetime.datetime, datetime.timedelta, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.calendar.services.week_lesson.WeekLesson, app.common.colors.DEFAULT_TARGET_COLOR, app.common.services.tutor_time.local_week_bounds, app.finance.services.charges.group_totals, app.group.models.group.Group, app.lesson.models.lesson.Lesson, app.student.models.student.Student
 def week_start(value: date | str) -> date  # Понедельник недели, содержащей `value` (строка — дата в формате ISO).
 def week_bounds(monday: date, tutor) -> tuple[datetime, datetime]  # Границы окна недели как aware UTC: пн 00:00 — следующий пн 00:00.
 def _target_name(first_name: str | None, last_name: str | None) -> str  # Имя ученика для карточки: «Иван И.» — имя и первая буква фамилии.
@@ -802,10 +828,13 @@ imports: dataclasses.dataclass, app.lesson.models.lesson.Lesson
 class WeekLesson
 
 # app/calendar/views/__init__.py [python]
-imports: fastapi.APIRouter, app.calendar.views.index
+imports: fastapi.APIRouter, app.calendar.views.index, app.calendar.views.show_price
 
 # app/calendar/views/index.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.calendar.services.color_mode.parse_color_mode, app.calendar.services.week.week_start, app.calendar.services.presentation.build_calendar_context, app.calendar.services.presentation.clock_to_minutes, app.calendar.services.week_days.build_week_days, app.common.access.require_tutor_id, app.common.services.tutor_time.now_local, app.common.services.tutor_time.today_local, app.common.services.tutor_time.tutor_zone_name, app.common.responses.is_htmx, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.settings.get_settings
+def week_response(
+    request: Request, db: Session, tutor, tutor_id: str, start: str | None, color: str | None
+)  # Ответ недели: полная страница или HTMX-фрагмент области календаря.
 def calendar(
     request: Request,
     start: str | None = None,
@@ -813,6 +842,17 @@ def calendar(
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 )  # Календарь недели; `?start=` — любая дата недели, нормализуется к пн.
+
+# app/calendar/views/show_price.py [python]
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, sqlalchemy.orm.Session, app.calendar.services.week.week_start, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.common.responses.saved_response, app.common.services.tutor_time.today_local, app.database.get_db, app.tutor.models.tutor.Tutor, app.tutor.services.settings.save_settings
+def _redirect_url(tutor: Tutor, start: str | None) -> str  # Адрес календаря на той неделе, где переключили флаг.
+def calendar_show_price(
+    request: Request,
+    show_price: str = Form(""),
+    start: str = Form(""),
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+)  # Сохраняет флаг «Показывать цену» и возвращает событие обновления.
 
 # app/common/__init__.py [python]
 
@@ -884,7 +924,7 @@ class RevalidatingStaticFiles(StaticFiles)
   def file_response(self, full_path, stat_result, scope, status_code=200)
 
 # app/common/views/__init__.py [python]
-imports: fastapi.APIRouter, app.common.views.clock, app.common.views.health, app.common.views.index
+imports: fastapi.APIRouter, app.common.views.clock, app.common.views.favicon, app.common.views.health, app.common.views.index
 
 # app/common/views/clock.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.services.tutor_time.now_utc, app.common.services.tutor_time.to_local, app.database.get_db, app.tutor.models.tutor.Tutor, app.tutor.services.sessions.SessionService
@@ -892,6 +932,10 @@ def _tutor_from_request(request: Request, db: Session) -> Tutor | None  # Кар
 def clock_fragment(
     request: Request, db: Session = Depends(get_db)
 ) -> HTMLResponse  # Отдаёт текущую дату/время в зоне педагога для `#clock` через htmx.
+
+# app/common/views/favicon.py [python]
+imports: pathlib.Path, fastapi.APIRouter, fastapi.responses.FileResponse
+def favicon() -> FileResponse  # Иконка сайта для запросов по корневому адресу.
 
 # app/common/views/health.py [python]
 imports: fastapi.APIRouter
@@ -906,8 +950,11 @@ imports: fastapi.Request, fastapi.responses.HTMLResponse, app.templating.templat
 def not_found(request: Request, exc: Exception) -> HTMLResponse  # Обработчик 404 для всего приложения (регистрируется в main.py).
 
 # app/config.py [python]
-imports: pydantic_settings.BaseSettings, pydantic_settings.SettingsConfigDict
+imports: typing.Literal, pydantic.model_validator, pydantic_settings.BaseSettings, pydantic_settings.SettingsConfigDict
 class Settings(BaseSettings)
+  def _check_files_settings(self) -> "Settings"  # Неполная конфигурация S3 — ошибка старта, а не падение на загрузке.
+  def allowed_extensions(self) -> tuple[str, ...]  # Разрешённые расширения без точки, в нижнем регистре.
+  def max_file_bytes(self) -> int  # Лимит размера файла в байтах (из мегабайт в env).
 
 # app/database.py [python]
 imports: collections.abc.Generator, sqlalchemy.create_engine, sqlalchemy.event, sqlalchemy.engine.Engine, sqlalchemy.orm.DeclarativeBase, sqlalchemy.orm.Session, sqlalchemy.orm.sessionmaker, sqlalchemy.pool.StaticPool, app.config.settings
@@ -915,8 +962,170 @@ def _enable_sqlite_foreign_keys(dbapi_connection, connection_record) -> None  # 
 def _connect_args(url: str) -> dict
 def _pool_class(url: str)
 class Base(DeclarativeBase)
-def init_db() -> None  # Создаёт таблицы, если их ещё нет (удобно для локальной разработки).
 def get_db() -> Generator[Session, None, None]  # FastAPI-зависимость: сессия на время запроса.
+
+# app/files/__init__.py [python]
+
+# app/files/models/__init__.py [python]
+
+# app/files/models/homework_file.py [python]
+imports: uuid.uuid4, sqlalchemy.ForeignKey, sqlalchemy.Integer, sqlalchemy.String, sqlalchemy.UniqueConstraint, sqlalchemy.orm.Mapped, sqlalchemy.orm.mapped_column, app.database.Base
+class HomeworkFile(Base)
+  def __repr__(self) -> str
+
+# app/files/models/stored_file.py [python]
+imports: datetime.UTC, datetime.datetime, uuid.uuid4, sqlalchemy.CheckConstraint, sqlalchemy.DateTime, sqlalchemy.ForeignKey, sqlalchemy.Integer, sqlalchemy.String, sqlalchemy.orm.Mapped, sqlalchemy.orm.mapped_column, app.common.constraints.sql_string_in, app.database.Base
+class StoredFile(Base)
+  def __repr__(self) -> str
+
+# app/files/services/__init__.py [python]
+
+# app/files/services/access.py [python]
+imports: fastapi.HTTPException, fastapi.Request, fastapi.status, sqlalchemy.select, sqlalchemy.orm.Session, app.cabinet.services.contact_sessions.get_contact_id_from_request, app.cabinet.services.sessions.get_student_id_from_request, app.files.models.homework_file.HomeworkFile, app.files.models.stored_file.StoredFile, app.group.models.group_member.GroupMember, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.student.models.student_contact.StudentContact, app.tutor.services.sessions.SessionService
+def _not_found() -> HTTPException  # Чужой и несуществующий файл отвечают одинаково.
+def _file_homework_ids(db: Session, file_id: str) -> list[str]  # ДЗ, к которым привязан файл (обычно одно, но связь не уникальна).
+def _student_can_read(db: Session, file_id: str, student_id: str) -> bool  # Файл привязан к ДЗ урока этого ученика (личного или группового).
+def _contact_can_read(db: Session, file_id: str, contact_id: str) -> bool  # Файл привязан к ДЗ урока ребёнка, привязанного к этому контакту.
+def resolve_downloadable_file(
+    db: Session, file_id: str, request: Request
+) -> StoredFile  # Файл, доступный текущему актору; иначе 404.
+
+# app/files/services/attach.py [python]
+imports: logging, sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.files.models.homework_file.HomeworkFile, app.files.models.stored_file.StoredFile, app.files.services.storage.Storage, app.files.services.storage_factory.storage_for_backend, app.files.services.upload.save_upload
+def _next_position(db: Session, homework_id: str) -> int  # Следующий номер в списке файлов ДЗ: после последнего прикреплённого.
+def _discard(files: list[StoredFile], storage: Storage | None) -> None  # Убирает объекты неудавшейся пачки: строки откатит транзакция.
+def attach_files(
+    db: Session,
+    tutor_id: str,
+    homework_id: str,
+    uploads: list,
+    storage: Storage | None = None,
+) -> tuple[list[StoredFile], list[str]]  # Сохраняет пачку файлов и привязывает их к ДЗ.
+
+# app/files/services/presentation.py [python]
+def file_size_label(size: int | None) -> str  # Размер файла: «512 Б», «12,4 КБ», «3,1 МБ».
+def file_download_name(name: str) -> str  # Имя для показа в списке: как есть, но пустое имя — «Файл».
+def register_template_helpers() -> None  # Регистрирует функции отображения в общем Jinja-окружении.
+
+# app/files/services/removal.py [python]
+imports: logging, sqlalchemy.select, sqlalchemy.orm.Session, app.files.models.homework_file.HomeworkFile, app.files.models.stored_file.StoredFile, app.files.services.storage.Storage, app.files.services.storage_factory.storage_for_backend, app.homework.models.homework.Homework
+def _storage(file: StoredFile, storage: Storage | None) -> Storage  # Хранилище файла: явное (тесты) либо записанное в метаданных.
+def _delete_object(file: StoredFile, storage: Storage | None) -> None  # Удаляет объект; отсутствующий объект — не ошибка.
+def delete_file(
+    db: Session,
+    file: StoredFile,
+    storage: Storage | None = None,
+) -> None  # Удаляет объект и строку; коммита не делает (его держит вызывающий).
+def delete_files(
+    db: Session,
+    files: list[StoredFile],
+    storage: Storage | None = None,
+) -> None  # Удаляет пачку файлов; коммита не делает.
+def files_of_homework(db: Session, homework_id: str) -> list[StoredFile]  # Файлы одного ДЗ в порядке прикрепления.
+def files_of_homeworks(
+    db: Session, homework_ids: list[str]
+) -> dict[str, list[StoredFile]]  # Файлы пачки ДЗ одним SELECT, сгруппированные по ДЗ (без N+1).
+def delete_homework_files(
+    db: Session,
+    lesson_ids: list[str],
+    storage: Storage | None = None,
+) -> int  # Удаляет объекты и метаданные файлов ДЗ уроков перед их удалением.
+
+# app/files/services/storage.py [python]
+imports: abc.ABC, abc.abstractmethod, pathlib.Path
+class Storage(ABC)
+  def save(self, key: str, data: bytes, content_type: str) -> None  # Записывает объект по ключу; существующий объект заменяется.
+  def open(self, key: str) -> bytes  # Читает объект целиком; нет объекта — исключение хранилища.
+  def delete(self, key: str) -> None  # Удаляет объект; отсутствующий объект — не ошибка.
+  def exists(self, key: str) -> bool  # Есть ли объект по ключу.
+  def download_url(
+        self, key: str, filename: str, content_type: str
+    ) -> str | None  # Временная ссылка на скачивание либо None — отдаёт приложение.
+  def local_path(self, key: str) -> Path | None  # Путь к файлу на диске либо None — объект не на локальном диске.
+
+# app/files/services/storage_factory.py [python]
+imports: functools.lru_cache, app.config.settings, app.files.services.storage.Storage, app.files.services.storage_local.LocalStorage, app.files.services.storage_s3.S3Storage
+def storage_for_backend(backend: str) -> Storage  # Хранилище конкретного бэкенда по текущим настройкам.
+def get_storage() -> Storage  # Хранилище по текущей конфигурации: `local` или `s3`.
+
+# app/files/services/storage_local.py [python]
+imports: os, pathlib.Path, uuid.uuid4, app.files.services.storage.Storage
+class LocalStorage(Storage)
+  def __init__(self, root: str | Path) -> None
+  def _path(self, key: str) -> Path  # Путь объекта; ключ вне корня — `ValueError`.
+  def save(self, key: str, data: bytes, content_type: str) -> None  # Пишет объект через временный файл и атомарную замену.
+  def open(self, key: str) -> bytes  # Читает объект целиком; нет файла — `FileNotFoundError`.
+  def delete(self, key: str) -> None  # Удаляет объект; отсутствующий файл — не ошибка.
+  def exists(self, key: str) -> bool  # Есть ли файл по ключу.
+  def download_url(
+        self, key: str, filename: str, content_type: str
+    ) -> str | None  # None: локальный файл отдаёт приложение с проверкой сессии.
+  def local_path(self, key: str) -> Path  # Путь на диске — его отдаёт `FileResponse` вьюхи скачивания.
+
+# app/files/services/storage_s3.py [python]
+imports: collections.abc.Callable, pathlib.Path, typing.Any, app.files.services.storage.Storage
+class S3Storage(Storage)
+  def __init__(
+        self,
+        bucket: str,
+        *,
+        prefix: str = "",
+        presign_ttl_seconds: int = 900,
+        client_factory: Callable[[], Any] | None = None,
+        region: str = "us-east-1",
+        endpoint_url: str = "",
+        access_key_id: str = "",
+        secret_access_key: str = "",
+    ) -> None
+  def client(self) -> Any  # Клиент S3; собирается лениво — импорт boto3 не тянет сеть.
+  def _build_client(self) -> Any  # Стандартный клиент boto3 по параметрам конфигурации.
+  def _object_key(self, key: str) -> str  # Ключ объекта в бакете: префикс + ключ приложения.
+  def save(self, key: str, data: bytes, content_type: str) -> None  # Кладёт объект в бакет; существующий объект заменяется.
+  def open(self, key: str) -> bytes  # Читает объект целиком; нет объекта — ошибка клиента S3.
+  def delete(self, key: str) -> None  # Удаляет объект; отсутствующий объект в S3 — не ошибка.
+  def exists(self, key: str) -> bool  # Есть ли объект по ключу (запрос `head_object`).
+  def download_url(
+        self, key: str, filename: str, content_type: str
+    ) -> str | None  # Presigned URL на скачивание вложением под исходным именем.
+  def local_path(self, key: str) -> Path | None  # None: объект не на локальном диске — отдаётся по ссылке.
+
+# app/files/services/upload.py [python]
+imports: collections.abc.Awaitable, collections.abc.Callable, pathlib.Path, uuid.uuid4, sqlalchemy.orm.Session, app.config.settings, app.files.models.stored_file.MAX_ORIGINAL_NAME_LENGTH, app.files.models.stored_file.StoredFile, app.files.services.storage.Storage
+def extension_of(filename: str) -> str  # Расширение файла без точки в нижнем регистре; нет расширения — ''.
+def content_type_for(filename: str, declared: str | None) -> str  # Тип содержимого: по расширению, если браузер прислал общий тип.
+def validate_upload(
+    filename: str,
+    size: int,
+    *,
+    allowed: tuple[str, ...] | None = None,
+    max_bytes: int | None = None,
+) -> list[str]  # Ошибки загружаемого файла: имя, расширение, размер.
+def build_key(tutor_id: str, filename: str) -> str  # Ключ объекта: `<tutor_id>/<32 hex><ext>` — без имени пользователя.
+def original_name(filename: str) -> str  # Исходное имя файла для метаданных: только базовое имя и лимит длины.
+def read_limited(
+    upload,
+    *,
+    max_bytes: int,
+    read: Callable[[int], Awaitable[bytes]] | None = None,
+) -> bytes | None  # Читает тело файла чанками; None — файл больше лимита.
+def save_upload(
+    db: Session,
+    tutor_id: str,
+    upload,
+    storage: Storage | None = None,
+) -> tuple[StoredFile | None, list[str]]  # Сохраняет один файл: объект в хранилище и строку метаданных.
+def _default_storage() -> Storage  # Хранилище по конфигурации; импорт внутри — разрыв цикла модулей.
+
+# app/files/views/__init__.py [python]
+imports: fastapi.APIRouter, app.files.views.download
+
+# app/files/views/download.py [python]
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.FileResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.database.get_db, app.files.services.access.resolve_downloadable_file, app.files.services.storage_factory.storage_for_backend
+def download_file(
+    file_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+)  # Отдаёт файл актору с доступом; остальным — 404.
 
 # app/finance/__init__.py [python]
 
@@ -984,8 +1193,9 @@ imports: sqlalchemy.orm.Session, app.finance.services.balance.balance, app.finan
 def card_summary_context(db: Session, student, tutor) -> dict  # Контекст сводки счёта для страницы карточки ученика.
 
 # app/finance/services/charges.py [python]
-imports: sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.AccountOperation, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.student.services.activation.activate_on_first_charge, app.tutor.services.clock.as_utc
+imports: collections.abc.Iterable, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.AccountOperation, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.student.services.activation.activate_on_first_charge, app.tutor.services.clock.as_utc
 def group_targets(db: Session, group_id: str) -> list[tuple[str, int | None]]  # Цели группового урока: пары «ученик, цена» по текущему составу.
+def group_totals(db: Session, group_ids: Iterable[str]) -> dict[str, int]  # Стоимость группового занятия по каждой группе: сумма цен участников.
 def absent_student_ids(db: Session, lesson_id: str) -> set[str]  # Ученики, отмеченные на уроке отсутствовавшими (`present = false`).
 def lesson_targets_any_status(
     db: Session, lesson: Lesson
@@ -1522,14 +1732,27 @@ class GoogleApiError(GoogleError)
 class GoogleUnauthorized(GoogleApiError)
 class GoogleReauthRequired(GoogleApiError)
 
+# app/gcalendar/services/event_color.py [python]
+imports: app.common.colors.DEFAULT_TARGET_COLOR
+def color_id(color: str | None) -> str  # colorId` события Google для цвета цели урока.
+def _normalize(color: str | None) -> str | None  # hex в нижний регистр с `#`; `None`, если значение не похоже на hex.
+def _nearest(color: str) -> str  # Ближайший цвет Google по расстоянию в CIELAB.
+def _distance(
+    left: tuple[float, float, float], right: tuple[float, float, float]
+) -> float  # Квадрат евклидова расстояния в CIELAB: корень не нужен для минимума.
+def _lab(color: str) -> tuple[float, float, float]  # sRGB hex → CIELAB (D65): перевод через линейный RGB и XYZ.
+def _linear(channel: str) -> float  # Канал 0–255 → линейная яркость по sRGB (гамма 2.4).
+def _f(value: float) -> float  # Компрессия XYZ для CIELAB (порог 6/29).
+
 # app/gcalendar/services/event_payload.py [python]
-imports: hashlib, json, datetime.timedelta, app.common.services.tutor_time.to_local, app.common.services.tutor_time.tutor_zone_name, app.lesson.models.lesson.LESSON_TYPE_LABELS
+imports: hashlib, json, datetime.timedelta, app.common.services.tutor_time.to_local, app.common.services.tutor_time.tutor_zone_name, app.gcalendar.services.event_color, app.lesson.models.lesson.LESSON_TYPE_LABELS
 def build_event(
     lesson,
     tutor,
     *,
     student_name: str | None = None,
     group_name: str | None = None,
+    target_color: str | None = None,
 ) -> dict  # Тело события Calendar API из урока.
 def content_hash(payload: dict) -> str  # sha256 тела события: одинаковый урок — одинаковый хеш.
 def _target_name(
@@ -1601,8 +1824,9 @@ imports: logging, sqlalchemy.orm.Session, app.config.settings, app.gcalendar.ser
 def enabled(db: Session, tutor_id: str) -> bool  # Синхронизация возможна: включена флагом и календарь подключён.
 def sync_lesson(db: Session, tutor, lesson: Lesson) -> str  # Создаёт или обновляет событие урока; возвращает `OUTCOME_*`.
 def sync_lessons(db: Session, tutor, lessons: list[Lesson]) -> list[str]  # Синхронизирует пачку уроков (серия); исходы по каждому.
+def resync_tutor_events(db: Session, tutor) -> tuple[int, int, int]  # Приводит события уже выгруженных уроков репетитора к состоянию БД.
 def delete_lesson_event(db: Session, tutor, lesson: Lesson) -> bool  # Удаляет событие урока в Google.
-def build_payload(db: Session, lesson: Lesson, tutor) -> dict  # Тело события из урока и имён его цели.
+def build_payload(db: Session, lesson: Lesson, tutor) -> dict  # Тело события из урока, имён его цели и цвета цели.
 def _call(db: Session, tutor_id: str, action)  # Вызов API с одним повтором после обновления access_token.
 def _handle_reauth(db: Session, tutor_id: str) -> None  # Сбрасывает подключение при отозванном доступе и пишет причину.
 def log_failure(db: Session, tutor_id: str, exc: GoogleApiError) -> None  # Пишет ошибку в лог и в карточку; исключение не пробрасывается.
@@ -1872,9 +2096,10 @@ def get_answer(db: Session, homework_id: str) -> HomeworkAnswer | None  # Отв
 def save_answer(db: Session, homework: Homework, data: dict) -> list[str]  # Создаёт (лениво) или обновляет ответ; при ошибке — rollback.
 
 # app/homework/services/homework_context.py [python]
-imports: datetime.datetime, sqlalchemy.orm.Session, app.common.services.tutor_time.to_local, app.homework.models.homework.HOMEWORK_STATUS_LABELS, app.homework.models.homework.HOMEWORK_STATUSES, app.homework.services.homework_writer.get_homework, app.lesson.models.lesson.Lesson
+imports: datetime.datetime, sqlalchemy.orm.Session, app.common.services.tutor_time.to_local, app.config.settings, app.files.services.presentation.file_size_label, app.files.services.removal.files_of_homework, app.homework.models.homework.HOMEWORK_STATUS_LABELS, app.homework.models.homework.HOMEWORK_STATUSES, app.homework.services.homework_writer.get_homework, app.lesson.models.lesson.Lesson
 def _input_datetime(value, tutor) -> str  # Значение для `input[type=datetime-local]`: «YYYY-MM-DDTHH:MM».
 def panel_values(homework, tutor) -> dict  # Значения полей панели из записи ДЗ; записи нет — дефолты панели.
+def _file_rows(db: Session, homework) -> list[dict]  # Строки списка файлов ДЗ: id, имя, размер, ссылка на скачивание.
 def homework_panel_context(
     db: Session,
     lesson: Lesson,
@@ -1894,19 +2119,39 @@ def parse_homework_form(form, tutor) -> tuple[dict, list[str]]  # Данные �
 # app/homework/services/homework_writer.py [python]
 imports: sqlalchemy.select, sqlalchemy.orm.Session, app.homework.models.homework.Homework, app.homework.services.homework_form.validate_homework_data, app.lesson.models.lesson.Lesson
 def get_homework(db: Session, lesson_id: str) -> Homework | None  # Запись ДЗ урока или None (ленивое создание — записи ещё нет).
-def save_homework(db: Session, lesson: Lesson, data: dict) -> list[str]  # Создаёт (лениво) или обновляет ДЗ урока; при ошибке — rollback.
+def save_homework(
+    db: Session,
+    lesson: Lesson,
+    data: dict,
+    *,
+    commit: bool = True,
+) -> list[str]  # Создаёт (лениво) или обновляет ДЗ урока; при ошибке — rollback.
 
 # app/homework/views/__init__.py [python]
-imports: fastapi.APIRouter, app.homework.views.save
+imports: fastapi.APIRouter, app.homework.views.delete_file, app.homework.views.save
+
+# app/homework/views/delete_file.py [python]
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.status, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.select, sqlalchemy.orm.Session, app.common.responses.is_htmx, app.database.get_db, app.files.models.homework_file.HomeworkFile, app.files.models.stored_file.StoredFile, app.files.services.removal.delete_file, app.homework.services.homework_context.homework_panel_context, app.homework.services.homework_writer.get_homework, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.templating.templates, app.tutor.models.tutor.Tutor
+def _owned_homework_file(
+    db: Session, homework_id: str, file_id: str, tutor_id: str
+) -> StoredFile  # Файл, привязанный к этому ДЗ и принадлежащий репетитору, либо 404.
+def delete_homework_file_view(
+    lesson_id: str,
+    file_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+)  # Удаляет файл ДЗ и возвращает панель без него; чужой — 404.
 
 # app/homework/views/save.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.responses.is_htmx, app.database.get_db, app.homework.services.homework_context.homework_panel_context, app.homework.services.homework_form.parse_homework_form, app.homework.services.homework_writer.save_homework, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.templating.templates, app.tutor.models.tutor.Tutor
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.responses.is_htmx, app.database.get_db, app.files.services.attach.attach_files, app.homework.services.homework_context.homework_panel_context, app.homework.services.homework_form.parse_homework_form, app.homework.services.homework_writer.get_homework, app.homework.services.homework_writer.save_homework, app.lesson.services.access.get_owned_lesson, app.lesson.services.access.require_tutor_id, app.templating.templates, app.tutor.models.tutor.Tutor
+def _uploads(form) -> list  # Выбранные файлы формы.
 def save_homework_view(
     lesson_id: str,
     request: Request,
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
-)  # Сохраняет ДЗ урока; чужой урок отвечает как несуществующий (404).
+)  # Сохраняет ДЗ урока и его файлы; чужой урок — 404.
 
 # app/lesson/__init__.py [python]
 
@@ -1973,7 +2218,7 @@ imports: sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.
 def complete_lessons(db: Session, tutor_id: str, lesson_ids: list[str]) -> int  # Переводит выбранные уроки в «Проведён»; возвращает число изменённых.
 
 # app/lesson/services/lesson_form.py [python]
-imports: json, datetime.date, datetime.datetime, datetime.time, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.forms.checked, app.common.services.forms.int_or_none, app.common.services.forms.text_value, app.common.services.tutor_time.to_local, app.common.services.tutor_time.to_utc, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.homework.services.homework_context.homework_panel_context, app.lesson.models.lesson.LESSON_DURATIONS, app.lesson.models.lesson.LESSON_STATUS_LABELS, app.lesson.models.lesson.LESSON_STATUSES, app.lesson.models.lesson.LESSON_TYPE_LABELS, app.lesson.models.lesson.MAX_LESSON_RATING, app.lesson.models.lesson.MIN_LESSON_RATING, app.lesson.models.lesson_attendance.ABSENCE_REASON_LABELS, app.lesson.models.lesson_attendance.ABSENCE_REASONS, app.lesson.models.lesson_attendance.LessonAttendance, app.lesson.services.presentation.format_lesson_datetime, app.lesson.services.presentation.format_target, app.lesson.services.presentation.format_time_span, app.lesson.services.until_presets.until_presets, app.student.models.student.Student, app.student.services.presentation.student_full_name
+imports: json, datetime.date, datetime.datetime, datetime.time, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.forms.checked, app.common.services.forms.int_or_none, app.common.services.forms.text_value, app.common.services.tutor_time.to_local, app.common.services.tutor_time.to_utc, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.homework.services.homework_context.homework_panel_context, app.lesson.models.lesson.LESSON_DURATIONS, app.lesson.models.lesson.LESSON_STATUS_LABELS, app.lesson.models.lesson.LESSON_STATUSES, app.lesson.models.lesson.LESSON_TYPE_LABELS, app.lesson.models.lesson.MAX_LESSON_RATING, app.lesson.models.lesson.MIN_LESSON_RATING, app.lesson.models.lesson_attendance.ABSENCE_REASON_LABELS, app.lesson.models.lesson_attendance.ABSENCE_REASONS, app.lesson.models.lesson_attendance.LessonAttendance, app.lesson.services.presentation.format_lesson_datetime, app.lesson.services.presentation.format_target, app.lesson.services.presentation.format_time_span, app.lesson.services.until_presets.until_presets, app.student.models.student.Student, app.student.services.presentation.student_full_name, app.tutor.services.settings.default_lesson_duration
 def _parse_datetime(raw: str) -> datetime | None
 def _parse_date(raw: str) -> date | None
 def _parse_price(raw: str) -> tuple[int | None, bool]  # Оплата ученика: (значение, ошибка разбора). Пусто — None без ошибки.
@@ -2013,7 +2258,7 @@ def page_url(base: str, **params) -> str  # Адрес с параметрами
 def sort_link(base: str, column: str, sort: str, direction: str, **params) -> dict  # Ссылка и состояние заголовка колонки.
 
 # app/lesson/services/lesson_remover.py [python]
-imports: sqlalchemy.select, sqlalchemy.orm.Session, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_series.LessonSeries
+imports: sqlalchemy.select, sqlalchemy.orm.Session, app.files.services.removal.delete_homework_files, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_series.LessonSeries
 def delete_lesson(db: Session, lesson: Lesson) -> None  # Удаляет один урок; у члена серии серия остаётся (уменьшается).
 def delete_series(db: Session, series_id: str) -> int  # Удаляет все уроки серии и саму серию. Возвращает число уроков.
 
@@ -2698,7 +2943,7 @@ def send_welcome(
 ) -> list[str]  # Приветствует чат от имени бота; пустой список — доставлено.
 
 # app/models.py [python]
-imports: app.booking.models.booking.Booking, app.booking.models.booking_attempt.BookingAttempt, app.cabinet.models.contact_access.ContactAccess, app.cabinet.models.contact_invite.ContactCabinetInvite, app.cabinet.models.contact_session.ContactSession, app.cabinet.models.invite.StudentCabinetInvite, app.cabinet.models.session.StudentSession, app.finance.models.account_operation.AccountOperation, app.gcalendar.models.calendar_event.CalendarEvent, app.finance.models.expense.Expense, app.finance.models.forecast_snapshot.ForecastSnapshot, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.homework.models.answer.HomeworkAnswer, app.homework.models.answer_link.HomeworkAnswerLink, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.lesson.models.lesson_series.LessonSeries, app.mailing.models.message_template.MessageTemplate, app.messenger.models.sent_message.SentMessage, app.messenger.models.student_invite.StudentMessengerInvite, app.slot.models.slot.Slot, app.student.models.contact.Contact, app.student.models.student_access.StudentAccess, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.task.models.task.Task, app.task.models.task_student.TaskStudent, app.tutor.models.password_reset_token.PasswordResetToken
+imports: app.booking.models.booking.Booking, app.booking.models.booking_attempt.BookingAttempt, app.cabinet.models.contact_access.ContactAccess, app.cabinet.models.contact_invite.ContactCabinetInvite, app.cabinet.models.contact_session.ContactSession, app.cabinet.models.invite.StudentCabinetInvite, app.cabinet.models.session.StudentSession, app.finance.models.account_operation.AccountOperation, app.gcalendar.models.calendar_event.CalendarEvent, app.finance.models.expense.Expense, app.finance.models.forecast_snapshot.ForecastSnapshot, app.files.models.homework_file.HomeworkFile, app.files.models.stored_file.StoredFile, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.homework.models.answer.HomeworkAnswer, app.homework.models.answer_link.HomeworkAnswerLink, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.lesson.models.lesson_series.LessonSeries, app.mailing.models.message_template.MessageTemplate, app.messenger.models.sent_message.SentMessage, app.messenger.models.student_invite.StudentMessengerInvite, app.slot.models.slot.Slot, app.student.models.contact.Contact, app.student.models.student_access.StudentAccess, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.task.models.task.Task
 
 # app/slot/__init__.py [python]
 
@@ -2789,9 +3034,13 @@ def slot_states(
 def is_free(state: str) -> bool  # Свободно ли окно по состоянию (только `free`).
 
 # app/slot/services/dialog_context.py [python]
-imports: datetime.date, datetime.datetime, datetime.time, datetime.timedelta, sqlalchemy.orm.Session, app.booking.services.panel.booking_panel, app.common.services.tutor_time.now_local, app.common.services.tutor_time.now_utc, app.common.services.tutor_time.to_local, app.lesson.models.lesson.LESSON_DURATIONS, app.slot.models.slot.Slot, app.slot.services.busy.SLOT_FREE, app.slot.services.busy.slot_states, app.slot.services.slot_form.MAX_GAP_MIN, app.slot.services.slot_form.WEEKDAY_LABELS, app.slot.services.slot_writer.has_active_booking
-def _single_values(slot: Slot | None, data: dict | None, tutor) -> dict  # Значения формы одного окна: присланные важнее сохранённых.
-def _batch_values(slot: Slot | None, data: dict | None, tutor) -> dict  # Значения формы пачки; по умолчанию — четыре недели с сегодняшнего дня.
+imports: datetime.date, datetime.datetime, datetime.time, datetime.timedelta, sqlalchemy.orm.Session, app.booking.services.panel.booking_panel, app.common.services.tutor_time.now_local, app.common.services.tutor_time.now_utc, app.common.services.tutor_time.to_local, app.lesson.models.lesson.LESSON_DURATIONS, app.slot.models.slot.Slot, app.slot.services.busy.SLOT_FREE, app.slot.services.busy.slot_states, app.slot.services.slot_form.MAX_GAP_MIN, app.slot.services.slot_form.WEEKDAY_LABELS, app.slot.services.slot_writer.has_active_booking, app.tutor.services.settings.default_lesson_duration
+def _single_values(
+    slot: Slot | None, data: dict | None, tutor, default_duration: int
+) -> dict  # Значения формы одного окна: присланные важнее сохранённых.
+def _batch_values(
+    slot: Slot | None, data: dict | None, tutor, default_duration: int
+) -> dict  # Значения формы пачки; по умолчанию — четыре недели с сегодняшнего дня.
 def _input_date(value) -> str  # Значение для `input[type=date]`: «YYYY-MM-DD».
 def _input_time(value) -> str  # Значение для `input[type=time]`: «HH:MM».
 def _form_values(values: dict) -> dict  # Значения пачки в виде, пригодном для полей формы.
@@ -3166,6 +3415,20 @@ def birthday_students(
     include_archived: bool = False,
 ) -> list[Student]  # Ученики репетитора, у которых день рождения приходится на `day`.
 def age_on(birth_date: date, day: date) -> int | None  # Сколько лет исполняется в день `day`; `None` — возраст неизвестен.
+def full_years(birth_date: date, day: date) -> int | None  # Сколько полных лет исполнилось к дню `day`; `None` — возраст неизвестен.
+
+# app/student/services/cities.py [python]
+imports: json.dumps, sqlalchemy.select, sqlalchemy.orm.Session, app.student.models.student.Student
+def city_options(
+    db: Session,
+    tutor_id: str,
+    exclude_student_id: str | None = None,
+) -> list[dict]  # Города других учеников репетитора: `[{value, label}, ...]`.
+def city_options_json(
+    db: Session,
+    tutor_id: str,
+    exclude_student_id: str | None = None,
+) -> str  # JSON-массив городов для `data-options` формы (как часовые зоны).
 
 # app/student/services/contact_lookup.py [python]
 imports: sqlalchemy.select, sqlalchemy.orm.Session, app.student.models.contact.Contact, app.student.models.student_contact.StudentContact, app.student.services.phone.normalize_phone
@@ -3203,7 +3466,7 @@ def save_access(
 ) -> list[str]  # Создаёт или обновляет вход ученика; без коммита (путь вызова — вьюха).
 
 # app/student/services/form_context.py [python]
-imports: sqlalchemy.orm.Session, app.cabinet.services.contact_invites.badge_contexts, app.cabinet.services.invites.invite_context, app.common.services.timezones.timezone_options_json, app.messenger.services.student_invites.invites_context, app.student.models.student.Student, app.student.models.student.STUDENT_STATUSES, app.student.services.presentation.contact_row, app.student.services.presentation.empty_student_form, app.student.services.presentation.student_to_form, app.student.services.students.contact_links, app.student.services.students.contact_options_json
+imports: sqlalchemy.orm.Session, app.cabinet.services.contact_invites.badge_contexts, app.cabinet.services.invites.invite_context, app.common.services.timezones.timezone_options_json, app.messenger.services.student_invites.invites_context, app.student.models.student.Student, app.student.models.student.STUDENT_STATUSES, app.student.services.cities.city_options_json, app.student.services.presentation.contact_row, app.student.services.presentation.empty_student_form, app.student.services.presentation.student_to_form, app.student.services.students.contact_links, app.student.services.students.contact_options_json
 def normalize_tab(value: str | None) -> str  # Имя вкладки из адреса; неизвестное или пустое — «Общее».
 def form_context(
     db: Session,
@@ -3252,7 +3515,7 @@ def is_phone_like(value: str | None) -> bool  # Похоже ли значени
 def format_phone(value: str | None) -> str  # Приводит номер к виду `+7 555 555-55-55`.
 
 # app/student/services/presentation.py [python]
-imports: datetime.date, datetime.datetime, app.common.services.tutor_time.today_local, app.common.services.tutor_time.to_local, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.student.services.birthdays.age_on
+imports: datetime.date, datetime.datetime, app.common.services.tutor_time.today_local, app.common.services.tutor_time.to_local, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.student.services.birthdays.age_on, app.student.services.birthdays.full_years
 def status_label(status: str | None) -> str  # Человекочитаемая подпись статуса (неизвестное значение — как есть).
 def kind_label(kind: str | None) -> str  # Человекочитаемая подпись подтипа ученика.
 def student_full_name(student: Student) -> str  # Имя и фамилия одной строкой.
@@ -3266,7 +3529,9 @@ def next_lesson_label(value: datetime | None, tutor) -> str  # «Сегодня 
 def short_date_label(value: datetime | date | None, tutor) -> str  # «15.10.2026» — дата колонки таблицы в зоне педагога; нет значения — «».
 def month_label(month: date) -> str  # «Октябрь 2026 г.» — подпись месяца в отчёте.
 def birth_date_label(value: date | None) -> str  # «17.05.2012» — дата рождения в карточке; нет значения — «».
+def _years_label(age: int) -> str  # «1 год» / «2 года» / «5 лет» — возраст со склонением слова «год».
 def birthday_age_label(birth_date: date | None, day: date) -> str  # «12 лет» — возраст, который исполняется в день `day`; иначе «».
+def student_age_label(birth_date: date | None, tutor) -> str  # «12 лет» — полных лет на сегодня в зоне педагога; иначе «».
 def register_template_helpers() -> None  # Регистрирует функции отображения в общем Jinja-окружении.
 
 # app/student/services/report.py [python]
@@ -3735,7 +4000,7 @@ class TutorSettings(Base)
 # app/tutor/services/__init__.py [python]
 
 # app/tutor/services/calendar_form.py [python]
-imports: re, zoneinfo.ZoneInfo, zoneinfo.ZoneInfoNotFoundError, app.common.services.forms.int_or_none, app.lesson.models.lesson.LESSON_DURATIONS
+imports: re, zoneinfo.ZoneInfo, zoneinfo.ZoneInfoNotFoundError, app.common.services.forms.int_or_none, app.lesson.models.lesson.LESSON_DURATIONS, app.tutor.models.tutor_settings.WEEKLY_LOAD_MAX_HOURS
 def _parse_whole_hour(raw: str) -> str | None  # «ЧЧ:ММ» с минутами 00 → та же строка; иначе None.
 def _is_valid_timezone(name: str) -> bool  # True, если имя распознаётся IANA TZDB (без fallback на UTC).
 def parse_calendar_form(form: dict) -> tuple[dict | None, list[str]]  # Разбирает форму календаря: (значения для записи, ошибки).
@@ -3842,8 +4107,9 @@ def set_session_cookie(response: Response, token: str) -> None  # Выставл
 def clear_session_cookie(response: Response) -> None  # Удаляет cookie сессии (logout).
 
 # app/tutor/services/settings.py [python]
-imports: sqlalchemy.orm.Session, app.tutor.models.tutor_settings.TutorSettings, app.tutor.models.tutor_settings.default_values
+imports: sqlalchemy.orm.Session, app.lesson.models.lesson.LESSON_DURATIONS, app.tutor.models.tutor_settings.DEFAULT_LESSON_DURATION, app.tutor.models.tutor_settings.TutorSettings, app.tutor.models.tutor_settings.default_values
 def get_settings(db: Session, tutor_id: str) -> TutorSettings  # Настройки репетитора; строки в БД нет — объект с дефолтами.
+def default_lesson_duration(db: Session, tutor_id: str) -> int  # Длительность нового урока и окна: настройка профиля, «Календарь».
 def save_settings(db: Session, tutor_id: str, values: dict) -> TutorSettings  # Сохраняет настройки; строки ещё нет — создаёт её (ленивый upsert).
 
 # app/tutor/services/settings_page.py [python]
@@ -3859,6 +4125,23 @@ def settings_page_context(
     errors: list[str] | None = None,
     form: dict | None = None,
 ) -> dict  # Контекст шаблона настроек: вкладки, секции мессенджеров и форма.
+
+# app/tutor/services/timezone_shift.py [python]
+imports: datetime.UTC, datetime.datetime, datetime.timedelta, zoneinfo.ZoneInfo, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.AccountOperation, app.group.models.group.Group, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.slot.models.slot.Slot, app.student.models.student.Student, app.tutor.services.clock.as_utc
+def shift_moment(
+    value: datetime, old_zone: ZoneInfo, new_zone: ZoneInfo
+) -> datetime  # Тот же момент в UTC после смены зоны, с сохранением настенного времени.
+def shift_tutor_schedule(
+    db: Session, tutor_id: str, old_zone: ZoneInfo, new_zone: ZoneInfo
+) -> dict[str, int]  # Пересчитывает моменты расписания репетитора под новую зону (без коммита).
+def tutor_lessons(db: Session, tutor_id: str) -> list[Lesson]  # Все уроки репетитора — прошедшие и будущие, любого статуса.
+def _shift_slots(
+    db: Session, tutor_id: str, old_zone: ZoneInfo, new_zone: ZoneInfo
+) -> int  # Сдвигает окна репетитора двухфазно (уникальность `starts_at`).
+def _shift_homework(
+    db: Session, lessons: list[Lesson], old_zone: ZoneInfo, new_zone: ZoneInfo
+) -> int  # Сдвигает сроки сдачи ДЗ уроков репетитора; `due_at = NULL` не трогает.
+def _shift_charges(db: Session, lessons: list[Lesson]) -> int  # Ставит дату списания на новое начало урока; суммы не меняются.
 
 # app/tutor/services/validation.py [python]
 imports: re
@@ -3903,7 +4186,7 @@ def profile(
 )  # Страница настроек; без сессии — редирект на вход (LoginRequired).
 
 # app/tutor/views/profile_calendar.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.calendar_form.parse_calendar_form, app.tutor.services.profile_page.profile_page_context, app.tutor.services.settings.save_settings
+imports: logging, zoneinfo.ZoneInfo, fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.common.services.tutor_time.tutor_zone, app.common.services.tutor_time.tutor_zone_name, app.database.get_db, app, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.calendar_form.parse_calendar_form, app.tutor.services.profile_page.profile_page_context, app.tutor.services.settings.save_settings, app.tutor.services.timezone_shift.shift_tutor_schedule
 def profile_calendar(
     request: Request,
     timezone: str = Form(""),
@@ -3915,9 +4198,10 @@ def profile_calendar(
     workday_end: str = Form(""),
     default_lesson_duration: str = Form(""),
     default_lesson_price: str = Form(""),
+    weekly_load_hours: str = Form(""),
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
-)  # Сохраняет часовой пояс, учебный год, рабочее время и уроки по умолчанию.
+)  # Сохраняет часовой пояс, учебный год, рабочее время, уроки и нагрузку.
 
 # app/tutor/views/profile_channels.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.common.responses.is_htmx, app.database.get_db, app.messenger.services.binding.BINDING_FAILED_HINT, app.messenger.services.binding.channels_block_context, app.messenger.services.binding.confirm_binding, app.messenger.services.binding.start_binding, app.messenger.services.binding.unbind_channel, app.messenger.services.messengers.SUPPORTED, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.profile_page.profile_page_context
@@ -4199,9 +4483,34 @@ def update_unavailability_end(
 imports: logging, sys, app.common.services.cron.run_tasks
 
 # main.py [python]
-imports: contextlib.asynccontextmanager, pathlib.Path, fastapi.FastAPI, fastapi.staticfiles.StaticFiles, app, app.common.static_files.RevalidatingStaticFiles, app.common.views.not_found.not_found, app.database.init_db
-def lifespan(app: FastAPI)
+imports: pathlib.Path, fastapi.FastAPI, fastapi.staticfiles.StaticFiles, app, app.common.static_files.RevalidatingStaticFiles, app.common.views.not_found.not_found
 def create_app() -> FastAPI
+
+# scripts/build_favicons.py [python]
+imports: json, math, sys, pathlib.Path, PIL.Image, PIL.ImageDraw
+def _load_source() -> Image.Image  # Исходник как RGBA; падаем, если файла нет или он не того размера.
+def _resize(image: Image.Image, size: int) -> Image.Image  # Уменьшение LANCZOS: единственный фильтр без «звона» на краях знака.
+def _gradient(
+    size: int, box: tuple[float, float, float, float] | None = None
+) -> Image.Image  # Диагональный градиент знака: от левого верхнего угла к правому нижнему.
+def _on_gradient(image: Image.Image) -> Image.Image  # Свести прозрачные углы на продолжение градиента.
+def _mark_mask(size: int) -> Image.Image  # Маска знака для maskable-иконки: облако с хвостиком, без фона.
+def _maskable(source: Image.Image, size: int = 512) -> Image.Image  # PWA-иконка `purpose: maskable`: знак в safe zone ~80%, фон без альфы.
+def _rounded_rect_path(
+    x: float, y: float, w: float, h: float, radius: float, control: float
+) -> str  # Скруглённый прямоугольник одним контуром с непрерывными углами.
+def _circle_path(cx: float, cy: float, r: float, clockwise: bool = True) -> str  # Окружность одним контуром из двух полудуг.
+def _capsule_path(
+    x1: float, y1: float, x2: float, y2: float, radius: float
+) -> str  # Капсула — луч солнца: отрезок с полукруглыми концами, одним контуром.
+def _background_path() -> str
+def _bubble_path() -> str  # Облако: скруглённый прямоугольник и хвостик отдельными подконтурами.
+def _sun_path() -> str  # Солнце: кольцо (внешний и внутренний контур), точка и восемь лучей.
+def _favicon_svg() -> str  # Цветная векторная иконка: резкая на Retina, вес — единицы килобайт.
+def _pinned_tab_svg() -> str  # Монохромный силуэт для `rel="mask-icon"` (Safari, закреплённые вкладки).
+def _manifest() -> str  # PWA-манифест: имя, цвета и иконки для установки на домашний экран.
+def build(output: Path = OUTPUT) -> list[Path]  # Пишет набор в `output` и возвращает список созданных файлов.
+def main() -> int
 
 # scripts/build_icons.py [python]
 imports: json, re, sys, pathlib.Path
@@ -4503,6 +4812,14 @@ def test_checked_homework_is_read_only(client, owner, student_factory, lesson_fa
 def test_answer_to_foreign_homework_404(
     client, owner, student_factory, lesson_factory
 )  # Чужое ДЗ неотличимо от несуществующего: 404, ответ не сохранён.
+def _attach_file(homework_id: str, name: str = "условие.pdf", body: bytes = b"%PDF")  # Прикрепляет файл к ДЗ напрямую в БД; возвращает id файла.
+def _tutor_of(lesson_id: str) -> str  # Репетитор урока (владелец ученика).
+def test_student_card_lists_attached_files(
+    client, owner, student_factory, lesson_factory
+)  # Ученик видит файл задания со ссылкой на скачивание и размером.
+def test_student_card_without_files_has_no_list(
+    client, owner, student_factory, lesson_factory
+)  # Без прикреплённых файлов списка нет — пустой блок не рендерится.
 
 # tests/test_cabinet_pages.py [python]
 imports: datetime.UTC, datetime.datetime, datetime.timedelta, pytest, app.database.SessionLocal, app.cabinet.models.invite.StudentCabinetInvite, app.cabinet.services.invites.create_invite, app.cabinet.services.sessions.create_session, app.lesson.models.lesson.Lesson, app.student.models.student_access.StudentAccess, app.tutor.services.password_hasher.PasswordHasher
@@ -4706,6 +5023,31 @@ def test_calendar_out_of_grid_lessons_visible_and_clickable(
     client, calendar_owner, student_factory
 )  # 10.3: уроки вне рабочего времени видны, прижаты и кликабельны.
 def test_calendar_drag_clamps_to_markup_bounds()  # 10.4: драг и предзаполнение зажимаются границами из разметки.
+def _set_show_price(tutor_id: str, value: bool) -> None  # Флаг «Показывать цену» напрямую в БД (минуя переключатель панели).
+def _show_price_checkbox(page: str) -> str  # Разметка чекбокса «Показывать цену» (пустая строка — нет).
+def test_calendar_card_shows_price_when_flag_on(
+    client, calendar_owner, student_factory
+)  # Флаг включён (дефолт): цена есть и в карточке, и в подсказке.
+def test_calendar_card_hides_price_when_flag_off(
+    client, calendar_owner, student_factory
+)  # Флаг выключен: цены нет ни в карточке, ни в подсказке.
+def test_calendar_group_lesson_shows_total_group_price(
+    client, calendar_owner, group_factory, group_member_factory, student_factory
+)  # Групповой урок: на карточке стоимость всей группы, а не цена места.
+def test_calendar_group_without_prices_has_no_price(
+    client, calendar_owner, group_factory, group_member_factory
+)  # Группа без цен у участников: блока цены нет, «0 ₽» не показывается.
+def test_group_totals_sums_members_and_skips_unknown_prices(
+    calendar_owner, group_factory, group_member_factory
+)  # group_totals`: сумма цен участников; группа без цен — не в словаре.
+def test_calendar_show_price_toggle_saves_flag(client, calendar_owner)  # POST переключателя сохраняет флаг и просит htmx перерисовать неделю.
+def test_calendar_show_price_toggle_without_htmx_redirects_to_week(
+    client, calendar_owner
+)  # Без HX-Request — 303 на ту же неделю, а не пустой ответ POST.
+def test_calendar_show_price_toggle_isolated_between_tutors(
+    client, calendar_owner, tutor_factory
+)  # Переключатель чужого репетитора не меняет флаг этого.
+def test_calendar_show_price_checkbox_markup(client, calendar_owner)  # Чекбокс панели: POST на флаг, состояние из настроек, неделя в запросе.
 
 # tests/test_colors.py [python]
 imports: app.common.colors.PALETTE, app.common.colors.assign_color, app.database.SessionLocal
@@ -4820,6 +5162,104 @@ def test_dropdown_js_is_served(client)
 def test_dropdown_js_loads_before_alpine()  # Скрипт подключается вместе с остальными фабриками — до Alpine.
 def test_list_is_positioned_over_layout()  # Список вынесен из потока и лежит поверх полей.
 def test_each_picker_uses_shared_positioning()  # Три вида списков позиционируются одним хелпером, а не каждый сам.
+
+# tests/test_favicons.py [python]
+imports: json, re, struct, pathlib.Path, pytest
+def _png_size(path: Path) -> tuple[int, int]  # Размер PNG из IHDR: сигнатура, длина, тип, ширина, высота.
+def _ico_sizes(path: Path) -> set[tuple[int, int]]  # Размеры записей ICO из ICONDIR/ICONDIRENTRY.
+def test_every_favicon_file_exists_and_is_not_empty()  # Все файлы набора на месте: пропавший файл — битая иконка без ошибки.
+def test_png_icons_have_expected_size(name: str, size: tuple[int, int])  # PNG-иконки объявлены в разметке и манифесте с точным размером.
+def test_favicon_ico_contains_tab_and_desktop_sizes()  # Мультиразмерный ICO: 16 — вкладка, 32 — закладки, 48 — рабочий стол.
+def test_vector_icons_are_svg()  # SVG-файлы начинаются с корневого `<svg>` и объявляют viewBox.
+def test_manifest_is_valid_and_points_to_existing_files()  # Манифест — валидный JSON, и каждая иконка из него существует на диске.
+def _assert_favicon_head(markup: str, where: str) -> None  # В head есть все ссылки набора и нет ссылок на внешние хосты.
+def test_head_links_on_auth_page(client)  # Страница входа — самая первая поверхность, которую видит человек.
+def test_head_links_on_404_page(client)  # 404 наследует тот же макет: иконка не должна пропадать на ошибке.
+def test_head_links_on_tutor_cabinet(client, tutor_factory)  # Страница кабинета после входа — основная рабочая поверхность.
+def test_head_links_on_public_booking_page(client, tutor_factory)  # Публичная страница записи — единственная, которую видит не клиент CRM.
+def test_favicon_files_are_served_with_revalidation(client, url: str, content_type: str)  # Файлы набора отдаются с правильным типом и политикой `no-cache`.
+def test_root_favicon_returns_the_same_bytes(client)  # GET /favicon.ico` отдаёт ту же иконку, что лежит в наборе.
+
+# tests/test_file_storage.py [python]
+imports: types.SimpleNamespace, pytest, app.config.Settings, app.files.services.storage_factory.get_storage, app.files.services.storage_factory.storage_for_backend, app.files.services.storage_local.LocalStorage, app.files.services.storage_s3.S3Storage, app.files.services.upload.build_key, app.files.services.upload.content_type_for, app.files.services.upload.extension_of, app.files.services.upload.validate_upload
+def test_local_storage_saves_reads_and_deletes(tmp_path)  # Запись, чтение, существование и удаление объекта.
+def test_local_storage_creates_root(tmp_path)  # Корень создаётся при инициализации: загрузка не падает на первом файле.
+def test_local_storage_rejects_key_outside_root(tmp_path, key)  # Ключ вне корня — ошибка: имя файла не должно писать куда угодно.
+def test_local_storage_has_no_download_url(tmp_path)  # Локальный файл отдаёт приложение — временной ссылки нет.
+class FakeS3Client
+  def __init__(self) -> None
+  def put_object(self, **kwargs)
+  def get_object(self, **kwargs)
+  def delete_object(self, **kwargs)
+  def head_object(self, **kwargs)
+  def generate_presigned_url(self, operation, Params, ExpiresIn)
+def _s3_storage(client: FakeS3Client, ttl: int = 900) -> S3Storage
+def test_s3_storage_saves_with_prefix_and_content_type()  # Объект кладётся с префиксом из настроек и типом содержимого.
+def test_s3_storage_reads_and_deletes()  # Чтение и удаление идут по тому же ключу с префиксом.
+def test_s3_presigned_url_has_ttl_and_attachment()  # Presigned URL: TTL из настроек, имя вложения и тип содержимого.
+def reset_storage_cache()  # Сбрасывает кэш фабрики до и после теста (env меняется в тесте).
+def test_factory_picks_local_backend(monkeypatch, tmp_path, reset_storage_cache)  # FILES_BACKEND=local` (по умолчанию) — локальное хранилище.
+def test_factory_picks_s3_backend(monkeypatch, reset_storage_cache)  # FILES_BACKEND=s3` — S3-хранилище с параметрами из настроек.
+def test_storage_for_backend_ignores_current_env(monkeypatch, tmp_path)  # Старый файл читается своим бэкендом, а не текущим значением env.
+def test_settings_defaults_are_local()  # По умолчанию — локальное хранилище с безопасным набором расширений.
+def test_settings_extensions_are_normalized()  # Регистр и точка в env не мешают: «.PDF, Docx» → pdf, docx.
+def test_settings_s3_requires_bucket_and_keys()  # Неполная конфигурация S3 — ошибка старта с именами параметров.
+def test_settings_s3_valid_configuration_passes()  # Бакет и ключи заданы — приложение стартует.
+def test_settings_rejects_non_positive_limits(field, value)  # Нулевой лимит или TTL — ошибка конфигурации, а не «загрузить ничего».
+def test_validate_upload_filename(filename, size, expected)  # Расширение из allowlist и непустое имя — обязательны.
+def test_validate_upload_rejects_oversized_file()  # Файл больше лимита отклоняется с понятным сообщением.
+def test_build_key_has_no_user_filename()  # Ключ объекта — id репетитора и uuid, имя пользователя не попадает.
+def test_build_key_without_extension()  # Файл без расширения не получает точку в конце ключа.
+def test_content_type_for(filename, declared, expected)  # Тип содержимого: по расширению, если браузер прислал общий тип.
+def test_extension_of_normalizes_case()  # Расширение приводится к нижнему регистру.
+
+# tests/test_file_upload.py [python]
+imports: datetime.UTC, datetime.datetime, types.SimpleNamespace, pytest, sqlalchemy.select, app, app.database.SessionLocal, app.files.models.homework_file.HomeworkFile, app.files.models.stored_file.StoredFile, app.homework.models.homework.Homework, app.homework.services.homework_writer.get_homework, app.lesson.models.lesson.Lesson, app.student.models.student_contact.StudentContact
+def local_files(tmp_path, monkeypatch)  # Все загрузки теста идут в `tmp_path`, кэш фабрики сброшен.
+def owner(client, tutor_factory)  # Репетитор, вошедший в клиент; возвращает его id.
+def owner_lesson(owner, student_factory)  # Индивидуальный урок вошедшего репетитора; возвращает id и ученика.
+def _hw_form(**extra) -> dict  # Валидная форма панели ДЗ без файлов.
+def _upload(lesson_id: str, files: list[tuple[str, bytes, str]], **extra)  # POST панели ДЗ с файлами: список (имя, тело, тип).
+def _stored_files() -> list[StoredFile]
+def _links() -> list[HomeworkFile]
+def test_upload_attaches_files_to_homework(owner, client, owner_lesson, local_files)  # Файлы сохраняются в хранилище и привязываются к ДЗ в порядке выбора.
+def test_upload_saves_homework_and_files_together(owner, client, owner_lesson)  # Успешная загрузка сохраняет и запись ДЗ, и файлы.
+def test_upload_rejected_extension_saves_nothing(owner, client, owner_lesson)  # Запрещённое расширение: ни файла, ни записи ДЗ (первое сохранение).
+def test_upload_rejected_extension_keeps_existing_homework(
+    owner, client, owner_lesson
+)  # Ошибка файла не меняет уже сохранённое ДЗ.
+def test_upload_rejects_oversized_file(owner, client, owner_lesson, monkeypatch)  # Файл больше лимита отклоняется, запись ДЗ не создаётся.
+def test_resave_without_files_keeps_attached(owner, client, owner_lesson)  # Повторное сохранение без выбора файлов не теряет прикреплённые.
+def test_upload_foreign_lesson_is_404(
+    owner, client, tutor_factory, student_factory
+)  # Чужой урок: файлы не сохраняются, ответ как при отсутствии урока.
+def test_upload_requires_session(client, tutor_factory, student_factory)  # Без сессии — редирект на вход, файлы не сохраняются.
+def _attach_file(lesson_id: str, name="условие.pdf", body=b"%PDF-1.7")  # Прикрепляет файл через панель ДЗ; возвращает id файла.
+def test_owner_downloads_local_file(owner, client, owner_lesson)  # Владелец получает файл вложением с защитными заголовками.
+def test_other_tutor_gets_404(owner, client, owner_lesson, tutor_factory)  # Чужой репетитор видит 404 — как будто файла нет.
+def test_anonymous_gets_404(client, owner, owner_lesson)  # Без входа файл недоступен — 404, а не редирект на форму входа.
+def test_student_downloads_file_of_own_homework(owner, client, owner_lesson)  # Ученик скачивает файл задания своего урока.
+def test_group_member_downloads_file(owner, client, group_factory, group_member_factory)  # Участник группы скачивает файл задания группового урока.
+def test_stranger_student_gets_404(owner, client, owner_lesson, student_factory)  # Ученик чужого урока получает 404.
+def test_parent_downloads_child_file(owner, client, owner_lesson, contact_factory)  # Родитель привязанного ребёнка скачивает файл задания.
+def test_unlinked_parent_gets_404(owner, client, owner_lesson, contact_factory)  # Родитель без привязки к ребёнку получает 404.
+def test_missing_object_on_disk_is_404(owner, client, owner_lesson, local_files)  # Метаданные без объекта на диске — 404, а не 500.
+class FakeS3Client
+  def __init__(self) -> None
+  def put_object(self, **kwargs)
+  def get_object(self, **kwargs)
+  def delete_object(self, **kwargs)
+  def head_object(self, **kwargs)
+  def generate_presigned_url(self, operation, Params, ExpiresIn)
+def s3_storage(monkeypatch)  # S3-хранилище с заглушкой клиента вместо сети.
+def test_s3_upload_writes_to_bucket(owner, client, owner_lesson, s3_storage)  # Загрузка при S3-бэкенде кладёт объект в бакет с префиксом.
+def test_s3_download_redirects_to_presigned_url(owner, client, owner_lesson, s3_storage)  # Скачивание из S3 — 302 на временную ссылку с TTL из настроек.
+def test_delete_file_removes_object_and_row(owner, client, owner_lesson, local_files)  # Удаление убирает объект с диска, строку метаданных и связь с ДЗ.
+def test_delete_foreign_file_is_404(
+    owner, client, owner_lesson, tutor_factory, student_factory
+)  # Файл чужого урока через свой урок удалить нельзя — 404.
+def test_delete_file_of_other_homework_is_404(owner, client, owner_lesson, student_factory)  # Файл, привязанный к другому ДЗ, через этот урок не удаляется.
+def test_delete_lesson_removes_file_objects(owner, client, owner_lesson, local_files)  # Удаление урока убирает объекты файлов и метаданные.
 
 # tests/test_finance_access.py [python]
 imports: pytest, fastapi.HTTPException, app.database.SessionLocal, app.finance.models.account_operation.AccountOperation, app.finance.services.access.get_owned_operation
@@ -5378,6 +5818,18 @@ def test_student_form_panels_point_to_their_tabs(client, owner)
 def test_group_form_panels_point_to_their_tabs(client, owner, student_factory, group_factory)
 def test_group_form_is_one_form_for_all_panels(client, owner, group_factory)  # Форма группы одна на пять панелей: невалидное поле может быть скрыто.
 
+# tests/test_gcalendar_event_color.py [python]
+imports: pytest, app.common.colors.DEFAULT_TARGET_COLOR, app.common.colors.PALETTE, app.gcalendar.services.event_color.DEFAULT_COLOR_ID, app.gcalendar.services.event_color.GOOGLE_EVENT_COLORS, app.gcalendar.services.event_color.PALETTE_COLOR_IDS, app.gcalendar.services.event_color.color_id
+def test_google_palette_has_eleven_event_colors()  # Палитра событий Google — 11 цветов с hex-значениями.
+def test_every_crm_palette_color_is_mapped()  # Каждый цвет палитры CRM и цвет по умолчанию есть в таблице.
+def test_palette_color_maps_to_expected_google_color(crm_color, expected)  # Цвет цели даёт заранее выбранный colorId Google.
+def test_result_is_always_a_google_color_id(crm_color)  # Возвращается строка из набора «1»–«11», как ждёт Calendar API.
+def test_hex_case_and_spaces_do_not_matter()  # Регистр hex и пробелы по краям не влияют на результат.
+def test_empty_color_falls_back_to_default(empty)  # Цвет не задан (NULL у старой записи) — цвет по умолчанию CRM.
+def test_broken_color_falls_back_to_default(broken)  # Некорректный hex не роняет синхронизацию: срабатывает default.
+def test_unknown_hex_gets_nearest_google_color()  # Незнакомый, но валидный hex красится в ближайший цвет Google.
+def test_default_crm_color_is_blueberry()  # Цвет по умолчанию CRM ближе всего к Blueberry.
+
 # tests/test_gcalendar_oauth.py [python]
 imports: json, urllib, io.BytesIO, app, app.database.SessionLocal, app.gcalendar.services.connection, app.gcalendar.services.oauth, app.gcalendar.services.errors.GoogleApiError, app.gcalendar.services.errors.GoogleReauthRequired, app.tutor.services.params.get_param, app.tutor.services.params.set_param
 class _FakeResponse
@@ -5408,7 +5860,7 @@ def test_clear_removes_all_google_params(tutor_factory)
 def test_take_oauth_state_is_one_time(tutor_factory)
 
 # tests/test_gcalendar_reconcile.py [python]
-imports: json, urllib, datetime.timedelta, app, app.database.SessionLocal, app.gcalendar.models.calendar_event.CalendarEvent, app.gcalendar.services.connection, app.gcalendar.services.mapping, app.gcalendar.services.reconcile.RECONCILE_FUTURE_DAYS, app.gcalendar.services.reconcile.reconcile_all, app.lesson.models.lesson.Lesson, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow
+imports: json, urllib, datetime.timedelta, app, app.database.SessionLocal, app.gcalendar.models.calendar_event.CalendarEvent, app.gcalendar.services.connection, app.gcalendar.services.mapping, app.gcalendar.services.reconcile.RECONCILE_FUTURE_DAYS, app.gcalendar.services.reconcile.reconcile_all, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow
 class _FakeResponse
   def __init__(self, payload)
   def read(self)
@@ -5426,6 +5878,12 @@ def test_reconcile_creates_missing_events(
 def test_reconcile_is_idempotent(
     monkeypatch, tutor_factory, student_factory, lesson_factory
 )  # Повторный прогон ничего не меняет и не ходит в API создания.
+def test_reconcile_patches_event_on_target_color_change(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Смена цвета ученика: сверка правит событие, второго не появляется.
+def test_reconcile_colors_existing_event_without_migration(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Событие, созданное до появления цвета, получает цвет при сверке.
 def test_reconcile_skips_disconnected_tutors(
     monkeypatch, tutor_factory, student_factory, lesson_factory
 )  # Репетитор без подключённого календаря не попадает в сверку.
@@ -5447,7 +5905,7 @@ class _ErrorBody
   def close(self)  # HTTPError закрывает тело как файл — заглушка не должна падать.
 
 # tests/test_gcalendar_sync.py [python]
-imports: json, urllib, datetime.UTC, datetime.datetime, datetime.timedelta, io.BytesIO, app, app.database.SessionLocal, app.gcalendar.models.calendar_event.CalendarEvent, app.gcalendar.services.connection, app.gcalendar.services.mapping, app.gcalendar.services.sync.OUTCOME_CREATED, app.gcalendar.services.sync.OUTCOME_FAILED, app.gcalendar.services.sync.OUTCOME_SKIPPED, app.gcalendar.services.sync.OUTCOME_UPDATED, app.gcalendar.services.sync.sync_lesson, app.lesson.models.lesson.Lesson, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow
+imports: json, urllib, datetime.UTC, datetime.datetime, datetime.timedelta, io.BytesIO, app, app.database.SessionLocal, app.gcalendar.models.calendar_event.CalendarEvent, app.gcalendar.services.connection, app.gcalendar.services.mapping, app.gcalendar.services.sync.OUTCOME_CREATED, app.gcalendar.services.sync.OUTCOME_FAILED, app.gcalendar.services.sync.OUTCOME_SKIPPED, app.gcalendar.services.sync.OUTCOME_UPDATED, app.gcalendar.services.sync.sync_lesson, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow
 class _FakeResponse
   def __init__(self, payload)
   def read(self)
@@ -5473,6 +5931,18 @@ def test_sync_without_changes_makes_no_requests(
 def test_sync_skips_without_connection(
     monkeypatch, tutor_factory, student_factory, lesson_factory
 )  # При неподключённом календаре запросов к API нет вовсе.
+def test_sync_patches_event_on_target_color_change(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Смена цвета ученика правит событие: второго события не появляется.
+def test_sync_uses_group_color_for_group_lesson(
+    monkeypatch, tutor_factory, group_factory, lesson_factory
+)  # Групповое занятие красится в цвет группы, а не ученика.
+def test_sync_without_target_color_uses_default(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # У цели без цвета (NULL у старой записи) событие получает default.
+def test_sync_without_color_change_makes_no_requests(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+)  # Повторная синхронизация с тем же цветом цели в Google не ходит.
 def test_sync_disabled_by_flag(monkeypatch, tutor_factory, student_factory, lesson_factory)  # Флаг GOOGLE_CALENDAR_SYNC=false выключает синхронизацию целиком.
 def test_sync_api_error_does_not_raise(
     monkeypatch, tutor_factory, student_factory, lesson_factory
@@ -5508,6 +5978,20 @@ def test_delete_group_view_deletes_lesson_events(
 def test_foreign_lesson_is_not_synced(
     monkeypatch, client, tutor_factory, student_factory, lesson_factory
 )  # Чужой урок недоступен: 404 и ни одного запроса к Google.
+def _calendar_form(timezone)  # Поля вкладки «Календарь»: без них форма профиля не сохранится.
+def _set_timezone(tutor_id, timezone)
+def test_timezone_change_patches_event_with_new_zone(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Смена зоны сохраняет настенное время, но шлёт PATCH с новой зоной.
+def test_timezone_change_patches_past_lesson_event(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Прошедший урок тоже обновляется: его событие осталось в календаре.
+def test_timezone_change_makes_no_requests_when_sync_disabled(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Флаг GOOGLE_CALENDAR_SYNC=false: смена зоны не ходит в Google.
+def test_timezone_change_survives_google_error(
+    monkeypatch, client, tutor_factory, student_factory, lesson_factory
+)  # Ошибка Google не отменяет сохранение профиля и пересчёт расписания.
 
 # tests/test_gcalendar_views.py [python]
 imports: json, urllib, datetime.UTC, datetime.datetime, datetime.timedelta, io.BytesIO, app, app.database.SessionLocal, app.gcalendar.models.calendar_event.CalendarEvent, app.gcalendar.services.connection, app.lesson.models.lesson.Lesson, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow, app.tutor.services.params.get_param
@@ -5982,7 +6466,7 @@ def test_group_lesson_charges_members(
 )  # Групповой урок: списание каждому участнику по цене группы.
 
 # tests/test_lesson_create.py [python]
-imports: json, re, datetime.date, datetime.datetime, pathlib.Path, pytest, sqlalchemy.select, app.database.SessionLocal, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_series.LessonSeries
+imports: json, re, datetime.date, datetime.datetime, pathlib.Path, pytest, sqlalchemy.select, app.database.SessionLocal, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_series.LessonSeries, app.tutor.services.settings.save_settings
 def owner(client, tutor_factory)  # Репетитор, вошедший в клиент; возвращает его id.
 def _all_lessons() -> list[dict]  # Все уроки БД по времени начала (значения, а не ORM-объекты).
 def _all_series() -> list[dict]  # Все серии БД.
@@ -6012,6 +6496,12 @@ def test_create_repeat_requires_slots(owner, client, student_factory)  # Пус�
 def _starts_input(page: str) -> str  # Тег поля «Начало» из разметки формы.
 def test_new_lesson_form_prefills_start_from_calendar(owner, client)  # ?starts_at=` заполняет «Начало» (спека «Префилл из календаря»).
 def test_new_lesson_form_ignores_bad_start(owner, client)  # Некорректный `starts_at` — форма открыта, «Начало» пустое.
+def _selected_duration(page: str) -> str | None  # Значение выделенного option селекта «Длительность».
+def _save_duration(tutor_id: str, duration: int) -> None  # Сохранить «Длительность урока по умолчанию» в настройках профиля.
+def test_new_lesson_form_prefills_duration_from_settings(owner, client)  # Без `?duration_min=` селект предвыбирает настройку профиля (45).
+def test_new_lesson_form_defaults_duration_without_settings_row(owner, client)  # Строки настроек нет — действует дефолт профиля 60 минут.
+def test_new_lesson_form_duration_prefill_beats_settings(owner, client)  # ?duration_min=` из окна важнее настройки профиля.
+def test_new_lesson_form_ignores_invalid_settings_duration(owner, client)  # Мусор в настройке (ручная правка БД) — селект на дефолте 60.
 
 # tests/test_lesson_lookup.py [python]
 imports: html, json, re, app.common.colors.PALETTE
@@ -6108,7 +6598,7 @@ def test_lessons_default_sort_nearest_first(owner, client, student_factory)  # �
 def test_lessons_list_partial_requires_session(client)  # Без входа партиал фильтров отвечает редиректом, без уроков.
 def test_changing_timezone_changes_display_but_not_stored_value(
     client, tutor_factory, student_factory
-)  # Спека: смена зоны меняет только показ, данные не переписываются.
+)  # Показ времени идёт в зоне карточки: зона меняется мимо формы.
 def test_unknown_timezone_does_not_break_pages(
     client, tutor_factory, student_factory
 )  # Спека: некорректное имя зоны не роняет показ — берётся системная зона.
@@ -6210,7 +6700,7 @@ def test_calendar_day_carries_reason_for_confirm(
 )  # Причина отметки приходит в `data-unavailable` — JS математику не считает.
 
 # tests/test_lesson_update.py [python]
-imports: re, datetime.date, datetime.datetime, datetime.timedelta, pytest, sqlalchemy.select, app.database.SessionLocal, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_series.LessonSeries, app.student.models.student.Student
+imports: re, datetime.date, datetime.datetime, datetime.timedelta, pytest, sqlalchemy.select, app.database.SessionLocal, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_series.LessonSeries, app.student.models.student.Student, app.tutor.services.settings.save_settings
 def owner(client, tutor_factory)  # Репетитор, вошедший в клиент; возвращает его id.
 def _insert_lesson(tutor_id: str, **overrides) -> str  # Урок напрямую в БД; возвращает id (как в test_lesson_pages).
 def _insert_series(tutor_id: str, count: int = 3, **overrides) -> tuple[str, list[str]]  # Серия уроков напрямую в БД: (series_id, [id уроков по времени]).
@@ -6222,6 +6712,9 @@ def test_edit_form_prefills_local_and_saving_keeps_utc(
     client, tutor_factory, student_factory
 )  # Спека (задача 3.2): урок `06:00 UTC` при зоне UTC+04.
 def test_edit_form_renders(owner, client, student_factory)  # Заголовок «Цель · дата, время», подзаголовок-интервал, поля, кнопки.
+def test_edit_form_keeps_lesson_duration_over_settings(
+    owner, client, student_factory
+)  # Правка показывает длительность урока, а не настройку профиля.
 def test_list_row_opens_edit_modal(owner, client, student_factory)  # Строка списка открывает модалку редактирования (HTMX-запрос строки).
 def test_edit_requires_session(client, tutor_factory, student_factory)  # Без входа модалка и сохранение недоступны — редирект на вход.
 def test_edit_status_and_rating(owner, client, student_factory)  # Проведённый урок: статус, оценка, комментарий; список — «(Оплачено)».
@@ -6591,6 +7084,9 @@ def test_contact_action_between_tutors_isolated(
 def test_three_sessions_coexist_in_one_client(
     client, owner, student_factory, contact_factory
 )  # Репетитор, ученик и родитель — три cookies, три кабинета одновременно.
+def test_parent_child_homework_lists_files(
+    client, owner, student_factory, contact_factory, lesson_factory
+)  # Родитель видит прикреплённые к заданию файлы со ссылкой на скачивание.
 
 # tests/test_parent_cabinet_services.py [python]
 imports: datetime.UTC, datetime.datetime, datetime.timedelta, pytest, sqlalchemy.select, app.cabinet.models.contact_access.ContactAccess, app.cabinet.models.contact_invite.ContactCabinetInvite, app.cabinet.models.contact_session.ContactSession, app.cabinet.services.child_finance.finance_overview, app.cabinet.services.child_homework.child_homework, app.cabinet.services.children.children, app.cabinet.services.children.get_child, app.cabinet.services.contact_invites.badge_contexts, app.cabinet.services.contact_invites.create_invite, app.cabinet.services.contact_invites.find_valid_invite, app.cabinet.services.contact_registration.ERROR_EMAIL_FORMAT, app.cabinet.services.contact_registration.ERROR_EMAIL_TAKEN, app.cabinet.services.contact_registration.ERROR_LINK_INVALID, app.cabinet.services.contact_registration.ERROR_PASSWORD_SHORT, app.cabinet.services.contact_registration.register_by_invite, app.cabinet.services.contact_sessions.COOKIE_NAME, app.cabinet.services.contact_sessions.create_session, app.cabinet.services.contact_sessions.delete_session, app.cabinet.services.contact_sessions.get_contact_id, app.database.SessionLocal, app.finance.models.account_operation.AccountOperation, app.homework.models.homework.Homework, app.student.models.contact.Contact, app.student.models.student_access.MIN_PASSWORD_LENGTH, app.student.models.student_contact.StudentContact
@@ -6664,7 +7160,7 @@ def test_contact_picker_excludes_linked_contacts(client, owner, student_factory)
 def test_picker_escapes_modal_close_and_selects_by_enter()  # Escape гасится, чтобы не закрыть модалку; Enter выбирает вариант.
 
 # tests/test_profile.py [python]
-imports: re, app.database.SessionLocal, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_settings.TutorSettings
+imports: re, app.database.SessionLocal, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_settings.TutorSettings, app.tutor.services.settings.save_settings
 def _register_and_login(client, email, name="Настройки", password=PASSWORD)
 def _login(client, email="profile-user@example.com", name="Профильный", password=PASSWORD)
 def _tutor_by_email(email)
@@ -6696,13 +7192,25 @@ def test_notifications_invalid_time_shows_error(client)
 def test_notifications_negative_threshold_shows_error(client)
 def _calendar_page(client, **params)
 def test_workday_defaults_without_settings_row(client)  # 1.1: без строки в БД `get_settings` отдаёт дефолт рабочего времени.
+def test_calendar_tab_save_keeps_show_price_flag(client)  # Сохранение вкладки «Календарь» не сбрасывает флаг показа цены.
+def _calendar_payload(**overrides)  # Полный набор полей вкладки «Календарь» для POST.
+def test_weekly_load_defaults_without_settings_row(client)  # 2.5: до первого сохранения желаемая нагрузка не задана (None).
+def test_calendar_tab_shows_weekly_load_field(client)  # 2.5: поле нагрузки есть на вкладке с пояснением про астрономические часы.
+def test_weekly_load_save_and_show(client)  # 2.5: валидная нагрузка сохраняется и повторно показывается в поле.
+def test_weekly_load_empty_clears(client)  # 2.5: пустое поле очищает сохранённое значение до None.
+def test_weekly_load_out_of_range_shows_error(client)  # 2.5: нагрузка вне 1..168 — ошибка на вкладке, сохранения нет.
+def test_weekly_load_isolation(client, tutor_factory)  # 2.5: сохранение нагрузки не создаёт настройки другому репетитору.
 def _calendar_values(**overrides)
 def test_calendar_form_accepts_whole_hour_interval()  # 2.1: валидный интервал целых часов разбирается в значения записи.
 def test_calendar_form_rejects_broken_format()  # 2.1: строка не «ЧЧ:ММ» — ошибка, значений записи нет.
 def test_calendar_form_rejects_non_whole_hours()  # 2.1: минуты не 00 отбраковываются — сетка моделируется целым часом.
 def test_calendar_form_rejects_reversed_interval()  # 2.1: конец раньше начала (в т.ч. «равно») — ошибка порядка.
+def test_calendar_form_accepts_weekly_load()  # 2.4: валидная нагрузка попадает в значения записи.
+def test_calendar_form_empty_weekly_load_is_none()  # 2.4: пустая нагрузка не ошибка — параметр очищается (None).
+def test_calendar_form_rejects_bad_weekly_load()  # 2.4: не число или вне 1..168 — ошибка, значений записи нет.
 def test_calendar_defaults(client)
 def test_calendar_save(client)
+def test_calendar_save_with_zone_change_keeps_other_settings(client)  # Смена часового пояса пересчитывает расписание, но другие настройки целы.
 def test_calendar_workday_defaults_shown_on_tab(client)  # 2.2: до первого сохранения в селектах дефолт 06:00–23:00.
 def test_calendar_bad_quarter_shows_error(client)
 def test_calendar_bad_duration_shows_error(client)  # Длительность — из закрытого списка длительностей урока.
@@ -6886,7 +7394,7 @@ def test_slots_cascade_with_tutor(tutor_factory)  # Удаление репет�
 def test_slot_table_is_registered_on_metadata()  # Модель зарегистрирована в агрегаторе: таблица и её инварианты на месте.
 
 # tests/test_slot_views.py [python]
-imports: datetime.UTC, datetime.datetime, pathlib.Path, re, pytest, app.database.SessionLocal, app.slot.models.slot.Slot
+imports: datetime.UTC, datetime.datetime, pathlib.Path, re, pytest, app.database.SessionLocal, app.slot.models.slot.Slot, app.tutor.services.settings.save_settings
 def owner(client, tutor_factory)  # Репетитор с зоной UTC, вошедший в клиент; возвращает его id.
 def _slots(tutor_id: str) -> list[Slot]  # Все окна репетитора из БД.
 def test_create_single_slot_via_form(client, owner)  # Форма одного окна создаёт строку в БД с полями из формы.
@@ -6906,6 +7414,12 @@ def test_past_slot_dialog_has_no_booking_action(client, owner, slot_factory)  # 
 def test_foreign_slot_is_404(client, owner, tutor_factory, slot_factory)  # Чужое окно отвечает как несуществующее — 404, а не 403.
 def test_dialog_has_both_modes(client, owner)  # Диалог создания содержит оба режима и их поля.
 def test_dialog_prefills_date_and_time_from_calendar(client, owner)  # ?date=` и `?time=` предзаполняют режим «Одно окно».
+def _save_duration(tutor_id: str, duration: int) -> None  # Сохранить «Длительность урока по умолчанию» в настройках профиля.
+def _selected_duration(page: str, select_id: str) -> str | None  # Значение выделенного option в селекте длительности по его id.
+def test_dialog_duration_defaults_to_settings(client, owner, select_id)  # Оба режима предвыбирают «Длительность урока по умолчанию» (45).
+def test_dialog_duration_defaults_without_settings_row(client, owner, select_id)  # Строки настроек нет — действует дефолт профиля 60 минут.
+def test_dialog_single_duration_keeps_calendar_prefill(client, owner)  # ?date=`/`?time=` не сбрасывают длительность из настроек.
+def test_dialog_duration_ignores_invalid_settings(client, owner)  # Мусор в настройке (ручная правка БД) — селект на дефолте 60.
 def test_batch_preview_counts_windows(client, owner)  # Предпросмотр показывает «Будет создано окон» и времена дня.
 def test_batch_preview_lists_skip_reasons(client, owner, student_factory)  # Пропуск по уроку виден в предпросмотре с подписью причины.
 def test_batch_preview_shows_limit_error(client, owner)  # Превышение лимита видно уже в предпросмотре.
@@ -6978,6 +7492,16 @@ def test_isolation_between_tutors(
 )
 def test_unknown_tab_falls_back_to_overview(client, tutor_factory)
 
+# tests/test_student_age.py [python]
+imports: datetime.UTC, datetime.date, datetime.datetime, types.SimpleNamespace, app.student.services.birthdays.full_years, app.student.services.presentation.student_age_label
+def test_full_years_counts_only_completed_years()  # День рождения в текущем году ещё не наступил — год не засчитан.
+def test_full_years_february_29_in_non_leap_year()  # Рождение 29 февраля: полные годы прибавляются 1 марта.
+def test_full_years_future_birth_date_is_unknown()  # Дата рождения в будущем — возраст неизвестен, а не отрицательный.
+def _tutor(timezone: str = "UTC")  # Минимальная карточка педагога: подписи нужна только зона.
+def test_student_age_label_pluralizes_years(monkeypatch)  # Склонение: 1 год, 2 года, 5 лет, 11 лет, 21 год.
+def test_student_age_label_without_date_is_empty(monkeypatch)  # Нет даты или она в будущем — пустая строка, подпись подтипа ставит шаблон.
+def test_student_age_label_uses_tutor_timezone(monkeypatch)  # Возраст считается по местной дате педагога, а не по UTC.
+
 # tests/test_student_auto_activation.py [python]
 imports: sqlalchemy.select, pytest, app.database.SessionLocal, app.finance.models.account_operation.AccountOperation, app.student.models.student.Student
 def _owner(client, tutor_factory, email="auto-act@example.com") -> str  # Репетитор, вошедший в клиент; возвращает его id.
@@ -7015,6 +7539,26 @@ def test_invite_route_returns_updated_block(client, owner, student_factory)  # P
 def test_invite_route_without_htmx_redirects(client, owner, student_factory)  # Без JS — 303 на карточку: форма работает и без htmx.
 def test_invite_route_isolation(client, owner, tutor_factory, student_factory)  # Чужой ученик и несуществующий неразличимы — 404; приглашения нет.
 def test_invite_reissue_replaces_link(client, owner, student_factory)  # Перевыпуск: прежняя ссылка перестаёт работать, новая активна.
+
+# tests/test_student_city.py [python]
+imports: json, re, html.unescape, pathlib.Path, pytest, app.database.SessionLocal, app.student.models.student.Student, app.student.services.cities.city_options, app.student.services.cities.city_options_json
+def owner(client, tutor_factory)  # Репетитор, вошедший в клиент; возвращает его id.
+def _create_payload(**overrides) -> dict
+def _city_options_from_html(html: str) -> list[dict]  # Города из `data-options` блока поля «Город» (не первого на странице).
+def test_options_are_cities_of_tutor_students(tutor_factory, student_factory)
+def test_options_ignore_empty_cities(tutor_factory, student_factory)
+def test_options_collapse_duplicates_case_insensitively(tutor_factory, student_factory)  # «Москва» и «москва» — один вариант: остаётся первое написание.
+def test_options_are_sorted_case_insensitively(tutor_factory, student_factory)
+def test_options_exclude_current_student(tutor_factory, student_factory)  # Свой город открытой карточки в подсказки не попадает.
+def test_options_do_not_leak_other_tutors(tutor_factory, student_factory)
+def test_options_json_keeps_cyrillic_readable(tutor_factory, student_factory)
+def test_form_offers_cities_of_other_students(client, owner, student_factory)
+def test_edit_form_hides_own_city_from_options(client, owner, student_factory)
+def test_city_is_saved(client, owner, student_factory)
+def test_city_not_in_options_is_saved_as_typed(client, owner, student_factory)  # Города нет в подсказках — он всё равно сохраняется как набран.
+def test_city_is_saved_for_adult(client, owner, student_factory)
+def test_empty_city_clears_it(client, owner, student_factory)
+def test_city_survives_validation_error(client, owner)  # После ошибки валидации форма показывает введённый город, а не пустое поле.
 
 # tests/test_student_login_hint.py [python]
 imports: pytest, app.database.SessionLocal, app.student.models.student.Student, app.student.models.student_access.StudentAccess, app.student.services.credentials.suggest_login
@@ -7079,6 +7623,11 @@ def test_empty_birth_date_is_none()
 def test_invalid_birth_date_is_rejected(raw)
 def test_adult_keeps_birth_date()  # Дата рождения есть и у взрослого: ограничение «только ребёнок» не действует.
 def test_reminders_are_parsed_independently()
+def test_city_is_parsed_and_trimmed()
+def test_empty_city_is_empty_string()
+def test_too_long_city_is_rejected()
+def test_city_at_limit_is_accepted()
+def test_adult_keeps_city()  # Город есть и у взрослого: сброс «только для ребёнка» к нему не применяется.
 def test_contact_rows_are_parsed_by_index()
 def test_empty_contact_row_is_skipped()
 def test_contact_phone_is_formatted()
@@ -7108,6 +7657,7 @@ def test_lookup_reports_already_linked(tutor_factory, student_factory)
 def test_lookup_returns_none_without_matches(tutor_factory)
 def test_update_changes_fields_but_not_id_or_tutor(tutor_factory, student_factory)
 def test_create_and_update_store_birth_date(tutor_factory, student_factory)  # Дата рождения записывается при создании и очищается пустым значением.
+def test_create_and_update_store_city(tutor_factory)  # Город записывается при создании и очищается пустым значением.
 def test_update_reuses_contact_and_updates_it_for_all_students(
     tutor_factory, student_factory
 )  # Изменение контакта видно у всех учеников, к которым он привязан.
@@ -7168,6 +7718,10 @@ def test_validation_feedback_lives_in_common_module()  # Форма ученик
 def test_default_tab_is_general()  # Вкладка по умолчанию «Общее»; её же подставляет сервер без `?tab=`.
 def test_grade_and_school_depend_on_kind(client, owner)
 def test_birth_date_is_date_input_without_kind_dependency(client, owner)  # Дата рождения — обычный `type="date"`, доступный и ребёнку, и взрослому.
+def test_city_field_precedes_school_field(client, owner)  # Поле «Город» стоит перед полем «Школа».
+def test_city_field_is_combobox_with_options(client, owner)  # Город — текстовый ввод с подсказками (combobox), а не обычное поле.
+def test_city_field_does_not_depend_on_kind(client, owner)  # Город доступен и ребёнку, и взрослому — в отличие от класса и школы.
+def test_edit_form_preselects_saved_city(client, owner, student_factory)
 def test_modal_uses_alpine_and_closes_by_escape(client, owner)  # Escape закрывает только верхний слой: счёт поверх карточки — первым.
 def test_pages_have_second_modal_layer(client, owner, student_factory)  # #modal-payment` — сосед `#modal` на обеих страницах учеников.
 def test_edit_with_tab_payments_opens_on_payments(client, owner, student_factory)  # ?tab=payments` открывает карточку сразу на вкладке «Платежи».
@@ -7284,7 +7838,7 @@ def test_card_without_contacts_renders(client, owner, student_factory)
 def test_card_requires_login(client, owner, student_factory)  # Карточка без действующей сессии — редирект на вход.
 
 # tests/test_students_ui.py [python]
-imports: re, datetime.UTC, datetime.datetime, pathlib.Path, pytest, app.database.SessionLocal, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact
+imports: re, datetime.UTC, datetime.date, datetime.datetime, pathlib.Path, pytest, app.database.SessionLocal, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact
 def owner(client, tutor_factory)  # Репетитор, вошедший в клиент; возвращает его id.
 def _css_block(selector: str) -> str  # Тело правила `selector { ... }` с учётом вложенных блоков.
 def _card_article(html: str) -> str  # HTML одной карточки ученика — без сайдбара и нижнего меню.
@@ -7294,6 +7848,27 @@ def test_card_shows_own_contacts(client, owner, student_factory)  # Карточ
 def test_card_without_contacts_renders(client, owner, student_factory)  # Без контактов карточка рендерится с пустыми метриками и планом.
 def test_card_shows_initials_and_status_chip(client, owner, student_factory)
 def test_card_hides_grade_and_school_for_adult(client, owner, student_factory)
+def test_card_shows_city_with_icon(client, owner, student_factory)  # Миникарточка списка показывает город с иконкой.
+def test_card_without_city_has_no_city_icon(client, owner, student_factory)  # Без города иконки города в карточке нет (и блок контактов не пустует).
+def test_card_shows_city_for_adult(client, owner, student_factory)  # Город виден и у взрослого: ограничение «только ребёнок» к нему не относится.
+def test_card_page_shows_city_with_icon(client, owner, student_factory)  # Большая карточка ученика показывает город с иконкой перед школой.
+def test_card_page_shows_city_for_adult(client, owner, student_factory)  # У взрослого город в большом профиле виден, хотя школы нет.
+def fixed_today(monkeypatch)  # Фиксирует «сегодня» педагога: 2 ноября 2026 года (зона UTC).
+def test_card_shows_age_instead_of_child_label(
+    client, owner, student_factory, fixed_today
+)  # У ребёнка с датой рождения вместо «Ребёнок» — возраст полных лет.
+def test_card_shows_age_instead_of_adult_label(
+    client, owner, student_factory, fixed_today
+)  # У взрослого с датой рождения возраст заменяет «Взрослый».
+def test_card_shows_age_with_grade_for_child(
+    client, owner, student_factory, fixed_today
+)  # Суффикс «, N класс» у ребёнка сохраняется рядом с возрастом.
+def test_card_without_birth_date_keeps_kind_label(
+    client, owner, student_factory, fixed_today
+)  # Без даты рождения подпись подтипа остаётся прежней.
+def test_card_with_future_birth_date_keeps_kind_label(
+    client, owner, student_factory, fixed_today
+)  # Дата рождения в будущем не даёт отрицательного возраста — подтип.
 def test_card_shows_real_metrics_and_actions(client, owner, student_factory)  # Метрики карточки настоящие (пусть и нулевые), маршруты кнопок есть.
 def test_card_page_shows_balance_summary(client, owner, student_factory)  # Вместо заглушки «Уроки и оплаты» — настоящий баланс ученика.
 def test_card_page_shows_balance_from_operations(
@@ -7383,6 +7958,29 @@ def test_combobox_js_is_served(client)
 def test_combobox_js_registers_before_alpine_loads()  # Подписка на `alpine:init` должна быть готова до обхода DOM.
 def test_combobox_js_handles_escape_before_modal()  # Escape закрывает список, а не модалку: событие не доходит до window.
 def test_styles_have_combobox_rules()
+
+# tests/test_timezone_shift.py [python]
+imports: re, datetime.UTC, datetime.datetime, zoneinfo.ZoneInfo, app.common.services.tutor_time.to_local, app.database.SessionLocal, app.finance.models.account_operation.AccountOperation, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.slot.models.slot.Slot, app.tutor.models.tutor.Tutor, app.tutor.services.clock.as_utc, app.tutor.services.timezone_shift.shift_moment, app.tutor.services.timezone_shift.shift_tutor_schedule
+def _utc(value)  # База данных хранит naive UTC (SQLite теряет tzinfo) — нормализуем.
+def test_shift_moment_keeps_wall_time_forward()  # UTC+04 → UTC+07: 10:00 настенных остаются 10:00, UTC 06:00 → 03:00.
+def test_shift_moment_keeps_wall_time_backward()  # UTC+07 → UTC+04: 10:00 настенных остаются 10:00, UTC 03:00 → 06:00.
+def test_shift_moment_naive_value_treated_as_utc()  # SQLite хранит naive-значения UTC: наивный вход конвертится так же.
+def test_shift_moment_respects_dst_per_row()  # Зона с переходом на летнее время: смещение зависит от даты.
+def test_shift_moment_old_equals_new_is_identity()  # old == new: сдвиг ничего не меняет (включая написание зон).
+def _add_lesson(db, tutor_id, **overrides) -> str  # Урок с первым учеником репетитора; возвращает id урока.
+def test_shift_tutor_schedule_shifts_lessons_slots_homework_charges(tutor_factory)  # Сдвиг пересчитывает уроки, окна, сроки ДЗ и списания.
+def test_shift_tutor_schedule_preserves_wall_time_in_db_value(tutor_factory)  # UTC сменилось, но настенное время урока в новой зоне прежнее (10:00).
+def test_shift_tutor_schedule_ignores_foreign_tutor(tutor_factory)  # Чужой репетитор и его окно/ДЗ не трогаются сдвигом.
+def test_shift_tutor_schedule_handles_slot_collision(tutor_factory)  # Двухфазный сдвиг окна: коллизия с UNIQUE(tutor_id, starts_at).
+def test_shift_tutor_schedule_handles_null_due_at(tutor_factory)  # ДЗ без срока сдачи (due_at NULL) сдвигу не мешает и остаётся NULL.
+def _register_and_login(client, email)
+def _calendar_form(timezone)
+def _tutor_id_by_email(email)
+def test_profile_calendar_post_shifts_schedule(client)  # POST вкладки «Календарь» сам пересчитывает урок/ДЗ и меняет зону.
+def _add_homework(db, lesson_id, **overrides)
+def test_profile_calendar_keeps_lesson_when_zone_unchanged(client)  # Сохранение той же зоны ничего не пересчитывает.
+def _event_cards(html)  # Карточки-события: дата колонки, начало, длительность, подпись времени.
+def test_calendar_html_identical_after_zone_change(client)  # Приёмка: карточки календаря до и после смены зоны совпадают.
 
 # tests/test_tutor_params.py [python]
 imports: sqlalchemy.text, app.database.SessionLocal, app.tutor.services.params.all_params, app.tutor.services.params.delete_param, app.tutor.services.params.get_param, app.tutor.services.params.set_param
