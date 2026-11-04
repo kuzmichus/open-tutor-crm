@@ -469,6 +469,124 @@ def test_calendar_tab_save_keeps_show_price_flag(client):
     assert settings.show_calendar_price is False
 
 
+def _calendar_payload(**overrides):
+    """Полный набор полей вкладки «Календарь» для POST."""
+    data = {
+        "timezone": "UTC",
+        "quarter1_end": "10-25",
+        "quarter2_end": "12-25",
+        "quarter3_end": "03-20",
+        "quarter4_end": "05-25",
+        "workday_start": "09:00",
+        "workday_end": "18:00",
+        "default_lesson_duration": "60",
+        "default_lesson_price": "",
+        "weekly_load_hours": "",
+    }
+    data.update(overrides)
+    return data
+
+
+def test_weekly_load_defaults_without_settings_row(client):
+    """2.5: до первого сохранения желаемая нагрузка не задана (None)."""
+    from app.tutor.services.settings import get_settings
+
+    _login(client)
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, tutor.id) is None
+        settings = get_settings(db, tutor.id)
+    assert settings.weekly_load_hours is None
+
+
+def test_calendar_tab_shows_weekly_load_field(client):
+    """2.5: поле нагрузки есть на вкладке с пояснением про астрономические часы."""
+    _login(client)
+    html = _calendar_page(client)
+    assert 'name="weekly_load_hours"' in html
+    assert "астрономических часов" in html
+    # До первого сохранения поле пустое.
+    assert 'name="weekly_load_hours" min="1" max="168" step="1"\n                   value=""' in html
+
+
+def test_weekly_load_save_and_show(client):
+    """2.5: валидная нагрузка сохраняется и повторно показывается в поле."""
+    _login(client)
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(weekly_load_hours="25"),
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/tutor/profile?tab=calendar&saved=1"
+
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        settings = db.get(TutorSettings, tutor.id)
+    assert settings.weekly_load_hours == 25
+
+    html = _calendar_page(client)
+    assert 'name="weekly_load_hours" min="1" max="168" step="1"\n                   value="25"' in html
+
+
+def test_weekly_load_empty_clears(client):
+    """2.5: пустое поле очищает сохранённое значение до None."""
+    _login(client)
+    tutor = _tutor_by_email("profile-user@example.com")
+    client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(weekly_load_hours="20"),
+        follow_redirects=False,
+    )
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, tutor.id).weekly_load_hours == 20
+
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(weekly_load_hours=""),
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, tutor.id).weekly_load_hours is None
+
+
+def test_weekly_load_out_of_range_shows_error(client):
+    """2.5: нагрузка вне 1..168 — ошибка на вкладке, сохранения нет."""
+    _login(client)
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(weekly_load_hours="169"),
+    )
+    assert response.status_code == 200
+    assert "Желаемая нагрузка" in response.text
+    # Ошибка показывается на вкладке «Календарь» — поле на месте.
+    assert 'name="weekly_load_hours"' in response.text
+
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, tutor.id) is None
+
+
+def test_weekly_load_isolation(client, tutor_factory):
+    """2.5: сохранение нагрузки не создаёт настройки другому репетитору."""
+    tutor_factory(email="load-other@example.com", password=PASSWORD)
+    _login(client, email="load-mine@example.com", name="Мой")
+
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(weekly_load_hours="20"),
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with SessionLocal() as db:
+        other = db.get(TutorSettings, _tutor_by_email("load-other@example.com").id)
+        assert other is None  # у чужого строки настроек нет и не появилось
+        mine = db.get(TutorSettings, _tutor_by_email("load-mine@example.com").id)
+        assert mine.weekly_load_hours == 20
+
+
 # ---------------------------------------------------------------------------
 # Разбор рабочего времени (сервис формы вкладки «Календарь»)
 # ---------------------------------------------------------------------------
@@ -485,6 +603,7 @@ def _calendar_values(**overrides):
         "quarter4_end": "05-25",
         "default_lesson_duration": "60",
         "default_lesson_price": "",
+        "weekly_load_hours": "20",
         "workday_start": "09:00",
         "workday_end": "18:00",
     }
@@ -523,6 +642,28 @@ def test_calendar_form_rejects_reversed_interval():
     values, errors = _calendar_values(workday_start="09:00", workday_end="09:00")
     assert values is None
     assert any("раньше окончания" in message for message in errors)
+
+
+def test_calendar_form_accepts_weekly_load():
+    """2.4: валидная нагрузка попадает в значения записи."""
+    values, errors = _calendar_values(weekly_load_hours="20")
+    assert errors == []
+    assert values["weekly_load_hours"] == 20
+
+
+def test_calendar_form_empty_weekly_load_is_none():
+    """2.4: пустая нагрузка не ошибка — параметр очищается (None)."""
+    values, errors = _calendar_values(weekly_load_hours="")
+    assert errors == []
+    assert values["weekly_load_hours"] is None
+
+
+def test_calendar_form_rejects_bad_weekly_load():
+    """2.4: не число или вне 1..168 — ошибка, значений записи нет."""
+    for raw in ("abc", "0", "-5", "169"):
+        values, errors = _calendar_values(weekly_load_hours=raw)
+        assert values is None, raw
+        assert any("Желаемая нагрузка" in message for message in errors), raw
 
 
 def test_calendar_defaults(client):
