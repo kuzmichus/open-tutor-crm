@@ -429,7 +429,6 @@ def test_homework_panel_renders_all_fields(owner, client, owner_lesson):
         "Учитывать дедлайн (напоминания и автоматический статус)",
         "Статус",
         "Файлы",
-        "Прикрепить файл",
         "Ссылка на запись урока",
         "Увидит ученик в кабинете",
         "Заметка педагога",
@@ -448,10 +447,15 @@ def test_homework_panel_renders_all_fields(owner, client, owner_lesson):
     for label in ("Не задано", "Задано", "Сдано", "Проверено", "Не выполнено"):
         assert label in page, label
 
-    # Файлы — заглушка: у кнопки нет name и она не отправляет данные.
-    attach = re.search(r"<button[^>]*>\s*Прикрепить файл\s*</button>", page)
-    assert attach is not None
-    assert "name=" not in attach.group(0)
+    # Файлы (change add-file-uploads): вместо кнопки-заглушки — поле выбора
+    # нескольких файлов, и форма отправляется multipart'ом.
+    upload = re.search(r"<input[^>]*name=\"files\"[^>]*>", page)
+    assert upload is not None, "нет поля выбора файлов"
+    assert 'type="file"' in upload.group(0)
+    assert "multiple" in upload.group(0)
+    assert 'hx-encoding="multipart/form-data"' in page
+    assert 'enctype="multipart/form-data"' in page
+    assert "Прикрепить файл" not in page
 
 
 # --------------------------------------------------------------------------

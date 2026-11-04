@@ -13,12 +13,14 @@
 условием в шаблоне. Роутов записи из кабинета родителя нет (спека).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.files.services.presentation import file_size_label
+from app.files.services.removal import files_of_homeworks
 from app.group.models.group_member import GroupMember
 from app.homework.models.homework import Homework
 from app.lesson.models.lesson import Lesson
@@ -60,6 +62,7 @@ class ChildHomeworkCard:
     status: str
     teacher_comment: str | None
     recording_url: str | None
+    files: list[dict] = field(default_factory=list)
 
 
 def child_homework(db: Session, student_id: str) -> list[ChildHomeworkCard]:
@@ -90,6 +93,10 @@ def child_homework(db: Session, student_id: str) -> list[ChildHomeworkCard]:
     # Свежее задание сверху; вторичный ключ держит порядок уроков с одним
     # временем (id в сортировке участвует, в контекст не попадает).
     rows.sort(key=lambda row: (row.starts_at, row[2]), reverse=True)
+    visible = rows[:HOMEWORK_LIMIT]
+    # Файлы прикреплены к ДЗ, а не к уроку: выборка одним SELECT на весь
+    # список, без N+1 на карточку (правило AGENTS.md 9).
+    files = files_of_homeworks(db, [row.id for row in visible])
     return [
         ChildHomeworkCard(
             lesson_starts_at=row.starts_at,
@@ -99,6 +106,15 @@ def child_homework(db: Session, student_id: str) -> list[ChildHomeworkCard]:
             status=row.status,
             teacher_comment=row.teacher_comment,
             recording_url=row.recording_url,
+            files=[
+                {
+                    "id": file.id,
+                    "name": file.original_name,
+                    "size_label": file_size_label(file.size),
+                    "url": f"/files/{file.id}",
+                }
+                for file in files.get(row.id, [])
+            ],
         )
-        for row in rows[:HOMEWORK_LIMIT]
+        for row in visible
     ]

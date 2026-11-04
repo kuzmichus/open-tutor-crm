@@ -71,6 +71,13 @@
         </p>
         {% endif %}
 
+        {# Файлы задания (спека homework-management): ученик только
+           скачивает — кнопки удаления нет (`editable` не задан). #}
+        {% if item.files %}
+        {% set files = item.files %}
+        {% include "homework/_files.html" %}
+        {% endif %}
+
         <hr class="hw-card__divider">
 
         {% if item.homework.status != 'checked' %}

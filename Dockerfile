@@ -38,13 +38,15 @@ COPY --chown=app:app pyproject.toml alembic.ini cron.py main.py ./
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app app ./app
 
-# База на томе /data: файл внутри контейнера пережил бы перезапуск,
-# но пропал бы при пересборке образа.
+# База и загруженные файлы — на томе /data: файл внутри контейнера пережил бы
+# перезапуск, но пропал бы при пересборке образа. Каталог файлов лежит рядом с
+# базой, чтобы одна резервная копия тома забирала и то, и другое.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    DATABASE_URL=sqlite:////data/tutor.db
+    DATABASE_URL=sqlite:////data/tutor.db \
+    FILES_LOCAL_ROOT=/data/files
 
-RUN mkdir /data && chown app:app /data
+RUN mkdir /data /data/files && chown app:app /data /data/files
 USER app
 
 VOLUME /data

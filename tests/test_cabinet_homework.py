@@ -364,3 +364,73 @@ def test_answer_to_foreign_homework_404(
     )
     assert response.status_code == 404
     assert _get_answer(foreign_homework) is None
+
+
+# --------------------------------------------------------------------------
+# Файлы задания в карточке (change add-file-uploads)
+# --------------------------------------------------------------------------
+
+def _attach_file(homework_id: str, name: str = "условие.pdf", body: bytes = b"%PDF"):
+    """Прикрепляет файл к ДЗ напрямую в БД; возвращает id файла."""
+    from app.files.models.homework_file import HomeworkFile
+    from app.files.models.stored_file import StoredFile
+
+    with SessionLocal() as db:
+        homework = db.get(Homework, homework_id)
+        file = StoredFile(
+            tutor_id=_tutor_of(homework.lesson_id),
+            backend="local",
+            storage_key=f"t/{name}",
+            original_name=name,
+            content_type="application/pdf",
+            size=len(body),
+        )
+        db.add(file)
+        db.flush()
+        db.add(
+            HomeworkFile(homework_id=homework_id, file_id=file.id, position=0)
+        )
+        db.commit()
+        return file.id
+
+
+def _tutor_of(lesson_id: str) -> str:
+    """Репетитор урока (владелец ученика)."""
+    from app.lesson.models.lesson import Lesson
+    from app.student.models.student import Student
+
+    with SessionLocal() as db:
+        lesson = db.get(Lesson, lesson_id)
+        return db.get(Student, lesson.student_id).tutor_id
+
+
+def test_student_card_lists_attached_files(
+    client, owner, student_factory, lesson_factory
+):
+    """Ученик видит файл задания со ссылкой на скачивание и размером."""
+    student_id = student_factory(tutor_id=owner)
+    lesson_id = lesson_factory(student_id=student_id)
+    homework_id = _make_homework(lesson_id)
+    file_id = _attach_file(homework_id, name="условие.pdf", body=b"x" * 2048)
+    _student_login(client, student_id)
+
+    page = client.get("/student/homework").text
+
+    assert "условие.pdf" in page
+    assert f'href="/files/{file_id}"' in page
+    assert "2 КБ" in page
+    # Ученик только скачивает: кнопки удаления в кабинете нет.
+    assert "hw-files__remove" not in page
+
+
+def test_student_card_without_files_has_no_list(
+    client, owner, student_factory, lesson_factory
+):
+    """Без прикреплённых файлов списка нет — пустой блок не рендерится."""
+    student_id = student_factory(tutor_id=owner)
+    lesson_id = lesson_factory(student_id=student_id)
+    _make_homework(lesson_id)
+    _student_login(client, student_id)
+
+    page = client.get("/student/homework").text
+    assert "hw-files" not in page

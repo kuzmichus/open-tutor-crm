@@ -6,6 +6,11 @@
 ДЗ отдельно от урока»). При любой ошибке транзакция откатывается и в БД
 не меняется ничего (design D4).
 
+`commit=False` — режим вьюхи с файлами: запись ДЗ только сбрасывается
+(`flush`), чтобы у неё появился id для привязки файлов, а коммит делает
+вызывающий после успешной загрузки. Ошибка файла тогда откатывает и ДЗ, и
+файлы одной транзакцией (design D5).
+
 Сервис не знает про FastAPI: на вход — словарь очищенных значений
 `parse_homework_form`, на выход — список ошибок (пустой при успехе).
 """
@@ -28,20 +33,27 @@ _VALUE_FIELDS = (
     "teacher_comment",
 )
 
-
 def get_homework(db: Session, lesson_id: str) -> Homework | None:
     """Запись ДЗ урока или None (ленивое создание — записи ещё нет)."""
     return db.scalars(
         select(Homework).where(Homework.lesson_id == lesson_id)
     ).one_or_none()
 
-
-def save_homework(db: Session, lesson: Lesson, data: dict) -> list[str]:
+def save_homework(
+    db: Session,
+    lesson: Lesson,
+    data: dict,
+    *,
+    commit: bool = True,
+) -> list[str]:
     """Создаёт (лениво) или обновляет ДЗ урока; при ошибке — rollback.
 
     Проверки дублируются здесь (как в `lesson_writer`): форма могла быть
     отправлена криво или в обход разбора. Пустой статус — значение по
     умолчанию «Не задано».
+
+    `commit=False` — запись сбрасывается, но не коммитится: вьюха прикрепляет
+    файлы и коммитит сама (или откатывает всё при ошибке файла).
     """
     errors = validate_homework_data(data)
     if errors:
@@ -65,5 +77,9 @@ def save_homework(db: Session, lesson: Lesson, data: dict) -> list[str]:
         for field in _VALUE_FIELDS:
             setattr(homework, field, values[field])
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        # id нужен привязке файлов — flush выдаёт его без коммита.
+        db.flush()
     return []

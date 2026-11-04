@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.files.services.presentation import file_size_label
+from app.files.services.removal import files_of_homeworks
 from app.group.models.group_member import GroupMember
 from app.homework.models.answer import HomeworkAnswer
 from app.homework.models.answer_link import HomeworkAnswerLink
@@ -25,19 +27,34 @@ from app.lesson.models.lesson import Lesson
 # Статус «Не задано» — запись без домашнего задания: в кабинете её нет.
 HIDDEN_STATUSES = ("not_assigned",)
 
+def _file_rows(files) -> list[dict]:
+    """Строки списка файлов: id, имя, подпись размера, адрес скачивания."""
+    return [
+        {
+            "id": file.id,
+            "name": file.original_name,
+            "size_label": file_size_label(file.size),
+            "url": f"/files/{file.id}",
+        }
+        for file in files
+    ]
+
 
 @dataclass(frozen=True)
 class HomeworkCard:
     """Строка списка «Домашних заданий»: ДЗ, его урок, ответ и ссылки.
 
     `answer` — None, пока ученик не отправлял ответ; `links` — адреса в
-    порядке списка (по `position`).
+    порядке списка (по `position`). `files` — прикреплённые к заданию файлы
+    (спека homework-management): строки {id, name, size_label, url},
+    собранные здесь, чтобы шаблон не ходил в БД и не считал размеры.
     """
 
     homework: Homework
     lesson: Lesson
     answer: HomeworkAnswer | None
     links: list[str] = field(default_factory=list)
+    files: list[dict] = field(default_factory=list)
 
 
 def _visible_rows(db: Session, student_id: str) -> list[tuple[Homework, Lesson]]:
@@ -94,9 +111,10 @@ def _assemble(
     db: Session,
     rows: list[tuple[Homework, Lesson]],
 ) -> list[HomeworkCard]:
-    """Карточки списка: добирает ответы и ссылки двумя массовыми SELECT."""
+    """Карточки списка: добирает ответы, ссылки и файлы массовыми SELECT."""
     answers = _answers_map(db, [homework.id for homework, _ in rows])
     links = _links_map(db, [answer.id for answer in answers.values()])
+    files = files_of_homeworks(db, [homework.id for homework, _ in rows])
     cards = []
     for homework, lesson in rows:
         answer = answers.get(homework.id)
@@ -106,6 +124,7 @@ def _assemble(
                 lesson=lesson,
                 answer=answer,
                 links=links.get(answer.id, []) if answer else [],
+                files=_file_rows(files.get(homework.id, [])),
             )
         )
     # Свежее задание сверху; вторичный ключ держит порядок уроков с одним

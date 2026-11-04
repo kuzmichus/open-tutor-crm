@@ -18,19 +18,23 @@
    (`{% include %}`) панель не должна подменять контекст полей урока
    (`form`, `statuses`, `errors`).
 
-   «Прикрепить файл» — визуальная заглушка без `name`: файлы в этой
-   итерации не загружаются и не сохраняются (спека «Поля ДЗ без файлов
-   и автоматики»). Чекбокс дедлайна сохраняется, но напоминания и
-   автостатус по дедлайну пока не выполняются.
+   «Прикрепить файл» — поле выбора файлов: файлы загружаются вместе с
+   сохранением панели (несколько за один раз) и хранятся в сменном
+   хранилище — локальный каталог или S3 (спека file-storage). Список уже
+   прикреплённых файлов — партиал `homework/_files.html` с кнопкой
+   удаления. Чекбокс дедлайна сохраняется, но напоминания и автостатус по
+   дедлайну пока не выполняются.
 
    Контекст: lesson, hw_form (assignment, due_at_value, deadline_enabled,
-   status, recording_url, teacher_note, teacher_comment), hw_errors,
-   hw_saved (маркер успеха на форме, design D8), hw_statuses,
-   hw_status_labels. #}
+   status, recording_url, teacher_note, teacher_comment), hw_files
+   (строки {id, name, size_label, url}), hw_errors, hw_saved (маркер
+   успеха на форме, design D8), hw_statuses, hw_status_labels. #}
 <form id="homework-panel"
       hx-post="/tutor/lessons/{{ lesson.id }}/homework"
       hx-target="#homework-panel"
       hx-swap="outerHTML"
+      enctype="multipart/form-data"
+      hx-encoding="multipart/form-data"
       {% if hw_saved %}data-hw-saved="1"{% endif %}>
     {% if hw_errors %}
     <div class="error" role="alert">
@@ -79,14 +83,18 @@
             </label>
         </div>
 
-        <div class="field">
-            <span class="label" id="hw-files-label">Файлы</span>
-            {# Заглушка: без name и без обработчика — клик ничего не
-               загружает и не отправляет (спека). #}
-            <button class="btn btn--outline btn--sm" type="button"
-                    aria-describedby="hw-files-label">
-                Прикрепить файл
-            </button>
+        <div class="field field--full">
+            <label class="label" for="hw-files">Файлы</label>
+            <input class="input hw-upload" id="hw-files" type="file"
+                   name="files" multiple
+                   aria-describedby="hw-files-hint">
+            <p class="form-hint" id="hw-files-hint">
+                Можно выбрать несколько файлов. До {{ files_max_size_mb }} МБ,
+                форматы: {{ files_allowed_extensions }}.
+            </p>
+            {% set files = hw_files %}
+            {% set editable = true %}
+            {% include "homework/_files.html" %}
         </div>
 
         <div class="field field--full">

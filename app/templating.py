@@ -132,3 +132,10 @@ from app.cabinet.services.presentation import (  # noqa: E402
 )
 
 register_cabinet_template_helpers()
+
+# Функции отображения модуля файлов (размер «12,4 КБ» в списке файлов ДЗ).
+from app.files.services.presentation import (  # noqa: E402
+    register_template_helpers as register_files_template_helpers,
+)
+
+register_files_template_helpers()

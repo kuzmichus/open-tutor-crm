@@ -654,3 +654,57 @@ def test_three_sessions_coexist_in_one_client(
     assert client.get("/parent", follow_redirects=False).status_code == 303
     assert client.get("/tutor/students").status_code == 200
     assert client.get("/student").status_code == 200
+
+# --------------------------------------------------------------------------
+# Файлы задания на вкладке ребёнка (change add-file-uploads)
+# --------------------------------------------------------------------------
+
+def test_parent_child_homework_lists_files(
+    client, owner, student_factory, contact_factory, lesson_factory
+):
+    """Родитель видит прикреплённые к заданию файлы со ссылкой на скачивание."""
+    from app.files.models.homework_file import HomeworkFile
+    from app.files.models.stored_file import StoredFile
+    from app.homework.models.homework import Homework
+
+    contact_id = _make_contact(owner)
+    student_id = student_factory(tutor_id=owner)
+    _link(student_id, contact_id)
+    _seed_parent_access(contact_id)
+    client.post(
+        "/parent/login",
+        data={"email": "mama@example.com", "password": PASSWORD},
+    )
+
+    lesson_id = lesson_factory(student_id=student_id, status="planned")
+    with SessionLocal() as db:
+        homework = Homework(
+            lesson_id=lesson_id, assignment="Страница 12", status="assigned"
+        )
+        db.add(homework)
+        db.flush()
+        file = StoredFile(
+            tutor_id=owner,
+            backend="local",
+            storage_key="t/условие.pdf",
+            original_name="условие.pdf",
+            content_type="application/pdf",
+            size=1024,
+        )
+        db.add(file)
+        db.flush()
+        db.add(
+            HomeworkFile(
+                homework_id=homework.id, file_id=file.id, position=0
+            )
+        )
+        db.commit()
+        file_id = file.id
+
+    page = client.get(f"/parent/students/{student_id}/homework").text
+
+    assert "условие.pdf" in page
+    assert f'href="/files/{file_id}"' in page
+    assert "1 КБ" in page
+    # Родитель только скачивает: кнопки удаления нет.
+    assert "hw-files__remove" not in page
