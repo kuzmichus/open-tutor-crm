@@ -1,12 +1,14 @@
-{# Сводка финансов: карточки-показатели и арифметика «заработано/получено».
+{# Сводка финансов: карточки-показатели, цена простоя и арифметика
+   «заработано/получено».
 
    Корень — обновляемый контейнер: после сохранения платежа или расхода
    диалоги шлют `payment-saved`/`expense-saved`, и блок перезапрашивает
    себя целиком (design D6) — числа всегда с сервера, в браузере нет ни
    одной денежной формулы.
 
-   Два рода чисел (design D3): поток за период (доход, возвраты, чистый
-   доход, расходы, заработано) и состояние на сейчас (долги, переплата) —
+   Три рода чисел (design D3): поток за период (начисленный доход,
+   возвраты, чистый доход, расходы, заработано), касса за период
+   (получено от учеников) и состояние на сейчас (долги, переплата) —
    подписи карточек это различают.
 
    Восемь карточек одного веса — стена, в которой глазу не за что
@@ -19,8 +21,9 @@
    переключателя, ни состояния, которое сбросилось бы при обновлении
    блока по htmx.
 
-   Контекст: period (key), summary (income, refunds, net_income, expenses,
-   profit, left_for_tutor, earned, debts, overpayments, compare_note). #}
+   Контекст: period (key), summary (income — начисленный доход, refunds,
+   expenses, profit, left_for_tutor, earned, received, debts,
+   overpayments, compare_note, time, idle, types, type_insight). #}
 <div class="fin-summary" id="finance-summary"
      hx-get="/tutor/finance/summary?period={{ period.key }}"
      hx-trigger="payment-saved from:body, expense-saved from:body"
@@ -37,8 +40,12 @@
                     <i data-lucide="arrow-down-left"></i>
                 </span>
             </div>
+            {# Начисленный доход, а не касса: урок проведён — деньги
+               заработаны, даже если ученик ещё не заплатил. Долг при этом
+               виден в карточке «Долги учеников» — одно и то же событие с
+               двух сторон (доход и дебиторка). #}
             <p class="fin-kpi__value fin-kpi__value--green">{{ money(summary.income) }}</p>
-            <p class="fin-kpi__sub">Оплаченные платежи за период</p>
+            <p class="fin-kpi__sub">Начислено за проведённые уроки, включая неоплаченные</p>
         </section>
 
         <section class="card fin-kpi fin-kpi--lead" aria-label="Чистая прибыль">
@@ -49,9 +56,9 @@
                 </span>
             </div>
             {# balance_label, а не money: прибыль может быть отрицательной
-               (расходы превысили доход), минус — типографский, как у долгов. #}
+               (расходы превысили полученное), минус — типографский. #}
             <p class="fin-kpi__value fin-kpi__value--violet">{{ balance_label(summary.profit) }}</p>
-            <p class="fin-kpi__sub">Чистый доход минус расходы</p>
+            <p class="fin-kpi__sub">Получено от учеников минус расходы</p>
         </section>
 
         <section class="card fin-kpi fin-kpi--lead" aria-label="Долги учеников">
@@ -80,15 +87,17 @@
             <p class="fin-kpi__sub">Возвращено ученикам</p>
         </section>
 
-        <section class="card fin-kpi fin-kpi--compact" aria-label="Чистый доход">
+        <section class="card fin-kpi fin-kpi--compact" aria-label="Получено от учеников">
             <div class="fin-kpi__head">
-                <span class="fin-kpi__title">Чистый доход</span>
+                <span class="fin-kpi__title">Получено от учеников</span>
                 <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">
                     <i data-lucide="wallet"></i>
                 </span>
             </div>
-            <p class="fin-kpi__value fin-kpi__value--green">{{ money(summary.net_income) }}</p>
-            <p class="fin-kpi__sub">Доход минус возвраты</p>
+            {# Касса за период: оплаченные платежи минус возвраты. Отдельная
+               карточка от «Дохода»: начислено и получено — разные суммы. #}
+            <p class="fin-kpi__value fin-kpi__value--green">{{ money(summary.received) }}</p>
+            <p class="fin-kpi__sub">Оплаченные платежи минус возвраты</p>
         </section>
 
         <section class="card fin-kpi fin-kpi--compact" aria-label="Расходы за период">
@@ -102,15 +111,17 @@
             <p class="fin-kpi__sub">Траты репетитора за период</p>
         </section>
 
-        <section class="card fin-kpi fin-kpi--compact" aria-label="Заработано уроками">
+        {# Проведённое время: цифра «Заработано» без часов не говорит,
+           за какое астрономическое время она получена. #}
+        <section class="card fin-kpi fin-kpi--compact" aria-label="Проведено часов">
             <div class="fin-kpi__head">
-                <span class="fin-kpi__title">Заработано (уроки)</span>
+                <span class="fin-kpi__title">Проведено часов</span>
                 <span class="fin-kpi__icon fin-kpi__icon--violet" aria-hidden="true">
-                    <i data-lucide="graduation-cap"></i>
+                    <i data-lucide="clock"></i>
                 </span>
             </div>
-            <p class="fin-kpi__value fin-kpi__value--violet">{{ money(summary.earned) }}</p>
-            <p class="fin-kpi__sub">Списания за проведённые уроки</p>
+            <p class="fin-kpi__value fin-kpi__value--violet">{{ summary.time.duration_label }}</p>
+            <p class="fin-kpi__sub">Астрономическое время проведённых уроков</p>
         </section>
 
         <section class="card fin-kpi fin-kpi--compact" aria-label="Переплата учеников">
@@ -125,16 +136,43 @@
         </section>
     </div>
 
+    {# Упущенная выручка: цена простоя в текущем/будущем месяце. Красный —
+       это не ошибка, а потеря, которую видно только в деньгах. #}
+    <section class="card fin-idle{% if not summary.idle.has_loss %} fin-idle--quiet{% endif %}"
+             aria-label="Упущенная выручка">
+        <div class="fin-idle__head">
+            <h2 class="fin-idle__title">Упущенная выручка</h2>
+            <span class="fin-idle__icon" aria-hidden="true">
+                <i data-lucide="hourglass"></i>
+            </span>
+        </div>
+        {% if summary.idle.has_loss %}
+        <p class="fin-idle__value">Вы теряете ~{{ money(summary.idle.lost) }} из-за {{ summary.idle.hours_phrase }} в этом месяце</p>
+        <p class="fin-idle__note">Свободные часы × средняя стоимость часа ({{ summary.idle.rev_label }}). Расчёт — до конца текущего месяца.</p>
+        {% elif summary.idle.minutes > 0 %}
+        <p class="fin-idle__value">У вас {{ summary.idle.hours_phrase }} в этом месяце</p>
+        <p class="fin-idle__note">Сумму потерь пока не посчитать: нужны проведённые часы и начисленный доход за период.</p>
+        {% else %}
+        <p class="fin-idle__value">Свободных часов до конца месяца нет</p>
+        <p class="fin-idle__note">Рабочее время занято уроками или закрыто недоступностью — терять нечего.</p>
+        {% endif %}
+        <a class="btn btn--outline btn--sm fin-idle__link" href="{{ summary.idle.calendar_url }}">
+            <i data-lucide="calendar"></i>
+            Посмотреть свободные окна
+        </a>
+    </section>
+
     <section class="card fin-compare" aria-label="Заработано и получено">
         <h2 class="fin-compare__title">Заработано и получено</h2>
         <div class="fin-compare__grid">
             <div class="fin-compare__item">
                 <p class="fin-compare__label">Заработано уроками</p>
                 <p class="fin-compare__value">{{ money(summary.earned) }}</p>
+                <p class="fin-compare__sub">Проведено: {{ summary.time.duration_label }}</p>
             </div>
             <div class="fin-compare__item">
                 <p class="fin-compare__label">Получено от учеников</p>
-                <p class="fin-compare__value fin-compare__value--green">{{ money(summary.net_income) }}</p>
+                <p class="fin-compare__value fin-compare__value--green">{{ money(summary.received) }}</p>
             </div>
             <div class="fin-compare__item">
                 <p class="fin-compare__label fin-compare__label--minus">− Расходы</p>
@@ -147,6 +185,37 @@
                 <p class="fin-compare__value{% if summary.left_is_negative %} fin-compare__value--red{% else %} fin-compare__value--green{% endif %}">{{ balance_label(summary.left_for_tutor) }}</p>
             </div>
         </div>
+        <p class="fin-compare__rate">Средняя стоимость часа: <strong>{{ summary.time.rev_per_hour_label }}</strong></p>
         <p class="fin-compare__note">{{ summary.compare_note }}</p>
+    </section>
+
+    {# Доходы по типам занятий: «сколько приносит час» у индивидуальных и
+       групповых — сравнение, из которого рождается совет набрать группу. #}
+    <section class="card fin-types" aria-label="Доходы по типам занятий">
+        <h2 class="fin-types__title">Доходы по типам занятий</h2>
+        <div class="fin-types__grid">
+            {% for column in summary.types %}
+            <div class="fin-types__column" data-type="{{ column.key }}">
+                <p class="fin-types__label">{{ column.label }}</p>
+                <p class="fin-types__value">{{ money(column.earned) }}</p>
+                <dl class="fin-types__stats">
+                    <div class="fin-types__stat">
+                        <dt>Потрачено времени</dt>
+                        <dd>{{ column.duration_label }}</dd>
+                    </div>
+                    <div class="fin-types__stat">
+                        <dt>Средняя стоимость часа</dt>
+                        <dd>{{ column.rate_label }}</dd>
+                    </div>
+                </dl>
+            </div>
+            {% endfor %}
+        </div>
+        {% if summary.type_insight %}
+        <p class="fin-types__insight">
+            <i data-lucide="sparkles" aria-hidden="true"></i>
+            {{ summary.type_insight }}
+        </p>
+        {% endif %}
     </section>
 </div>

@@ -51,7 +51,7 @@ def finance_index(
         "period_options": PERIOD_OPTIONS,
         "period_labels": PERIOD_LABELS,
         "summary": summary_context(
-            db, tutor_id, start=period["start"], end=period["end"]
+            db, tutor, start=period["start"], end=period["end"]
         ),
     }
     context.update(operations_context(db, tutor, **state))

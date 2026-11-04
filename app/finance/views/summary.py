@@ -39,7 +39,7 @@ def finance_summary(
         {
             "period": period,
             "summary": summary_context(
-                db, tutor_id, start=period["start"], end=period["end"]
+                db, tutor, start=period["start"], end=period["end"]
             ),
         },
     )

@@ -1,21 +1,33 @@
 """Сводка страницы финансов: поток за период и балансы на сейчас (design D3).
 
-Два рода чисел, и подписи карточек это подчёркивают:
+Три рода чисел, и подписи карточек это подчёркивают:
 
 - **Поток за период** — операции в окне `[start, end)` по `occurred_at`
-  («Расходы» — по `spent_at` той же таблицы трат): «Доход» (оплаченные
-  платежи), «Возвраты», «Чистый доход», «Расходы», «Заработано (уроки)».
-  Считаются запросами `GROUP BY kind` c JOIN по владельцу ученика — N+1
-  на карточку здесь недопустим.
+  («Расходы» — по `spent_at` той же таблицы трат): «Доход» (начисленный
+  доход: списания за проведённые уроки, включая неоплаченные), «Возвраты»,
+  «Чистый доход», «Расходы», «Заработано (уроки)». Считаются запросами
+  `GROUP BY kind` c JOIN по владельцу ученика — N+1 на карточку здесь
+  недопустим.
+- **Касса за период** — «Получено от учеников» (оплаченные платежи минус
+  возвраты): деньги, которые реально пришли на счёт. «Чистая прибыль» и
+  «Осталось репетитору» считаются по кассе, а не по начислению: расходы
+  платятся живыми деньгами.
 - **Состояние на сейчас** — «Долги учеников» и «Переплата»: суммы
   отрицательных и положительных балансов всех учеников. Баланс —
   производная (design D3 student-finance), поэтому считается той же
   формулой `signed_amount` в Python по операциям, сгруппированным по
   ученику: второй копии правила денег не появляется.
 
-Блок «Заработано и получено» — арифметика по референсу: заработано
-уроками, получено от учеников, минус расходы — и итог «Осталось
-репетитору» (получено минус расходы, то же число, что «Чистая прибыль»).
+Смысл разделения (change finance-hours-idle-revenue): репетитор провёл
+урок и начислил 1 200 ₽ — это доход, даже если ученик ещё не заплатил.
+Та же тысяча двести одновременно лежит в «Долгах учеников» как дебиторка,
+а «Чистая прибыль» остаётся кассовой: в ней этой суммы нет, пока деньги
+не пришли. Раньше «Доход» показывал платежи, и при начисленных, но
+неоплаченных уроках верхняя карточка обнулялась — это и был баг.
+
+К деньгам добавлено время (`time_metrics`): проведённые часы периода,
+средняя стоимость часа, свободные часы месяца с ценой простоя и доходы
+по типам занятий.
 
 Сервис не знает про FastAPI: на вход — сессия, репетитор и период,
 на выход — словарь для `finance/_summary.html`.
@@ -27,6 +39,13 @@ from sqlalchemy.orm import Session
 from app.finance.models.account_operation import AccountOperation
 from app.finance.services.balance import signed_amount
 from app.finance.services.expenses import period_expenses
+from app.finance.services.time_metrics import (
+    idle_context,
+    rev_per_hour,
+    time_context,
+    type_insight,
+    type_split,
+)
 from app.student.models.student import Student
 
 
@@ -106,19 +125,33 @@ def compare_note(received: int, earned: int) -> str:
     return "Полученное совпадает с заработанным."
 
 
-def summary_context(db: Session, tutor_id: str, *, start, end) -> dict:
-    """Контекст `finance/_summary.html`: суммы, прибыль и сравнение."""
+def summary_context(db: Session, tutor, *, start, end) -> dict:
+    """Контекст `finance/_summary.html`: суммы, касса, время и сравнение.
+
+    `tutor` — объект карточки, а не id: часы и простой считаются в зоне
+    педагога, и второй `SELECT` ради неё здесь не нужен — вызывающие вьюхи
+    уже загрузили репетитора для проверки сессии.
+    """
+    tutor_id = tutor.id
     flow = period_flow(db, tutor_id, start=start, end=end)
     sides = balance_sides(db, tutor_id)
     expenses = period_expenses(db, tutor_id, start=start, end=end)
 
-    net_income = flow["income"] - flow["refunds"]
-    received = net_income
-    profit = net_income - expenses
+    # Касса: пришли деньги минус возвраты. Начисленный доход (`earned`) —
+    # отдельное число верхней карточки, в кассу он не подмешивается.
+    received = flow["income"] - flow["refunds"]
+    profit = received - expenses
+
+    time = time_context(db, tutor, earned=flow["earned"], start=start, end=end)
+    types = type_split(db, tutor, earned=flow["earned"], start=start, end=end)
+    # RevPTH для цены простоя — тот же, что в карточке времени: простой
+    # оценивается по фактической стоимости часа, а не по плановой цене.
+    idle = idle_context(db, tutor, rev=rev_per_hour(flow["earned"], time["minutes"]))
+
     return {
-        "income": flow["income"],
+        # «Доход» верхней карточки — начисленный доход за проведённые уроки.
+        "income": flow["earned"],
         "refunds": flow["refunds"],
-        "net_income": net_income,
         "expenses": expenses,
         "profit": profit,
         # «= Осталось репетитору» блока сравнения: получено минус расходы.
@@ -129,7 +162,13 @@ def summary_context(db: Session, tutor_id: str, *, start, end) -> dict:
         # класс решает сервер, шаблон знак не разбирает.
         "left_is_negative": profit < 0,
         "earned": flow["earned"],
+        # «Получено от учеников» блока сравнения — касса, а не начисление.
+        "received": received,
         "debts": sides["debts"],
         "overpayments": sides["overpayments"],
         "compare_note": compare_note(received, flow["earned"]),
+        "time": time,
+        "idle": idle,
+        "types": types,
+        "type_insight": type_insight(types),
     }
