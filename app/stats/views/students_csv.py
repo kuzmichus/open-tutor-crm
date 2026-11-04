@@ -37,6 +37,7 @@ def students_csv(
         status=request.query_params.get("status", ""),
         activity=request.query_params.get("activity", ""),
         no_future=request.query_params.get("no_future") == "1",
+        sort=request.query_params.get("sort", ""),
     )
     # BOM в начале файла: Excel распознаёт UTF-8 только по нему.
     content = "\ufeff" + students_csv_text(filtered, tutor)

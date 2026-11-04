@@ -1,15 +1,21 @@
-"""Обзор (`/tutor/stats?tab=overview`): KPI-карточки, риск потери, прогноз.
+"""Обзор (`/tutor/stats?tab=overview`): загрузка, KPI, риск потери, прогноз.
 
-Все карточки считаются из одних строк `student_rows.collect_rows`, поэтому
-«Активных» и «Потерянных» на обзоре и в таблице вкладки нельзя разойтись
-(design D2). Деньги считаются критериями баланса (`BALANCE_PAYMENT_STATUS`)
-и «Дохода за месяц» дашборда: только оплаченные платежи, возвраты вычитаются.
+Все карточки учеников считаются из одних строк `student_rows.collect_rows`,
+поэтому «Активных» и «Потерянных» на обзоре и в таблице вкладки нельзя
+разойтись (design D2). Деньги считаются критериями баланса
+(`BALANCE_PAYMENT_STATUS`) и «Дохода за месяц» дашборда: только оплаченные
+платежи, возвраты вычитаются.
+
+Загрузка (`utilization`) и карта загрузки (`heatmap`) работают с
+астрономическими часами: фактические часы — длительность проведённых
+уроков, доступные — рабочие дни периода за вычетом отметок недоступности
+(см. `hours`, `availability`). Период «Обзора» по умолчанию — 30 дней.
 
 Прогноз считается по запросу (`forecast=1`): обзор открывают чаще, чем он
 нужен, а его агрегаты — лишние запросы на каждый показ (design D3).
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -21,20 +27,34 @@ from app.finance.models.account_operation import (
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import Lesson
+from app.stats.services.availability import available_minutes
+from app.stats.services.heatmap import heatmap_context
+from app.stats.services.hours import (
+    completed_minutes,
+    minutes_to_hours,
+)
+from app.stats.services.utilization import utilization_context
 from app.student.models.student import Student
 
 # Горизонт прогноза в днях (референс: «Прогноз на месяц»).
 FORECAST_DAYS = 30
 
 
-def _revenue(db: Session, tutor_id: str) -> int:
-    """Выручка за всё время: оплаченные платежи минус возвраты, рубли.
+def _revenue(
+    db: Session,
+    tutor_id: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> int:
+    """Выручка за период: оплаченные платежи минус возвраты, рубли.
 
-    Возвраты вычитаются, потому что выручкой не является: платёж, вернувшийся
-    ученику, не должен завышать LTV. Списания за уроки не участвуют — это
-    не деньги, пришедшие репетитору.
+    Возвраты вычитаются, потому что выручкой не являются: платёж, вернувшийся
+    ученику, не должен завышать ни «Выручку на час», ни средний чек.
+    Списания за уроки не участвуют — это не деньги, пришедшие репетитору.
+    Без границ (`None`) — выручка за всё время.
     """
-    rows = db.execute(
+    stmt = (
         select(
             AccountOperation.kind,
             AccountOperation.status,
@@ -42,9 +62,14 @@ def _revenue(db: Session, tutor_id: str) -> int:
         )
         .join(Student, Student.id == AccountOperation.student_id)
         .where(Student.tutor_id == tutor_id)
-    ).all()
+    )
+    if start is not None:
+        stmt = stmt.where(AccountOperation.occurred_at >= start)
+    if end is not None:
+        stmt = stmt.where(AccountOperation.occurred_at < end)
+
     total = 0
-    for kind, status, amount in rows:
+    for kind, status, amount in db.execute(stmt).all():
         if kind == "payment" and status == BALANCE_PAYMENT_STATUS:
             total += amount
         elif kind == "refund":
@@ -58,6 +83,10 @@ def _forecast(db: Session, tutor, *, now) -> dict:
     Индивидуальный урок — его цена; групповой — цена каждого участника
     (`price_override` или цена группы). Урок без цены даёт ноль: выдумывать
     «среднюю цену» значило бы показать число, которого не будет в кассе.
+
+    `hours` — астрономическая длительность тех же уроков (групповой урок
+    считается один раз): «Запланировано занятий» без часов не отвечает,
+    сколько времени эта нагрузка займёт.
     """
     end = now + timedelta(days=FORECAST_DAYS)
     lessons = db.scalars(
@@ -90,41 +119,93 @@ def _forecast(db: Session, tutor, *, now) -> dict:
             )
 
     amount = 0
+    minutes = 0
     for lesson in lessons:
+        minutes += lesson.duration_min or 0
         if lesson.student_id:
             amount += lesson.price or 0
         else:
             amount += member_prices.get(lesson.group_id, 0)
-    return {"amount": amount, "lessons": len(lessons), "days": FORECAST_DAYS}
+    return {
+        "amount": amount,
+        "lessons": len(lessons),
+        "days": FORECAST_DAYS,
+        "minutes": minutes,
+        "hours": minutes_to_hours(minutes),
+    }
 
 
-def overview_context(db: Session, tutor, *, rows, now, forecast: bool) -> dict:
+def _declining_rows(rows: list[dict]) -> list[dict]:
+    """Ученики с падением нагрузки — от самого сильного падения к слабому.
+
+    «Ушёл» (архив) не попадает: уход уже показан в «Потерянных», и красный
+    флаг «нагрузка −100%» там был бы вторым сообщением об одном и том же.
+    """
+    return sorted(
+        (
+            row
+            for row in rows
+            if row["decline"] and row["activity"] != "lost"
+        ),
+        key=lambda row: (-row["decline_percent"], row["student"].first_name),
+    )
+
+
+def overview_context(
+    db: Session,
+    tutor,
+    *,
+    rows: list[dict],
+    now,
+    forecast: bool,
+    start: datetime | None,
+    end: datetime | None,
+) -> dict:
     """Контекст вкладки «Обзор» из готовых строк `collect_rows` (design D2).
 
-    LTV — целые рубли (выручка / занимавшиеся); занимавшихся нет — `None`,
-    шаблон покажет «—»: ноль выглядел бы как «каждый принёс 0 ₽», хотя
-    учеников просто нет. Retention передаётся парой «числитель/знаменатель»:
-    процент считает хелпер отображения, а не сервис.
+    «Выручка на час» — целые рубли (выручка периода / фактические часы);
+    часов нет — `None`, шаблон покажет «—»: ноль выглядел бы как «час стоит
+    0 ₽», хотя занятий просто не было. Retention передаётся парой
+    «числитель/знаменатель»: процент считает хелпер отображения.
     """
     studied = [row for row in rows if row["last_lesson_at"] is not None]
     active_status = sum(
         1 for row in studied if row["student"].status == "active"
     )
 
-    revenue = _revenue(db, tutor.id)
-    ltv = revenue // len(studied) if studied else None
+    revenue = _revenue(db, tutor.id, start=start, end=end)
+    actual_minutes = completed_minutes(db, tutor.id, start=start, end=end)
+    hours = minutes_to_hours(actual_minutes)
+    revenue_per_hour = round(revenue / hours) if hours > 0 else None
 
-    context = {
-        "ltv": ltv,
+    risk_rows = sorted(
+        (row for row in rows if row["activity"] == "risk"),
+        key=lambda row: row["last_lesson_at"],
+    )
+    declining_rows = _declining_rows(rows)
+
+    return {
+        "revenue_per_hour": revenue_per_hour,
+        "revenue_period": revenue,
+        "hours_actual": hours,
+        "utilization": utilization_context(
+            db,
+            tutor,
+            start=start,
+            end=end,
+            actual_minutes=actual_minutes,
+            available_minutes=available_minutes(
+                db, tutor, start=start, end=end
+            ),
+        ),
+        "heatmap": heatmap_context(db, tutor, now=now),
         "retention_active": active_status,
         "retention_total": len(studied),
         "active_count": sum(1 for row in rows if row["activity"] == "active"),
         "lost_count": sum(1 for row in rows if row["activity"] == "lost"),
         # Самые давние «отвалившиеся» — сверху: их терять ближе всего.
-        "risk_rows": sorted(
-            (row for row in rows if row["activity"] == "risk"),
-            key=lambda row: row["last_lesson_at"],
-        ),
+        "risk_rows": risk_rows,
+        "declining_rows": declining_rows,
+        "risk_total": len(risk_rows) + len(declining_rows),
         "forecast": _forecast(db, tutor, now=now) if forecast else None,
     }
-    return context

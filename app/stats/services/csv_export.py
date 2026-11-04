@@ -8,14 +8,14 @@ UTF-8 с BOM и разделитель «;» — файл открывается
 import csv
 from io import StringIO
 
+from app.stats.services.presentation import hours_label, week_rate_label
+from app.stats.services.student_rows import ACTIVITY_LABELS
 from app.student.services.presentation import (
     next_lesson_label,
     short_date_label,
     status_label,
     student_full_name,
 )
-from app.stats.services.presentation import week_rate_label
-from app.stats.services.student_rows import ACTIVITY_LABELS
 
 # Заголовок выгрузки. Названия колонок совпадают с таблицей вкладки.
 CSV_HEADERS = (
@@ -26,6 +26,7 @@ CSV_HEADERS = (
     "Цена занятия",
     "Баланс",
     "Занятий/нед",
+    "Часов/нед",
     "Последнее",
     "Следующее",
     "Email",
@@ -50,6 +51,7 @@ def students_csv_text(rows: list[dict], tutor) -> str:
                 row["last_price"] if row["last_price"] is not None else "",
                 row["balance"],
                 week_rate_label(row["week_count"]),
+                hours_label(row["hours_week"]),
                 short_date_label(row["last_lesson_at"], tutor),
                 next_lesson_label(row["next_at"], tutor),
                 student.email or "",
