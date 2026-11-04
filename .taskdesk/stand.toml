@@ -13,3 +13,11 @@ health_path = "/health"
 DATABASE_URL = "sqlite:///./tutor.db"
 # Зона сервера влияет на значение по умолчанию при регистрации репетитора.
 TZ = "Europe/Ulyanovsk"
+
+# Наполнение стенда данными (контракт stands/seed): TaskDesk запускает скрипт
+# до stand-up.sh, передавая выбранный пресет в TD_SEED_PRESET. Скрипт сам
+# поднимает схему (seed-фаза идёт до старта приложения) и печатает JSON
+# с учётными данными последней непустой строкой stdout.
+[seed]
+seed_script = ".taskdesk/seed.sh"
+seed_presets = ["demo", "minimal"]
