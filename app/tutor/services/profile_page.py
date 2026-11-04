@@ -87,6 +87,10 @@ def _form_defaults(tutor: Tutor, settings, tab: str) -> dict:
             "" if settings.default_lesson_price is None
             else str(settings.default_lesson_price)
         ),
+        "weekly_load_hours": (
+            "" if settings.weekly_load_hours is None
+            else str(settings.weekly_load_hours)
+        ),
     }
 
 

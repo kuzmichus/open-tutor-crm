@@ -4,7 +4,9 @@
 уроков подставляют ближайшую будущую дату в момент использования.
 Длительность урока валидируется по закрытому списку LESSON_DURATIONS —
 источник истины живёт в модуле lesson (design D7). Рабочее время —
-целые часы «ЧЧ:ММ» (design D2), границы сетки календаря.
+целые часы «ЧЧ:ММ» (design D2), границы сетки календаря. Желаемая
+нагрузка в неделю — целые астрономические часы 1..168 (design D4),
+пустое поле = параметр не задан.
 """
 
 import re
@@ -12,6 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.common.services.forms import int_or_none
 from app.lesson.models.lesson import LESSON_DURATIONS
+from app.tutor.models.tutor_settings import WEEKLY_LOAD_MAX_HOURS
 
 # «ММ-ДД»: месяц 01–12, день — по календарю месяца.
 _QUARTER_RE = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$")
@@ -81,6 +84,22 @@ def parse_calendar_form(form: dict) -> tuple[dict | None, list[str]]:
             errors.append("Стоимость урока по умолчанию — целое число не меньше нуля.")
         else:
             values["default_lesson_price"] = price
+
+    # «Желаемая нагрузка в неделю» — рабочие астрономические часы (60 минут)
+    # для комфортной занятости. Пустое поле допустимо и очищает параметр
+    # (NULL); иначе — целое число от 1 до числа часов в неделе.
+    load_raw = (form.get("weekly_load_hours") or "").strip()
+    if load_raw == "":
+        values["weekly_load_hours"] = None
+    else:
+        load = int_or_none(load_raw)
+        if load is None or not 1 <= load <= WEEKLY_LOAD_MAX_HOURS:
+            errors.append(
+                "Желаемая нагрузка — целое число часов в неделю "
+                f"от 1 до {WEEKLY_LOAD_MAX_HOURS}."
+            )
+        else:
+            values["weekly_load_hours"] = load
 
     # Рабочее время — границы сетки календаря. Целые часы только (дизайн
     # D2): строка сетки моделируется часом, нецелые интервалы ломали бы
