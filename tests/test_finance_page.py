@@ -7,8 +7,12 @@
 
 Ключевой сценарий сводки: ученик А принёс 2 000 (и 500 «ожидают»),
 300 вернули, урок списал 1 200; ученик Б должен 1 200; ученик В имеет
-переплату 800. Ожидающий платёж в доход не входит (design D4
+переплату 800. Ожидающий платёж в кассу не входит (design D4
 student-finance).
+
+«Доход» верхней карточки — начисление за проведённые уроки (change
+finance-hours-idle-revenue): урок списан — деньги заработаны, даже если
+платежа ещё нет. Касса — отдельная карточка «Получено от учеников».
 """
 
 import re
@@ -102,12 +106,14 @@ def test_page_shows_summary_cards(client, tutor_factory, student_factory):
     _operation(saver, "payment", 800, now, status="paid", method="online")
 
     html = client.get("/tutor/finance").text
-    # Доход — все оплаченные платежи репетитора: 2 000 Ани и 800 Веры.
-    assert _kpi_value(html, "Доход") == _money(2800)
+    # Доход — начислено за проведённые уроки: 1 200 Ани и 1 200 Бориса.
+    assert _kpi_value(html, "Доход") == _money(2400)
     assert _kpi_value(html, "Возвраты") == _money(300)
-    assert _kpi_value(html, "Чистый доход") == _money(2500)
+    # Касса: оплаченные платежи 2 000 + 800 минус возврат 300.
+    assert _kpi_value(html, "Получено от учеников") == _money(2500)
     assert _kpi_value(html, "Чистая прибыль") == _money(2500)
-    assert _kpi_value(html, "Заработано (уроки)") == _money(2400)
+    # Часов в этом сценарии нет: списания созданы без уроков.
+    assert _kpi_value(html, "Проведено часов") == "0 мин"
     # Долг — типографский минус (U+2212), как у баланса карточки.
     assert _kpi_value(html, "Долги учеников") == f"\u2212{_money(1200)}"
     # Переплата — все положительные балансы: остаток Ани 500 и 800 Веры.
@@ -121,10 +127,9 @@ def test_period_prev_excludes_current_month(client, tutor_factory, student_facto
     student_id = student_factory(tutor_id=tutor_id)
 
     prev_amount, current_amount = 7000, 900
-    _operation(student_id, "payment", prev_amount, _first_day_of_month(1),
-               status="paid", method="transfer")
-    _operation(student_id, "payment", current_amount, utcnow(),
-               status="paid", method="transfer")
+    # «Доход» — начисление за уроки: окно периода проверяем списаниями.
+    _operation(student_id, "lesson", prev_amount, _first_day_of_month(1))
+    _operation(student_id, "lesson", current_amount, utcnow())
 
     html = client.get("/tutor/finance?period=prev").text
     assert _kpi_value(html, "Доход") == _money(prev_amount)
@@ -139,10 +144,9 @@ def test_period_3m_and_unknown_fallback(client, tutor_factory, student_factory):
     student_id = student_factory(tutor_id=tutor_id)
 
     old, fresh = 5000, 600
-    _operation(student_id, "payment", old, _first_day_of_month(2),
-               status="paid", method="transfer")
-    _operation(student_id, "payment", fresh, utcnow(),
-               status="paid", method="transfer")
+    # Начисленный доход: окно периода проверяем списаниями за уроки.
+    _operation(student_id, "lesson", old, _first_day_of_month(2))
+    _operation(student_id, "lesson", fresh, utcnow())
 
     html = client.get("/tutor/finance?period=3m").text
     assert _kpi_value(html, "Доход") == _money(old + fresh)
@@ -383,7 +387,7 @@ def test_summary_has_two_tiers_with_all_eight_cards(client, tutor_factory):
         re.S,
     )
     secondary = re.search(
-        r'<div class="fin-kpis fin-kpis--secondary">(.*?)</div>\s*<section class="card fin-compare"',
+        r'<div class="fin-kpis fin-kpis--secondary">(.*?)</div>\s*<section class="card fin-idle',
         html,
         re.S,
     )
@@ -398,9 +402,9 @@ def test_summary_has_two_tiers_with_all_eight_cards(client, tutor_factory):
     # Расшифровка — остальные пять, порядок прежний.
     assert titles(secondary.group(1)) == [
         "Возвраты",
-        "Чистый доход",
+        "Получено от учеников",
         "Расходы",
-        "Заработано (уроки)",
+        "Проведено часов",
         "Переплата",
     ]
 

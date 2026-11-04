@@ -121,7 +121,7 @@ def test_analytics_tab_shows_charts_and_pills(client, tutor_factory, student_fac
     )
 
     # Легенда рядов и подписи делений оси — как на референсе.
-    for label in ("Доход", "Заработано", "Расходы"):
+    for label in ("Получено", "Заработано", "Расходы"):
         assert label in section
     assert "<svg" in section
 
