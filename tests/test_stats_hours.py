@@ -342,7 +342,10 @@ def test_revenue_per_hour(
     operation_factory(student_id=anna, amount=2000, occurred_at=now)
 
     html = client.get("/tutor/stats").text
-    assert "LTV" not in html
+    # LTV остался в ряду карточек и стоит до «Выручки на час»: сначала
+    # «сколько приносит ученик», потом «сколько стоит час».
+    assert "LTV (Сред. чек)" in html
+    assert html.index("LTV (Сред. чек)") < html.index("Выручка на час")
     assert _kpi_value(html, "Выручка на час") == f"1{NBSP}000{NBSP}₽"
 
 
@@ -485,3 +488,23 @@ def test_overview_period_defaults_to_30_days(client, tutor_factory):
     garbage = client.get("/tutor/stats?tab=overview&period=bogus")
     assert garbage.status_code == 200
     assert pattern.search(garbage.text)
+
+
+def test_period_chips_order(client, tutor_factory):
+    """Чипы периода идут от короткого окна к длинному, последнее — «Весь период»."""
+    _login(client, tutor_factory)
+    html = client.get("/tutor/stats").text
+    labels = ["Сегодня", "7 дней", "30 дней", "Весь период"]
+    assert [html.index(label) for label in labels] == sorted(
+        html.index(label) for label in labels
+    )
+
+
+def test_forecast_block_under_its_button(client, tutor_factory):
+    """Прогноз раскрывается сразу под кнопкой, до блока «Загрузка»."""
+    _login(client, tutor_factory)
+    html = client.get("/tutor/stats?tab=overview&forecast=1").text
+    toolbar = html.index('class="stats-toolbar"')
+    forecast = html.index('class="card stats-forecast"')
+    utilization = html.index('class="card stats-util"')
+    assert toolbar < forecast < utilization

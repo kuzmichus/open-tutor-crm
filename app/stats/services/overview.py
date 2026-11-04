@@ -165,7 +165,8 @@ def overview_context(
 
     «Выручка на час» — целые рубли (выручка периода / фактические часы);
     часов нет — `None`, шаблон покажет «—»: ноль выглядел бы как «час стоит
-    0 ₽», хотя занятий просто не было. Retention передаётся парой
+    0 ₽», хотя занятий просто не было. LTV — средняя выручка на ученика за всё
+    время (карточка стоит первой в ряду). Retention передаётся парой
     «числитель/знаменатель»: процент считает хелпер отображения.
     """
     studied = [row for row in rows if row["last_lesson_at"] is not None]
@@ -178,6 +179,13 @@ def overview_context(
     hours = minutes_to_hours(actual_minutes)
     revenue_per_hour = round(revenue / hours) if hours > 0 else None
 
+    # LTV — средняя выручка на ученика за всё время: это «ценность клиента»,
+    # поэтому она не сужается до выбранного периода, в отличие от «Выручки
+    # на час». Знаменатель — занимавшиеся хотя бы раз: ученик без занятий
+    # ещё не принёс выручки и занижал бы среднее.
+    ltv_revenue = _revenue(db, tutor.id)
+    ltv = ltv_revenue // len(studied) if studied else None
+
     risk_rows = sorted(
         (row for row in rows if row["activity"] == "risk"),
         key=lambda row: row["last_lesson_at"],
@@ -188,6 +196,7 @@ def overview_context(
         "revenue_per_hour": revenue_per_hour,
         "revenue_period": revenue,
         "hours_actual": hours,
+        "ltv": ltv,
         "utilization": utilization_context(
             db,
             tutor,

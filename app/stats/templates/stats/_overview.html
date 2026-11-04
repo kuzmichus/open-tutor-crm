@@ -1,4 +1,4 @@
-{# Вкладка «Обзор»: период, загрузка, KPI-карточки, карта загрузки, риск, прогноз. #}
+{# Вкладка «Обзор»: период, прогноз, загрузка, KPI-карточки, карта загрузки, риск. #}
 {% include "stats/_period.html" %}
 
 <div class="stats-toolbar">
@@ -7,6 +7,28 @@
         Прогноз на месяц
     </a>
 </div>
+
+{# Прогноз раскрывается сразу под своей кнопкой: это продолжение действия,
+   а не отдельный блок страницы. #}
+{% if overview.forecast %}
+<section class="card stats-forecast" aria-label="Прогноз на месяц">
+    <h2 class="stats-forecast__title">Прогноз на месяц</h2>
+    <p class="stats-hint">Ожидаемая выручка — сумма цен запланированных занятий на
+        ближайшие {{ overview.forecast.days }} дней: у индивидуального урока — его цена,
+        у группового — цена каждого участника. Уроки без цены считаются нулём.</p>
+    <div class="stats-duo">
+        <div class="stats-duo__item">
+            <p class="stats-duo__label">Ожидаемая выручка</p>
+            <p class="stats-duo__value">{{ money(overview.forecast.amount) }}</p>
+        </div>
+        <div class="stats-duo__item">
+            <p class="stats-duo__label">Запланировано занятий</p>
+            <p class="stats-duo__value">{{ overview.forecast.lessons }}</p>
+            <p class="stats-duo__sub stats-kpi__sub--hours">{{ hours_phrase(overview.forecast.hours) }}</p>
+        </div>
+    </div>
+</section>
+{% endif %}
 
 {# Загрузка: факт к комфортной цели и факт к доступному максимуму. #}
 <section class="card stats-util" aria-label="Загрузка">
@@ -62,27 +84,20 @@
     </p>
 </section>
 
-{% if overview.forecast %}
-<section class="card stats-forecast" aria-label="Прогноз на месяц">
-    <h2 class="stats-forecast__title">Прогноз на месяц</h2>
-    <p class="stats-hint">Ожидаемая выручка — сумма цен запланированных занятий на
-        ближайшие {{ overview.forecast.days }} дней: у индивидуального урока — его цена,
-        у группового — цена каждого участника. Уроки без цены считаются нулём.</p>
-    <div class="stats-duo">
-        <div class="stats-duo__item">
-            <p class="stats-duo__label">Ожидаемая выручка</p>
-            <p class="stats-duo__value">{{ money(overview.forecast.amount) }}</p>
-        </div>
-        <div class="stats-duo__item">
-            <p class="stats-duo__label">Запланировано занятий</p>
-            <p class="stats-duo__value">{{ overview.forecast.lessons }}</p>
-            <p class="stats-duo__sub stats-kpi__sub--hours">{{ hours_phrase(overview.forecast.hours) }}</p>
-        </div>
-    </div>
-</section>
-{% endif %}
-
 <div class="stats-kpis">
+    <section class="card stats-kpi">
+        <div class="stats-kpi__head">
+            <span class="stats-kpi__title">LTV (Сред. чек)</span>
+            <span class="stats-kpi__icon stats-kpi__icon--up" aria-hidden="true">
+                <i data-lucide="trending-up"></i>
+            </span>
+        </div>
+        <p class="stats-kpi__value">
+            {%- if overview.ltv is not none %}{{ money(overview.ltv) }}{% else %}—{% endif -%}
+        </p>
+        <p class="stats-kpi__sub">Выручка на одного ученика</p>
+    </section>
+
     <section class="card stats-kpi">
         <div class="stats-kpi__head">
             <span class="stats-kpi__title">Выручка на час</span>

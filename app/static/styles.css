@@ -6134,7 +6134,9 @@
     }
 
     @media (min-width: 1024px) {
-      grid-template-columns: repeat(4, 1fr);
+      /* Карточек пять: auto-fit держит их в один ряд и не оставляет
+         сироту на второй строке, пока ширина позволяет. */
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     }
   }
 
