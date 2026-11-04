@@ -16,6 +16,7 @@ from app.stats.services.new_and_trials import new_students_stats, trial_conversi
 from app.stats.services.overview import overview_context
 from app.stats.services.periods import parse_period
 from app.stats.services.student_rows import (
+    SORT_OPTIONS,
     apply_filters,
     collect_rows,
     paginate,
@@ -46,11 +47,15 @@ def _students_total(db: Session, tutor_id: str) -> int:
 def _students_context(db: Session, request: Request, tutor, *, now) -> dict:
     """Контекст вкладки «Ученики»: строки, фильтры, пагинация, ссылка на CSV."""
     rows = collect_rows(db, tutor, now=now)
+    sort = request.query_params.get("sort", "")
+    if sort not in SORT_OPTIONS:
+        sort = ""
     filters = {
         "q": request.query_params.get("q", ""),
         "status": request.query_params.get("status", ""),
         "activity": request.query_params.get("activity", ""),
         "no_future": request.query_params.get("no_future") == "1",
+        "sort": sort,
     }
     filtered = apply_filters(rows, **filters)
     page_rows, paging = paginate(filtered, request.query_params.get("page", ""))
@@ -121,14 +126,18 @@ def stats_index(
             students_total=_students_total(db, tutor.id),
         )
     else:
+        period = parse_period(request.query_params, tutor, default="30d")
         rows = collect_rows(db, tutor, now=now)
         context.update(
+            period=period,
             overview=overview_context(
                 db,
                 tutor,
                 rows=rows,
                 now=now,
                 forecast=request.query_params.get("forecast") == "1",
+                start=period["start"],
+                end=period["end"],
             ),
             students_total=len(rows),
         )

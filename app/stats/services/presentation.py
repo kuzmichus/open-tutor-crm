@@ -8,8 +8,8 @@
 from datetime import datetime
 
 from app.common.services.tutor_time import to_local
-from app.stats.services.student_rows import ACTIVITY_LABELS
 from app.stats.services.new_and_trials import MIN_TRIALS_FOR_RATE
+from app.stats.services.student_rows import ACTIVITY_LABELS
 
 # Короткие названия месяцев в родительном падеже: ещё одна копия в проекте
 # (finance, lesson, student, tutor) — цена разделения модулей, вынос в
@@ -76,6 +76,54 @@ def activity_label(value: str | None) -> str:
     return ACTIVITY_LABELS.get(value or "", "")
 
 
+def _hours_number(hours: float) -> str:
+    """Число часов «52,5» / «52»: целые — без дробной части.
+
+    Часы считаются из минут, поэтому 60 минут — ровно «1», а не «1,0»:
+    подпись «1 час» читается, «1,0 час» — нет.
+    """
+    if abs(hours - round(hours)) < 0.05:
+        return str(round(hours))
+    return f"{hours:.1f}".replace(".", ",")
+
+
+def _hours_word(hours: float) -> str:
+    """Склонение «час/часа/часов» для значения в часах.
+
+    Дробное значение всегда «часа»: «0,5 часа», «1,5 часа» — так же, как
+    «полтора часа»; правило «1 час / 2 часа / 5 часов» — только для целых.
+    """
+    if abs(hours - round(hours)) >= 0.05:
+        return "часа"
+    value = abs(round(hours))
+    last_two = value % 100
+    last = value % 10
+    if 11 <= last_two <= 14:
+        return "часов"
+    if last == 1:
+        return "час"
+    if 2 <= last <= 4:
+        return "часа"
+    return "часов"
+
+
+def hours_label(hours: float) -> str:
+    """Астрономические часы коротко: «52,5 ч», «1,5 ч», «0 ч»."""
+    return f"{_hours_number(hours)} ч"
+
+
+def hours_phrase(hours: float) -> str:
+    """Часы со склонением: «1,5 часа», «1 час», «2 часа», «5 часов»."""
+    return f"{_hours_number(hours)} {_hours_word(hours)}"
+
+
+def percent_or_dash(value: int | None) -> str:
+    """Процент из готового числа: «80%»; значения нет — «—»."""
+    if value is None:
+        return "—"
+    return f"{value}%"
+
+
 def lesson_datetime_label(value: datetime | None, tutor) -> str:
     """«26.10.2026, 15:00» — момент занятия в зоне педагога; нет — «»."""
     if value is None:
@@ -99,6 +147,9 @@ def register_template_helpers() -> None:
     templates.env.globals.update(
         week_rate_label=week_rate_label,
         percent_label=percent_label,
+        percent_or_dash=percent_or_dash,
+        hours_label=hours_label,
+        hours_phrase=hours_phrase,
         conversion_label=conversion_label,
         kept_reason_label=kept_reason_label,
         activity_label=activity_label,

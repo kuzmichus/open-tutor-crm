@@ -14,6 +14,11 @@
 
 Баланс, следующий урок и последняя цена не дублируются: они берутся из
 `student.services.list_metrics` (design D5) — правила денег в проекте одни.
+
+Время на ученика (`hours_week`) считается из длительности уроков, а не из их
+числа: 45-минутное занятие — 0,75 часа. Флаг падения нагрузки
+(`decline`) — отдельный признак: он не переводит ученика в «Отвалившиеся»,
+а дополняет «Риск потери» случаем «ходит, но стал ходить вдвое меньше».
 """
 
 from datetime import datetime, timedelta
@@ -23,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import Lesson
+from app.stats.services.hours import MINUTES_PER_HOUR, student_regular_minutes
 from app.student.models.student import Student
 from app.student.services.list_metrics import attach_metrics
 from app.tutor.services.clock import as_utc
@@ -33,8 +39,18 @@ RECENT_DAYS = 14
 # Окно среднего «Занятий/нед»: счётчик за 4 недели, делится на `RATE_WEEKS`.
 RATE_WEEKS = 4
 
+# Флаг падения нагрузки: часы за последние 2 недели (`RECENT_DAYS`)
+# сравниваются с предыдущими двумя неделями. Флаг ставится, если фактические
+# часы сократились не меньше чем вдвое и база была не меньше 2 часов:
+# на одном занятии в две недели любые колебания дают «−100%».
+DECLINE_RATIO = 0.5
+DECLINE_MIN_MINUTES = 120
+
 # Строк на странице вкладки «Ученики».
 PAGE_SIZE = 25
+
+# Режимы сортировки таблицы: по дате последнего занятия и по часам в неделю.
+SORT_OPTIONS = ("date", "hours")
 
 # Значения фильтра состояния активности (пустое — «все ученики»).
 ACTIVITY_OPTIONS = ("active", "risk", "lost")
@@ -213,6 +229,22 @@ def collect_rows(db: Session, tutor, *, now: datetime) -> list[dict]:
     )
     with_future = _students_with_future(db, tutor.id, now)
 
+    # Часы по ученикам: «Часов/нед» за 4 недели и окна флага падения
+    # нагрузки (2 недели против предыдущих 2 недель). Три запроса на всю
+    # таблицу, как и остальные агрегаты: на ученика запросов нет.
+    regular_minutes = student_regular_minutes(
+        db, tutor.id, start=now - timedelta(days=RATE_WEEKS * 7)
+    )
+    recent_minutes = student_regular_minutes(
+        db, tutor.id, start=now - timedelta(days=RECENT_DAYS)
+    )
+    prev_minutes = student_regular_minutes(
+        db,
+        tutor.id,
+        start=now - timedelta(days=RECENT_DAYS * 2),
+        end=now - timedelta(days=RECENT_DAYS),
+    )
+
     # `attach_metrics` читает только `card["student"].id`: минимальные
     # карточки без контактов — контакты статистике не нужны.
     cards = attach_metrics(db, [{"student": s} for s in students], now=now)
@@ -221,6 +253,12 @@ def collect_rows(db: Session, tutor, *, now: datetime) -> list[dict]:
     for card in cards:
         student = card["student"]
         last_at = last_map.get(student.id)
+        recent = recent_minutes.get(student.id, 0)
+        prev = prev_minutes.get(student.id, 0)
+        decline = (
+            prev >= DECLINE_MIN_MINUTES
+            and 0 < recent <= prev * DECLINE_RATIO
+        )
         rows.append(
             {
                 "student": student,
@@ -229,6 +267,19 @@ def collect_rows(db: Session, tutor, *, now: datetime) -> list[dict]:
                 "next_at": card["next_lesson_at"],
                 "last_lesson_at": last_at,
                 "week_count": counts.get(student.id, 0),
+                "hours_week": (
+                    regular_minutes.get(student.id, 0)
+                    / MINUTES_PER_HOUR
+                    / RATE_WEEKS
+                ),
+                "hours_recent": recent / MINUTES_PER_HOUR,
+                "hours_prev": prev / MINUTES_PER_HOUR,
+                # Падение не меняет состояние активности: ученик с будущими
+                # занятиями остаётся «Активным», но получает красный флаг.
+                "decline": decline,
+                "decline_percent": (
+                    round((1 - recent / prev) * 100) if decline else 0
+                ),
                 "has_future": student.id in with_future,
                 "activity": classify(
                     status=student.status,
@@ -239,9 +290,32 @@ def collect_rows(db: Session, tutor, *, now: datetime) -> list[dict]:
             }
         )
 
-    # Референс: списки отсортированы по дате последнего занятия; никогда не
-    # занимавшие уходят в конец, внутри групп — по имени.
-    rows.sort(
+    return sort_rows(rows, "date")
+
+
+def sort_rows(rows: list[dict], sort: str = "date") -> list[dict]:
+    """Упорядочивание строк таблицы; `sort` вне `SORT_OPTIONS` — по дате.
+
+    «По дате» — референс списков: свежие занятия сверху, никогда не
+    занимавшие в конце. «По часам» — самые «тяжёлые» по времени ученики
+    сверху: так открывается список из карточки «Активных», где репетитор
+    ищет, на кого уходит больше всего времени. Внутри равных часов порядок
+    тот же, что и по дате: список не «прыгает» между запросами.
+    """
+    if sort not in SORT_OPTIONS:
+        sort = "date"
+    ordered = list(rows)
+    if sort == "hours":
+        ordered.sort(
+            key=lambda row: (
+                -row["hours_week"],
+                -(row["last_lesson_at"].timestamp() if row["last_lesson_at"] else 0),
+                row["student"].first_name,
+                row["student"].last_name or "",
+            )
+        )
+        return ordered
+    ordered.sort(
         key=lambda row: (
             row["last_lesson_at"] is None,
             -(row["last_lesson_at"].timestamp() if row["last_lesson_at"] else 0),
@@ -249,7 +323,7 @@ def collect_rows(db: Session, tutor, *, now: datetime) -> list[dict]:
             row["student"].last_name or "",
         )
     )
-    return rows
+    return ordered
 
 
 def _matches_q(student: Student, needle: str) -> bool:
@@ -271,8 +345,9 @@ def apply_filters(
     status: str = "",
     activity: str = "",
     no_future: bool = False,
+    sort: str = "",
 ) -> list[dict]:
-    """Фильтрация строк вкладки; неизвестные значения фильтров игнорируются."""
+    """Фильтрация и сортировка строк вкладки; неизвестные значения игнорируются."""
     needle = q.strip().casefold()
     result = rows
     if needle:
@@ -289,7 +364,7 @@ def apply_filters(
             for row in result
             if row["activity"] != "lost" and not row["has_future"]
         ]
-    return result
+    return sort_rows(result, sort or "date")
 
 
 def paginate(rows: list[dict], page_raw: str) -> tuple[list[dict], dict]:

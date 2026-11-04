@@ -1,10 +1,16 @@
-"""Разбор периода вкладки «Новые и пробные».
+"""Разбор периода вкладки статистики.
 
 Границы считаются настенным временем педагога через `local_day_bounds`
 (design D3 спеки tutor-timezone): «сегодня» ночного занятия при UTC-хранилище
 не уезжает в соседний день. Произвольный период — включительный диапазон дат:
-конец — начало суток после `date_to`. Мусор в query — не 500, а «Всё время»
-(design D6): период передаётся ссылками, опечатка не повод ломать страницу.
+конец — начало суток после `date_to`. Мусор в query — не 500, а период по
+умолчанию (design D6): период передаётся ссылками, опечатка не повод ломать
+страницу.
+
+Умолчание параметра различается по вкладкам: «Новые и пробные» исторически
+показывают «Весь период» (`default="all"`), а «Обзор» — последние 30 дней
+(`default="30d"`), потому что загрузка и выручка за всё время отвечают не на
+тот вопрос, с которым страницу открывают.
 """
 
 from datetime import date, datetime, timedelta
@@ -16,11 +22,14 @@ PERIOD_OPTIONS = ("all", "today", "7d", "30d", "custom")
 
 # Подписи пресетов для чипов.
 PERIOD_LABELS = {
-    "all": "Всё время",
+    "all": "Весь период",
     "today": "Сегодня",
     "7d": "7 дней",
     "30d": "30 дней",
 }
+
+# Длина пресетов в днях включительно (кроме «сегодня» и «всё время»).
+PRESET_DAYS = {"7d": 7, "30d": 30}
 
 
 def _parse_date(raw: str | None) -> date | None:
@@ -33,33 +42,48 @@ def _parse_date(raw: str | None) -> date | None:
         return None
 
 
-def parse_period(params, tutor) -> dict:
+def _preset_bounds(key: str, tutor) -> tuple[datetime | None, datetime | None]:
+    """Границы пресета `[start, end)`; «Весь период» — без границ."""
+    today = today_local(tutor)
+    if key == "today":
+        return local_day_bounds(today, tutor)
+    if key in PRESET_DAYS:
+        days = PRESET_DAYS[key]
+        start, _ = local_day_bounds(today - timedelta(days=days - 1), tutor)
+        end, _ = local_day_bounds(today + timedelta(days=1), tutor)
+        return start, end
+    return None, None
+
+
+def parse_period(params, tutor, *, default: str = "all") -> dict:
     """Окно периода как aware-UTC-границы `[start, end)`; без границ — всё время.
 
     `date_from`/`date_to` — включительно, поэтому `end` — начало суток после
-    `date_to`. Незавершённый диапазон (только одна дата) трактуется как всё
-    время: половина диапазона — скорее незаполненная форма, чем намерение.
+    `date_to`. Незавершённый диапазон (только одна дата или мусор) трактуется
+    как период по умолчанию: половина диапазона — скорее незаполненная форма,
+    чем намерение.
     """
-    key = params.get("period", "all")
+    if default not in PERIOD_OPTIONS:
+        default = "all"
+    key = params.get("period", default)
     if key not in PERIOD_OPTIONS:
-        key = "all"
+        key = default
 
-    start: datetime | None = None
-    end: datetime | None = None
     date_from = _parse_date(params.get("date_from"))
     date_to = _parse_date(params.get("date_to"))
 
-    today = today_local(tutor)
-    if key == "today":
-        start, end = local_day_bounds(today, tutor)
-    elif key in ("7d", "30d"):
-        days = 7 if key == "7d" else 30
-        start, _ = local_day_bounds(today - timedelta(days=days - 1), tutor)
-        end, _ = local_day_bounds(today + timedelta(days=1), tutor)
-    elif key == "custom" and date_from is not None and date_to is not None:
+    if key == "custom" and date_from is not None and date_to is not None:
         if date_from <= date_to:
             start, _ = local_day_bounds(date_from, tutor)
             end, _ = local_day_bounds(date_to + timedelta(days=1), tutor)
+        else:
+            # Диапазон наоборот — тоже незаполненная форма: показываем
+            # период по умолчанию, а не пустоту.
+            start, end = _preset_bounds(default, tutor)
+    else:
+        if key == "custom":
+            key = default
+        start, end = _preset_bounds(key, tutor)
 
     return {
         "key": key,

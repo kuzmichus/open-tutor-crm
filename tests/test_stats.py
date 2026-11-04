@@ -64,7 +64,7 @@ def test_overview_empty(client, tutor_factory):
     assert response.status_code == 200
     assert "Статистика и Аналитика" in html
     assert "Ученики (0)" in html
-    assert _kpi_value(html, "LTV (Сред. чек)") == "—"
+    assert _kpi_value(html, "Выручка на час") == "—"
     assert _kpi_value(html, "Retention Rate") == "—"
     assert _kpi_value(html, "Активных") == "0"
     assert _kpi_value(html, "Потерянных") == "0"
@@ -116,8 +116,9 @@ def test_overview_metrics(
     assert _kpi_value(html, "Потерянных") == "1"
     # Занимались четверо, статусно-активных из них трое.
     assert _kpi_value(html, "Retention Rate") == "75%"
-    # Выручка 2000 на четверых занимавшихся.
-    assert "500" in _kpi_value(html, "LTV (Сред. чек)")
+    # Выручка 2000 ₽ за период на 4 фактические часа (2 урока Ани, уроки
+    # Бориса и пробное Даши; занятия 40-дневной давности вне периода).
+    assert _kpi_value(html, "Выручка на час") == f"500{NBSP}₽"
     # Пробное Даши не создало ни активности, ни риска.
     assert "Риск потери: 1" in html
     risk_block = html[html.index("Риск потери:") :]
@@ -343,6 +344,8 @@ def test_forecast_on_overview(
     assert "Прогноз на месяц" in page.text
     assert f"2{NBSP}000" in page.text  # 1500 (Аня) + 500 (Борис, цена группы)
     assert "Запланировано занятий" in page.text
+    # Длительность запланированных уроков: два урока по часу.
+    assert "2 часа" in page.text
 
     # Без параметра прогноз не считается и не показывается.
     plain = client.get("/tutor/stats")
@@ -376,4 +379,4 @@ def test_unknown_tab_falls_back_to_overview(client, tutor_factory):
     _login(client, tutor_factory)
     response = client.get("/tutor/stats?tab=bogus")
     assert response.status_code == 200
-    assert "LTV (Сред. чек)" in response.text
+    assert "Выручка на час" in response.text

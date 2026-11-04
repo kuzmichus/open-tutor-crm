@@ -6134,7 +6134,9 @@
     }
 
     @media (min-width: 1024px) {
-      grid-template-columns: repeat(4, 1fr);
+      /* Карточек пять: auto-fit держит их в один ряд и не оставляет
+         сироту на второй строке, пока ширина позволяет. */
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     }
   }
 
@@ -6227,6 +6229,204 @@
     font-weight: 500;
     color: var(--success);
     text-align: center;
+  }
+
+  .stats-risk__subhead {
+    margin: calc(var(--space) * 3) 0 calc(var(--space) * 2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  /* Красный флаг «нагрузка −N%» в панели риска. */
+  .stats-flag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 calc(var(--space) * 2);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--destructive) 12%, transparent);
+    color: var(--destructive);
+  }
+
+  /* Блок «Загрузка»: две полосы «факт к цели» и «факт к максимуму». */
+  .stats-util {
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .stats-util__title {
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .stats-util__rows {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .stats-util__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 2);
+  }
+
+  .stats-util__label {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .stats-util__value {
+    font-size: var(--text-xl);
+    font-weight: 700;
+  }
+
+  .stats-util__bar {
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    overflow: hidden;
+  }
+
+  .stats-util__fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--muted-foreground);
+    transition: width 0.3s ease;
+  }
+
+  .stats-util__bar--ok .stats-util__fill { background: var(--success); }
+  .stats-util__bar--low .stats-util__fill { background: var(--warning-fg); }
+  .stats-util__bar--high .stats-util__fill { background: var(--destructive); }
+
+  .stats-util__sub {
+    margin: calc(var(--space) * 2) 0 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .stats-util__hint {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    margin: calc(var(--space) * 4) 0 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+
+    & [data-lucide] { width: 14px; height: 14px; flex: none; }
+  }
+
+  /* Подпись «52,5 часа» под числом запланированных занятий. */
+  .stats-kpi__sub--hours {
+    margin-top: calc(var(--space));
+    color: var(--foreground);
+  }
+
+  /* Карта загрузки: сетка «день недели × час» на текущую неделю. */
+  .stats-heat {
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .stats-heat__title {
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .stats-heat__scroll {
+    overflow-x: auto;
+  }
+
+  .stats-heat__table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 2px;
+  }
+
+  .stats-heat__corner {
+    width: 52px;
+  }
+
+  .stats-heat__hour {
+    padding: 0 0 calc(var(--space));
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  .stats-heat__day {
+    padding-right: calc(var(--space) * 2);
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  .stats-heat__day-num { opacity: 0.7; }
+
+  .stats-heat__row--today .stats-heat__day {
+    color: var(--brand);
+    font-weight: 600;
+  }
+
+  .stats-heat__cell {
+    min-width: 18px;
+    height: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .stats-heat__cell--free { background: var(--card); }
+
+  .stats-heat__cell--busy {
+    background: var(--stat-blue);
+    border-color: var(--stat-blue-fg);
+  }
+
+  .stats-heat__cell--unavailable {
+    background: var(--muted);
+    border-color: var(--muted);
+  }
+
+  .stats-heat__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--space) * 3);
+    margin: calc(var(--space) * 3) 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+
+    & li {
+      display: inline-flex;
+      align-items: center;
+      gap: calc(var(--space) * 2);
+    }
+  }
+
+  .stats-heat__swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .stats-heat__insight {
+    margin: calc(var(--space) * 3) 0 0;
+    font-size: var(--text-sm);
+    color: var(--foreground);
   }
 
   .stats-card__header {
