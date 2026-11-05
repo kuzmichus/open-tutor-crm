@@ -20,6 +20,7 @@ TABS = (
     ("security", "Безопасность"),
     ("notifications", "Уведомления"),
     ("calendar", "Календарь"),
+    ("finances", "Финансы"),
 )
 
 TAB_KEYS = tuple(key for key, _label in TABS)
@@ -30,6 +31,7 @@ TAB_ACTIONS = {
     "security": "/tutor/profile/security",
     "notifications": "/tutor/profile/notifications",
     "calendar": "/tutor/profile/calendar",
+    "finances": "/tutor/profile/finances",
 }
 
 # Опции селектов рабочего времени: целые часы суток «00:00»…«23:00»
@@ -85,28 +87,37 @@ def _form_defaults(tutor: Tutor, settings, tab: str) -> dict:
             "digest_time": settings.digest_time,
             "low_balance_threshold": str(settings.low_balance_threshold),
         }
-    # calendar
-    return {
-        "timezone": tutor.timezone or "",
-        "quarter1_end": settings.quarter1_end,
-        "quarter2_end": settings.quarter2_end,
-        "quarter3_end": settings.quarter3_end,
-        "quarter4_end": settings.quarter4_end,
-        "workday_start": settings.workday_start,
-        "workday_end": settings.workday_end,
-        "default_lesson_duration": str(settings.default_lesson_duration),
-        "default_lesson_price": (
-            "" if settings.default_lesson_price is None
-            else str(settings.default_lesson_price)
-        ),
-        "weekly_load_hours": (
-            "" if settings.weekly_load_hours is None
-            else str(settings.weekly_load_hours)
-        ),
-        # Decimal('0.70') → «0.7»: пользователь вводил 0.7, лишний ноль
-        # в поле выглядел бы как чужая правка (та же логика, что у ставки).
-        "preparation_coefficient": _decimal_text(settings.preparation_coefficient),
-    }
+    if tab == "finances":
+        return {
+            "npd_enabled": settings.npd_enabled,
+            "npd_tax_rate_individual": _decimal_text(settings.npd_tax_rate_individual),
+            "npd_tax_rate_legal_entity": _decimal_text(settings.npd_tax_rate_legal_entity),
+            "npd_annual_income_limit": str(settings.npd_annual_income_limit),
+        }
+    if tab == "calendar":
+        return {
+            "timezone": tutor.timezone or "",
+            "quarter1_end": settings.quarter1_end,
+            "quarter2_end": settings.quarter2_end,
+            "quarter3_end": settings.quarter3_end,
+            "quarter4_end": settings.quarter4_end,
+            "workday_start": settings.workday_start,
+            "workday_end": settings.workday_end,
+            "default_lesson_duration": str(settings.default_lesson_duration),
+            "default_lesson_price": (
+                "" if settings.default_lesson_price is None
+                else str(settings.default_lesson_price)
+            ),
+            "weekly_load_hours": (
+                "" if settings.weekly_load_hours is None
+                else str(settings.weekly_load_hours)
+            ),
+            # Decimal('0.70') → «0.7»: пользователь вводил 0.7, лишний ноль
+            # в поле выглядел бы как чужая правка (та же логика, что у ставки).
+            "preparation_coefficient": _decimal_text(settings.preparation_coefficient),
+        }
+    # Неизвестная вкладка нормализована в «Профиль» выше — сюда не попадаем.
+    return {}
 
 
 def profile_page_context(

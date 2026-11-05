@@ -24,7 +24,7 @@
 
             <div class="page-header">
                 <h1>Профиль</h1>
-                <p>Профиль, безопасность, уведомления и календарь</p>
+                <p>Профиль, безопасность, уведомления, календарь и финансы</p>
             </div>
 
             {# Вкладки — ссылки с состоянием в URL (?tab=…): страница работает
@@ -59,6 +59,8 @@
                 {% include "tutor/_tab_security.html" %}
             {% elif tab == 'notifications' %}
                 {% include "tutor/_tab_notifications.html" %}
+            {% elif tab == 'finances' %}
+                {% include "tutor/_tab_finances.html" %}
             {% else %}
                 {% include "tutor/_tab_calendar.html" %}
             {% endif %}
