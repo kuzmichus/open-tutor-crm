@@ -6661,6 +6661,19 @@
     }
   }
 
+  /* Самозанятый видит четвёртую карточку «Чистая прибыль (после налогов)».
+     Колонки включаются модификатором, а не всегда: три карточки в сетке
+     из четырёх колонок оставили бы пустую клетку. */
+  .fin-kpis--npd {
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
   /* Компактный ярус на мобиле — две колонки: пять карточек в столбик
      растягивали сводку на лишний экран, а числа здесь короткие. */
   .fin-kpis--secondary {
@@ -6763,6 +6776,15 @@
     }
 
     gap: calc(var(--space) * 4);
+  }
+
+  /* С налоговой строкой позиций пять: четвёрка колонок оставила бы итог
+     одного на второй строке. На широком экране — три колонки, чтобы пары
+     «заработано/получено», «расходы/налог» и итог читались блоками. */
+  .fin-compare--tax .fin-compare__grid {
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(3, 1fr);
+    }
   }
 
   .fin-compare__item {
@@ -6876,6 +6898,156 @@
   .fin-idle__link {
     align-self: flex-start;
     text-decoration: none;
+  }
+
+  /* Налог НПД: блок под карточками доходов. Нейтральная левая полоса —
+     налог не ошибка и не потеря, а платёж, который предстоит сделать;
+     цветом говорит только предупреждение о лимите. */
+  .fin-npd {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 4);
+    padding: calc(var(--space) * 4);
+    border-left: 3px solid var(--brand);
+  }
+
+  .fin-npd__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-npd__title {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-npd__icon {
+    display: inline-flex;
+    color: var(--muted-foreground);
+
+    & [data-lucide] { width: 18px; height: 18px; }
+  }
+
+  .fin-npd__total {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+  }
+
+  .fin-npd__total-label {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-npd__value {
+    margin: 0;
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--foreground);
+  }
+
+  /* Детализация по типам плательщиков: мелкий шрифт — это расшифровка
+     итога, а не второй равноправный показатель. */
+  .fin-npd__details {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    margin: 0;
+  }
+
+  .fin-npd__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-npd__row-label {
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  .fin-npd__row-value {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-npd__note {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-npd__limit {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-npd__bar {
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    overflow: hidden;
+  }
+
+  /* Ширину задаёт шаблон инлайново (как у блока загрузки статистики);
+     класс отвечает только за цвет заливки. */
+  .fin-npd__fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--brand);
+    transition: width 0.3s ease;
+  }
+
+  .fin-npd__bar--warning .fin-npd__fill { background: var(--warning-fg); }
+
+  .fin-npd__limit-text {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  /* Приближение к годовому лимиту — жёлтая плашка: это предупреждение о
+     риске потерять статус НПД, а не ошибка расчёта. */
+  .fin-npd__warning {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius);
+    background: var(--warning-soft);
+    color: var(--warning-fg);
+    font-size: var(--text-sm);
+
+    & [data-lucide] { width: 18px; height: 18px; flex-shrink: 0; }
+  }
+
+  /* Подсказка про ставку юрлиц: совет, а не данные — фон-плашка отделяет
+     его от чисел налога. */
+  .fin-npd__insight {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    padding: calc(var(--space) * 3);
+    border-radius: var(--radius);
+    background: var(--muted);
+    color: var(--foreground);
+    font-size: var(--text-sm);
+
+    & [data-lucide] { width: 18px; height: 18px; flex-shrink: 0; color: var(--muted-foreground); }
   }
 
   /* Доходы по типам занятий: две колонки сравнения. На мобиле — одна,

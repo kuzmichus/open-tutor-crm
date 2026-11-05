@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 from app.finance.models.account_operation import AccountOperation
 from app.finance.services.balance import signed_amount
 from app.finance.services.expenses import period_expenses
+from app.finance.services.npd import npd_context
 from app.finance.services.time_metrics import (
     idle_context,
     rev_per_hour,
@@ -148,6 +149,14 @@ def summary_context(db: Session, tutor, *, start, end) -> dict:
     # оценивается по фактической стоимости часа, а не по плановой цене.
     idle = idle_context(db, tutor, rev=rev_per_hour(flow["earned"], time["minutes"]))
 
+    # НПД: при выключенном флаге сервис не делает запросов и возвращает
+    # `{"enabled": False}`, налог — ноль. Тогда «Чистая прибыль (после
+    # налогов)» равна начисленному доходу минус расходы, а разметка блока
+    # налога в шаблон не попадает вовсе.
+    npd = npd_context(db, tutor, start=start, end=end)
+    tax_total = npd["tax"]["total"] if npd["enabled"] else 0
+    net_after_tax = flow["earned"] - expenses - tax_total
+
     return {
         # «Доход» верхней карточки — начисленный доход за проведённые уроки.
         "income": flow["earned"],
@@ -171,4 +180,9 @@ def summary_context(db: Session, tutor, *, start, end) -> dict:
         "idle": idle,
         "types": types,
         "type_insight": type_insight(types),
+        # НПД: налог, лимит и подсказка. `net_after_tax` — прибыль «на
+        # руки» по начислению: доход − расходы − расчётный налог (п. 3 ТЗ).
+        "npd": npd,
+        "net_after_tax": net_after_tax,
+        "net_after_tax_is_negative": net_after_tax < 0,
     }

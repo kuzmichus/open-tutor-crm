@@ -178,6 +178,19 @@ def rate_label(value: int | None) -> str:
         return "—"
     return f"{money(value)}/ч"
 
+def npd_rate_label(basis_points: int) -> str:
+    """Ставка НПД из базисных пунктов: «4 %», «6 %», «4,5 %».
+
+    Ставки хранятся целыми базисными пунктами (400 = 4 %): дробная часть
+    появляется только у нестандартных значений из профиля, и тогда она
+    печатается через запятую, как принято в русской типографике.
+    """
+    whole, rest = divmod(int(basis_points), 100)
+    if rest == 0:
+        return f"{whole}\u00a0%"
+    fraction = f"{rest:02d}".rstrip("0")
+    return f"{whole},{fraction}\u00a0%"
+
 def _hours_word(hours: float) -> str:
     """Склонение «час/часа/часов» для дробного или целого значения."""
     if abs(hours - round(hours)) >= 0.05:
@@ -234,6 +247,7 @@ def register_template_helpers() -> None:
         lessons_count_label=lessons_count_label,
         duration_label=duration_label,
         rate_label=rate_label,
+        npd_rate_label=npd_rate_label,
         free_hours_phrase=free_hours_phrase,
         ratio_label=ratio_label,
     )
