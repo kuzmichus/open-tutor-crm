@@ -105,7 +105,7 @@ def test_weekly_values_scale_to_period(tutor_factory):
 def test_zero_coefficient_gives_no_preparation(tutor_factory):
     """Коэффициент 0: подготовки нет, кольцо целиком занято уроками."""
     tutor_id = tutor_factory(timezone="UTC")
-    _save(tutor_id, preparation_coefficient=Decimal("0"))
+    _save(tutor_id, preparation_coefficient=Decimal(0))
 
     context = _context(tutor_id, actual_minutes=600, days=7)
     assert context["preparation_hours"] == 0
