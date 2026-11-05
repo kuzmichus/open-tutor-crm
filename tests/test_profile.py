@@ -469,6 +469,16 @@ def test_calendar_tab_save_keeps_show_price_flag(client):
     assert settings.show_calendar_price is False
 
 
+def _field_value(html, name):
+    """Значение `value` у поля формы с именем `name` (None — поля нет).
+
+    Проверка не зависит от переносов строк и отступов в разметке: поле
+    может переехать в другую сетку, а значение остаться тем же.
+    """
+    match = re.search(rf'name="{re.escape(name)}"[^>]*?value="([^"]*)"', html)
+    return match.group(1) if match else None
+
+
 def _calendar_payload(**overrides):
     """Полный набор полей вкладки «Календарь» для POST."""
     data = {
@@ -482,6 +492,7 @@ def _calendar_payload(**overrides):
         "default_lesson_duration": "60",
         "default_lesson_price": "",
         "weekly_load_hours": "",
+        "preparation_coefficient": "0.7",
     }
     data.update(overrides)
     return data
@@ -506,7 +517,7 @@ def test_calendar_tab_shows_weekly_load_field(client):
     assert 'name="weekly_load_hours"' in html
     assert "астрономических часов" in html
     # До первого сохранения поле пустое.
-    assert 'name="weekly_load_hours" min="1" max="168" step="1"\n                   value=""' in html
+    assert _field_value(html, "weekly_load_hours") == ""
 
 
 def test_weekly_load_save_and_show(client):
@@ -526,7 +537,7 @@ def test_weekly_load_save_and_show(client):
     assert settings.weekly_load_hours == 25
 
     html = _calendar_page(client)
-    assert 'name="weekly_load_hours" min="1" max="168" step="1"\n                   value="25"' in html
+    assert _field_value(html, "weekly_load_hours") == "25"
 
 
 def test_weekly_load_empty_clears(client):
@@ -588,6 +599,131 @@ def test_weekly_load_isolation(client, tutor_factory):
 
 
 # ---------------------------------------------------------------------------
+# Коэффициент подготовки (вкладка «Календарь»)
+# ---------------------------------------------------------------------------
+
+
+def test_preparation_coefficient_defaults_without_settings_row(client):
+    """До первого сохранения коэффициент подготовки равен 0.7."""
+    from decimal import Decimal
+
+    from app.tutor.services.settings import get_settings
+
+    _login(client)
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, tutor.id) is None
+        settings = get_settings(db, tutor.id)
+    assert settings.preparation_coefficient == Decimal("0.70")
+
+
+def test_calendar_tab_shows_preparation_coefficient(client):
+    """Поле коэффициента есть на вкладке, по умолчанию 0.7, с пояснением."""
+    _login(client)
+    html = _calendar_page(client)
+    assert 'name="preparation_coefficient"' in html
+    assert "Коэффициент подготовки" in html
+    assert _field_value(html, "preparation_coefficient") == "0.7"
+    # Пояснение: доля времени урока на подготовку и проверку ДЗ.
+    assert "подготовку" in html
+    assert "домашних заданий" in html
+
+
+def test_preparation_coefficient_save_and_show(client):
+    """Сохранённый коэффициент показывается без хвостовых нулей."""
+    _login(client)
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(preparation_coefficient="1.2"),
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        settings = db.get(TutorSettings, tutor.id)
+    assert str(settings.preparation_coefficient) == "1.20"
+
+    html = _calendar_page(client)
+    assert _field_value(html, "preparation_coefficient") == "1.2"
+
+
+def test_preparation_coefficient_accepts_comma(client):
+    """Запятая как десятичный разделитель — та же дробь, что и точка."""
+    _login(client)
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(preparation_coefficient="0,8"),
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        assert str(db.get(TutorSettings, tutor.id).preparation_coefficient) == "0.80"
+
+
+def test_preparation_coefficient_empty_returns_default(client):
+    """Пустое поле не ошибка — возвращается значение по умолчанию 0.7."""
+    from decimal import Decimal
+
+    _login(client)
+    tutor = _tutor_by_email("profile-user@example.com")
+    client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(preparation_coefficient="2"),
+        follow_redirects=False,
+    )
+    with SessionLocal() as db:
+        assert str(db.get(TutorSettings, tutor.id).preparation_coefficient) == "2.00"
+
+    response = client.post(
+        "/tutor/profile/calendar",
+        data=_calendar_payload(preparation_coefficient=""),
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    with SessionLocal() as db:
+        settings = db.get(TutorSettings, tutor.id)
+    assert settings.preparation_coefficient == Decimal("0.70")
+
+
+def test_preparation_coefficient_bad_value_shows_error(client):
+    """Мусор или значение вне 0..5 — ошибка на вкладке, сохранения нет."""
+    _login(client)
+    for raw in ("abc", "-0.1", "5.1"):
+        response = client.post(
+            "/tutor/profile/calendar",
+            data=_calendar_payload(preparation_coefficient=raw),
+        )
+        assert response.status_code == 200, raw
+        assert "Коэффициент подготовки" in response.text, raw
+        assert 'name="preparation_coefficient"' in response.text, raw
+
+    tutor = _tutor_by_email("profile-user@example.com")
+    with SessionLocal() as db:
+        assert db.get(TutorSettings, tutor.id) is None
+
+
+def test_calendar_form_preparation_coefficient():
+    """Разбор коэффициента: число, пусто → дефолт, границы 0 и 5 включены."""
+    from decimal import Decimal
+
+    values, errors = _calendar_values(preparation_coefficient="1.5")
+    assert errors == []
+    assert values["preparation_coefficient"] == Decimal("1.5")
+
+    values, errors = _calendar_values(preparation_coefficient="")
+    assert errors == []
+    assert values["preparation_coefficient"] == Decimal("0.70")
+
+    for raw in ("0", "5"):
+        values, errors = _calendar_values(preparation_coefficient=raw)
+        assert errors == [], raw
+        assert values["preparation_coefficient"] == Decimal(raw), raw
+
+
+# ---------------------------------------------------------------------------
 # Разбор рабочего времени (сервис формы вкладки «Календарь»)
 # ---------------------------------------------------------------------------
 
@@ -604,6 +740,7 @@ def _calendar_values(**overrides):
         "default_lesson_duration": "60",
         "default_lesson_price": "",
         "weekly_load_hours": "20",
+        "preparation_coefficient": "0.7",
         "workday_start": "09:00",
         "workday_end": "18:00",
     }
