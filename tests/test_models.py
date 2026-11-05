@@ -204,6 +204,34 @@ def test_student_status_defaults_to_new(student_factory):
         assert session.get(Student, student_id).status == "new"
 
 
+def test_student_payer_type_defaults_to_individual(student_factory):
+    """Тип плательщика по умолчанию — физическое лицо."""
+    student_id = student_factory()
+
+    with SessionLocal() as session:
+        assert session.get(Student, student_id).payer_type == "individual"
+
+
+def test_student_payer_type_rejects_unknown_value(tutor_factory):
+    """Тип плательщика вне individual/legal_entity отклоняется CHECK."""
+    tutor_id = tutor_factory()
+    with SessionLocal() as session:
+        session.add(
+            Student(
+                tutor_id=tutor_id,
+                first_name="Странный",
+                kind="child",
+                payer_type="company",
+            )
+        )
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+        else:
+            raise AssertionError("payer_type='company' должен был упасть на CHECK")
+
+
 def test_student_status_rejects_unknown_value(tutor_factory, student_factory):
     """Статус вне new/active/archived отклоняется CHECK-ограничением."""
     tutor_id = tutor_factory()

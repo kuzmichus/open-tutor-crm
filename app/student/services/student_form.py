@@ -14,6 +14,7 @@ from app.student.models.student import (
     MAX_GRADE,
     MIN_GRADE,
     STUDENT_KINDS,
+    STUDENT_PAYER_TYPES,
     STUDENT_STATUSES,
 )
 from app.student.services.phone import format_phone
@@ -63,6 +64,9 @@ def parse_student_form(form: Mapping) -> tuple[dict, list[str]]:
     for field in _REMIND_FIELDS:
         data[field] = checked(form, field)
     data["payer_contact_id"] = text_value(form, "payer_contact_id")
+    # Тип плательщика: пустое значение означает «не передан» — по умолчанию
+    # физическое лицо, как и в модели.
+    data["payer_type"] = text_value(form, "payer_type") or "individual"
 
     errors: list[str] = []
 
@@ -79,6 +83,10 @@ def parse_student_form(form: Mapping) -> tuple[dict, list[str]]:
 
     if data["status"] and data["status"] not in STUDENT_STATUSES:
         errors.append("Выберите корректный статус ученика.")
+
+    if data["payer_type"] not in STUDENT_PAYER_TYPES:
+        errors.append("Выберите тип плательщика: физлицо или юрлицо.")
+        data["payer_type"] = "individual"
 
     # Телефон сохраняется в едином виде `+7 555 555-55-55`.
     data["phone"] = format_phone(data["phone"])

@@ -99,8 +99,48 @@ def test_form_has_all_card_fields(client, owner):
         "remind_homework",
         "remind_cancel",
         "payer_contact_id",
+        "payer_type",
     ):
         assert f'name="{name}"' in html, f"В форме нет поля {name}"
+
+
+def test_payer_type_toggle_sits_next_to_payer_select(client, owner):
+    """Переключатель «Физлицо/Юрлицо» — в секции плательщика."""
+    html = client.get("/tutor/students/new").text
+
+    payer_pos = html.index('id="student-payer"')
+    toggle_pos = html.index('name="payer_type"')
+    section_end = html.index("</fieldset>", toggle_pos)
+
+    assert payer_pos < toggle_pos < section_end
+    for value, label in (("individual", "Физлицо"), ("legal_entity", "Юрлицо")):
+        assert f'name="payer_type" value="{value}"' in html
+        assert label in html
+
+
+def test_payer_type_defaults_to_individual(client, owner):
+    """Новый ученик: по умолчанию отмечено «Физлицо»."""
+    html = client.get("/tutor/students/new").text
+    block = html[html.index('name="payer_type"') : html.index("</fieldset>", html.index('name="payer_type"'))]
+
+    assert re.search(r'value="individual"\s+checked', block)
+    assert not re.search(r'value="legal_entity"\s+checked', block)
+
+
+def test_edit_form_preselects_saved_payer_type(client, owner, student_factory):
+    student_id = student_factory(tutor_id=owner, payer_type="legal_entity")
+    html = client.get(f"/tutor/students/{student_id}/edit").text
+    block = html[html.index('name="payer_type"') : html.index("</fieldset>", html.index('name="payer_type"'))]
+
+    assert re.search(r'value="legal_entity"\s+checked', block)
+    assert not re.search(r'value="individual"\s+checked', block)
+
+
+def test_payer_type_toggle_highlights_selected_segment_without_js(client, owner):
+    """Выбранный сегмент подсвечивает CSS, а не Alpine: у группы нет модели."""
+    html = client.get("/tutor/students/new").text
+    assert 'class="tabs tabs--radio"' in html
+    assert ".tabs--radio .tab:has(input:checked)" in STYLES
 
 def test_status_select_follows_kind_and_precedes_name(client, owner):
     """Статус — справа от «Кто ученик», имя и фамилия — следующей строкой."""
