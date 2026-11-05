@@ -258,6 +258,70 @@ def test_payer_must_be_linked():
     ]
 
 
+# --------------------------------------------------------------------------
+# Тип плательщика (TOCRM-42)
+# --------------------------------------------------------------------------
+
+
+def test_payer_type_defaults_to_individual():
+    """Форма без поля типа плательщика — физлицо."""
+    data, errors = parse_student_form({"first_name": "Маша", "kind": "child"})
+    assert errors == []
+    assert data["payer_type"] == "individual"
+
+
+def test_known_payer_type_is_parsed():
+    data, errors = parse_student_form(
+        {"first_name": "Маша", "kind": "child", "payer_type": "legal_entity"}
+    )
+    assert errors == []
+    assert data["payer_type"] == "legal_entity"
+
+
+def test_unknown_payer_type_is_rejected():
+    data, errors = parse_student_form(
+        {"first_name": "Маша", "kind": "child", "payer_type": "company"}
+    )
+    assert "Выберите тип плательщика: физлицо или юрлицо." in errors
+    # Невалидное значение не сохраняется: подставляется безопасный дефолт.
+    assert data["payer_type"] == "individual"
+
+
+def test_create_student_saves_payer_type(tutor_factory):
+    """Тип плательщика из формы сохраняется в модели."""
+    tutor_id = tutor_factory()
+    with SessionLocal() as db:
+        student, errors = create_student(
+            db,
+            tutor_id,
+            _student_data(payer_type="legal_entity"),
+            [],
+        )
+        assert errors == []
+        assert db.get(Student, student.id).payer_type == "legal_entity"
+
+
+def test_create_student_without_payer_type_uses_individual(tutor_factory):
+    """Вызовы сервиса без поля типа (другие модули) дают физлицо."""
+    tutor_id = tutor_factory()
+    with SessionLocal() as db:
+        student, errors = create_student(db, tutor_id, _student_data(), [])
+        assert errors == []
+        assert db.get(Student, student.id).payer_type == "individual"
+
+
+def test_update_student_changes_payer_type(tutor_factory, student_factory):
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    with SessionLocal() as db:
+        student = db.get(Student, student_id)
+        errors = update_student(
+            db, student, tutor_id, _student_data(payer_type="legal_entity"), []
+        )
+        assert errors == []
+        assert db.get(Student, student_id).payer_type == "legal_entity"
+
+
 def test_empty_payer_means_student_pays_himself():
     assert validate_payer("", set()) == []
 

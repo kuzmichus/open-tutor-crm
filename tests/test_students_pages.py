@@ -250,6 +250,66 @@ def test_create_with_contacts_and_payer(client, owner):
 # --------------------------------------------------------------------------
 
 
+def test_create_student_with_legal_entity_payer_type(client, owner):
+    """Тип плательщика из формы сохраняется при создании."""
+    response = client.post(
+        "/tutor/students",
+        data=_create_payload(first_name="Маша", payer_type="legal_entity"),
+    )
+    assert response.status_code == 200
+
+    with SessionLocal() as db:
+        student = db.query(Student).filter_by(tutor_id=owner, first_name="Маша").one()
+        assert student.payer_type == "legal_entity"
+
+
+def test_create_student_without_payer_type_defaults_to_individual(client, owner):
+    """Без поля в форме тип плательщика — физлицо."""
+    response = client.post(
+        "/tutor/students",
+        data=_create_payload(first_name="Маша"),
+    )
+    assert response.status_code == 200
+
+    with SessionLocal() as db:
+        student = db.query(Student).filter_by(tutor_id=owner, first_name="Маша").one()
+        assert student.payer_type == "individual"
+
+
+def test_update_changes_payer_type(client, owner, student_factory):
+    student_id = student_factory(tutor_id=owner, first_name="Маша")
+
+    client.post(
+        f"/tutor/students/{student_id}",
+        data=_create_payload(first_name="Маша", payer_type="legal_entity"),
+    )
+
+    with SessionLocal() as db:
+        assert db.get(Student, student_id).payer_type == "legal_entity"
+
+
+def test_update_with_unknown_payer_type_shows_error(client, owner, student_factory):
+    student_id = student_factory(tutor_id=owner, first_name="Маша")
+
+    response = client.post(
+        f"/tutor/students/{student_id}",
+        data=_create_payload(first_name="Маша", payer_type="company"),
+    )
+    assert "Выберите тип плательщика: физлицо или юрлицо." in response.text
+
+    with SessionLocal() as db:
+        assert db.get(Student, student_id).payer_type == "individual"
+
+
+def test_card_shows_payer_type(client, owner, student_factory):
+    student_id = student_factory(
+        tutor_id=owner, first_name="Маша", payer_type="legal_entity"
+    )
+    response = client.get(f"/tutor/students/{student_id}")
+    assert response.status_code == 200
+    assert "Юрлицо" in response.text
+
+
 def test_edit_form_shows_existing_values(client, owner, student_factory):
     student_id = student_factory(
         tutor_id=owner, first_name="Маша", last_name="Петрова", level="B1"
