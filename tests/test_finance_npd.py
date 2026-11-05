@@ -245,8 +245,8 @@ def test_npd_lead_row_has_four_cards(client, tutor_factory):
     assert titles == [
         "Доход",
         "Чистая прибыль",
-        "Долги учеников",
         "Чистая прибыль (после налогов)",
+        "Долги учеников",
     ]
 
 

@@ -63,20 +63,11 @@
             <p class="fin-kpi__sub">Получено от учеников минус расходы</p>
         </section>
 
-        <section class="card fin-kpi fin-kpi--lead" aria-label="Долги учеников">
-            <div class="fin-kpi__head">
-                <span class="fin-kpi__title">Долги учеников</span>
-                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
-                    <i data-lucide="user-x"></i>
-                </span>
-            </div>
-            <p class="fin-kpi__value fin-kpi__value--red">{{ balance_label(summary.debts) }}</p>
-            <p class="fin-kpi__sub">Сумма отрицательных балансов на сейчас</p>
-        </section>
-
         {# НПД: прибыль «на руки» — начисленный доход минус расходы и
-           расчётный налог. Только при включённом флаге самозанятого:
-           иначе ярус остаётся из трёх карточек, как раньше. #}
+           расчётный налог. Стоит сразу за кассовой «Чистой прибылью»:
+           репетитор сравнивает два числа — «пришло» и «останется после
+           налога». Только при включённом флаге самозанятого: иначе ярус
+           остаётся из трёх карточек, как раньше. #}
         {% if summary.npd.enabled %}
         <section class="card fin-kpi fin-kpi--lead" aria-label="Чистая прибыль (после налогов)">
             <div class="fin-kpi__head">
@@ -89,6 +80,17 @@
             <p class="fin-kpi__sub">Прибыль с учётом НПД</p>
         </section>
         {% endif %}
+
+        <section class="card fin-kpi fin-kpi--lead" aria-label="Долги учеников">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Долги учеников</span>
+                <span class="fin-kpi__icon fin-kpi__icon--red" aria-hidden="true">
+                    <i data-lucide="user-x"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value fin-kpi__value--red">{{ balance_label(summary.debts) }}</p>
+            <p class="fin-kpi__sub">Сумма отрицательных балансов на сейчас</p>
+        </section>
     </div>
 
     {# Второй ярус: расшифровка и состояние счетов. Те же числа, что были
