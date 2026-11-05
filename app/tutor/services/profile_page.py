@@ -42,18 +42,30 @@ def normalize_tab(raw: str | None) -> str:
     return raw if raw in TAB_KEYS else "profile"
 
 
+def _decimal_text(value) -> str:
+    """Decimal из Numeric-колонки → строка для поля формы без хвостовых нулей.
+
+    `Numeric(10, 2)` отдаёт `Decimal('2000.00')` / `Decimal('0.70')`, а
+    пользователь вводил «2000» и «0.7»: хвостовые нули в поле выглядели
+    бы как чужая правка. `None` → пустая строка. Нули срезаются только у
+    дробной части: у «10» значащий ноль терять нельзя.
+    """
+    if value is None:
+        return ""
+    text = format(value, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
+
+
 def _form_defaults(tutor: Tutor, settings, tab: str) -> dict:
     """Значения полей активной вкладки из текущего состояния карточки."""
     if tab == "profile":
-        # Ставка приходит из Numeric(10, 2) как Decimal('2000.00'): для
-        # поля формы лишние нули обрезаем — пользователь ввёл «2000».
-        hourly_rate = tutor.hourly_rate
-        rate_text = "" if hourly_rate is None else format(hourly_rate, "f").rstrip("0").rstrip(".")
         return {
             "name": tutor.name,
             "phone": tutor.phone or "",
             "about": tutor.about or "",
-            "hourly_rate": rate_text,
+            "hourly_rate": _decimal_text(tutor.hourly_rate),
             "experience": tutor.experience or "",
         }
     if tab == "security":
@@ -91,6 +103,9 @@ def _form_defaults(tutor: Tutor, settings, tab: str) -> dict:
             "" if settings.weekly_load_hours is None
             else str(settings.weekly_load_hours)
         ),
+        # Decimal('0.70') → «0.7»: пользователь вводил 0.7, лишний ноль
+        # в поле выглядел бы как чужая правка (та же логика, что у ставки).
+        "preparation_coefficient": _decimal_text(settings.preparation_coefficient),
     }
 
 

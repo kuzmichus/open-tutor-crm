@@ -13,6 +13,7 @@
 """
 
 from collections.abc import Mapping
+from decimal import Decimal, InvalidOperation
 
 
 def text_value(form: Mapping, key: str) -> str:
@@ -44,6 +45,23 @@ def int_or_none(raw: str | None) -> int | None:
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+def decimal_or_none(raw: str | None) -> Decimal | None:
+    """Десятичное число из строки; пусто, мусор или не-строка — None.
+
+    Запятая принимается наравне с точкой: «0,7» — то же, что «0.7» (в
+    русской раскладке запятая — привычный десятичный разделитель).
+    `NaN` и `Infinity` отбрасываются: `Decimal` их разбирает, но в
+    `Numeric`-колонку такое значение не записать.
+    """
+    if not isinstance(raw, str):
+        return None
+    try:
+        value = Decimal(raw.strip().replace(",", "."))
+    except (InvalidOperation, ValueError):
+        return None
+    return value if value.is_finite() else None
 
 
 def parse_rubles(raw: str, label: str, errors: list[str]) -> int | None:

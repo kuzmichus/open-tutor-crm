@@ -114,15 +114,33 @@
     <section class="card settings-card">
         <h2 class="card__title">Желаемая нагрузка</h2>
         <p class="card__desc">
-            Количество рабочих астрономических часов в неделю, комфортных
-            для работы. Поле необязательное: пустое значение не задаёт
-            нагрузку.
+            Комфортная занятость и время, которое уходит на подготовку к
+            занятиям помимо самих уроков.
         </p>
-        <div class="field">
-            <label class="label" for="tutor-weekly-load">Нагрузка в неделю (часов)</label>
-            <input class="input" id="tutor-weekly-load" type="number"
-                   name="weekly_load_hours" min="1" max="168" step="1"
-                   value="{{ form.weekly_load_hours }}" placeholder="Например, 20">
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-weekly-load">Нагрузка в неделю (часов)</label>
+                <input class="input" id="tutor-weekly-load" type="number"
+                       name="weekly_load_hours" min="1" max="168" step="1"
+                       value="{{ form.weekly_load_hours }}" placeholder="Например, 20">
+                <p class="card__desc">
+                    Количество рабочих астрономических часов в неделю, комфортных
+                    для работы. Поле необязательное: пустое значение не задаёт
+                    нагрузку.
+                </p>
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-preparation-coefficient">Коэффициент подготовки</label>
+                <input class="input" id="tutor-preparation-coefficient" type="number"
+                       name="preparation_coefficient" min="0" max="5" step="0.1"
+                       value="{{ form.preparation_coefficient }}" placeholder="Например, 0.7">
+                <p class="card__desc">
+                    Какая доля длительности урока в среднем уходит на подготовку
+                    к занятию и проверку домашних заданий. При коэффициенте 0.7
+                    каждый час урока требует ещё около 42 минут на подготовку —
+                    это время стоит учитывать при планировании недели.
+                </p>
+            </div>
         </div>
     </section>
 

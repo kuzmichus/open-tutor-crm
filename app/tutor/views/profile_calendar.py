@@ -47,10 +47,12 @@ def profile_calendar(
     default_lesson_duration: str = Form(""),
     default_lesson_price: str = Form(""),
     weekly_load_hours: str = Form(""),
+    preparation_coefficient: str = Form(""),
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 ):
-    """Сохраняет часовой пояс, учебный год, рабочее время, уроки и нагрузку."""
+    """Сохраняет часовой пояс, учебный год, рабочее время, уроки, нагрузку и
+    коэффициент подготовки."""
     tutor = db.get(Tutor, tutor_id)
     if tutor is None:
         raise LoginRequired()
@@ -66,6 +68,7 @@ def profile_calendar(
         "default_lesson_duration": default_lesson_duration,
         "default_lesson_price": default_lesson_price,
         "weekly_load_hours": weekly_load_hours,
+        "preparation_coefficient": preparation_coefficient,
     }
     values, errors = parse_calendar_form(form)
     if errors:
