@@ -10,10 +10,11 @@
   `CheckConstraint("payer_type IN ('individual', 'legal_entity')",
   name="ck_students_payer_type")` в `__table_args__`.
 - [x] 1.2 `alembic/versions/c3f1a9d7e2b4_add_student_payer_type.py`:
-  `down_revision = '5b38b6d8c1a1'`, `op.add_column` с NOT NULL,
+  `down_revision = '5eb0e460963e'` (после влитой TOCRM-41 — иначе получаются
+  две головы и `alembic upgrade head` падает), `op.add_column` с NOT NULL,
   `server_default='individual'` и CHECK в самой колонке; откат —
   `op.drop_column('students', 'payer_type')`. Проверка:
-  `alembic upgrade head` + `alembic check` на чистой SQLite.
+  `alembic upgrade head` на чистой SQLite.
 
 ## 2. Сервисы
 
@@ -56,6 +57,9 @@
 - [x] 4.4 `tests/test_students_pages.py`: создание и редактирование с
   `payer_type`, дефолт без поля, ошибка на неизвестном значении, подпись
   «Юрлицо» в карточке.
+- [x] 4.5 `tests/test_migration_heads.py`: у цепочки ревизий ровно одна
+  голова, revision id не повторяются, нет merge-ревизий с двумя родителями —
+  иначе `alembic upgrade head` в `.taskdesk/stand-up.sh` не выполнится.
 
 ## 5. Регресс и документация
 

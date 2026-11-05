@@ -1,7 +1,7 @@
 """add student payer type
 
 Revision ID: c3f1a9d7e2b4
-Revises: 5b38b6d8c1a1
+Revises: 5eb0e460963e
 Create Date: 2026-11-05 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'c3f1a9d7e2b4'
-down_revision: Union[str, Sequence[str], None] = '5b38b6d8c1a1'
+down_revision: Union[str, Sequence[str], None] = '5eb0e460963e'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
