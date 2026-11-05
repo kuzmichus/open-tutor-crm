@@ -32,11 +32,14 @@
 ## 3. Шаблоны
 
 - [x] 3.1 `app/student/templates/student/_form.html`: в секции «Плательщик»
-  под полем «Кто оплачивает занятия» добавить радиогруппу `.tabs` с
-  `role="radiogroup"`, `aria-labelledby="payer-type-label"` и radio
+  под полем «Кто оплачивает занятия» добавить радиогруппу `.tabs tabs--radio`
+  с `role="radiogroup"`, `aria-labelledby="payer-type-label"` и radio
   `name="payer_type"` (`individual` — отмечено по умолчанию, `legal_entity` —
-  по `form.payer_type`). Новых CSS-классов не вводить.
-- [x] 3.2 `app/student/templates/student/card.html`: под ФИО плательщика
+  по `form.payer_type`). Подсветку выбранного сегмента даёт CSS, а не Alpine.
+- [x] 3.2 `app/static/styles.css`: правило
+  `.tabs--radio .tab:has(input:checked)` — фон, цвет и тень активного таба для
+  радиогрупп без Alpine-модели (приём `.un-modes__option`).
+- [x] 3.3 `app/student/templates/student/card.html`: под ФИО плательщика
   вывести `{{ payer_type_label(student.payer_type) }}`.
 
 ## 4. Тесты
@@ -48,7 +51,8 @@
   сохраняют тип; вызов без ключа даёт `individual`.
 - [x] 4.3 `tests/test_students_form.py`: поле `payer_type` есть в форме;
   переключатель стоит в секции плательщика после селекта; по умолчанию
-  отмечено «Физлицо»; в форме редактирования отмечено сохранённое значение.
+  отмечено «Физлицо»; в форме редактирования отмечено сохранённое значение;
+  выбранный сегмент подсвечивается CSS-правилом `.tabs--radio`.
 - [x] 4.4 `tests/test_students_pages.py`: создание и редактирование с
   `payer_type`, дефолт без поля, ошибка на неизвестном значении, подпись
   «Юрлицо» в карточке.

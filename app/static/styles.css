@@ -1593,6 +1593,15 @@
     box-shadow: var(--shadow-card);
   }
 
+  /* Радиогруппа в стиле табов без Alpine-модели (тип плательщика):
+     выбранный сегмент подсвечивает сам CSS, `:has` — тот же приём, что
+     у `.un-modes__option`. Так разметка не требует JS-состояния. */
+  .tabs--radio .tab:has(input:checked) {
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: var(--shadow-card);
+  }
+
   /* Табы модалки ученика: на всю ширину, на мобильном переносятся. */
   .modal-tabs {
     display: flex;

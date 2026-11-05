@@ -135,6 +135,13 @@ def test_edit_form_preselects_saved_payer_type(client, owner, student_factory):
     assert re.search(r'value="legal_entity"\s+checked', block)
     assert not re.search(r'value="individual"\s+checked', block)
 
+
+def test_payer_type_toggle_highlights_selected_segment_without_js(client, owner):
+    """Выбранный сегмент подсвечивает CSS, а не Alpine: у группы нет модели."""
+    html = client.get("/tutor/students/new").text
+    assert 'class="tabs tabs--radio"' in html
+    assert ".tabs--radio .tab:has(input:checked)" in STYLES
+
 def test_status_select_follows_kind_and_precedes_name(client, owner):
     """Статус — справа от «Кто ученик», имя и фамилия — следующей строкой."""
     html = client.get("/tutor/students/new").text

@@ -289,7 +289,7 @@
                            физлицо: это же значение подставляет модель и миграция. #}
                         <div class="field">
                             <span class="label" id="payer-type-label">Тип плательщика</span>
-                            <div class="tabs" role="radiogroup" aria-labelledby="payer-type-label">
+                            <div class="tabs tabs--radio" role="radiogroup" aria-labelledby="payer-type-label">
                                 <label class="tab">
                                     <input class="sr-only" type="radio" name="payer_type" value="individual"
                                            {% if form.payer_type != 'legal_entity' %}checked{% endif %}>

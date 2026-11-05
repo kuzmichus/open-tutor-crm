@@ -51,9 +51,11 @@
   `payer_type_label`, регистрация хелпера).
 - **Шаблоны**: `app/student/templates/student/_form.html` (переключатель),
   `app/student/templates/student/card.html` (подпись типа плательщика).
+- **Стили**: `app/static/styles.css` — правило
+  `.tabs--radio .tab:has(input:checked)` для подсветки выбранного сегмента без
+  Alpine-модели (как у `.un-modes__option`).
 - **Тесты**: `tests/test_models.py`, `tests/test_student_services.py`,
   `tests/test_students_form.py`, `tests/test_students_pages.py`.
 - **Вне объёма**: реквизиты юрлица (ИНН, название организации, банковские
   данные), фильтры и отчёты по типу плательщика, изменения справочника
-  контактов. Новых CSS-классов нет — переключатель использует существующие
-  `.tabs` / `.tab`.
+  контактов.
