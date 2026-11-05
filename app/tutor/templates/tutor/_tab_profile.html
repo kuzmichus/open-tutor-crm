@@ -1,5 +1,8 @@
 {# Вкладка «Профиль»: личная информация и тарифы (поля «Предметы»
-   референса в форме нет — по решению владельца `subject` не трогаем). #}
+   референса в форме нет — по решению владельца `subject` не трогаем) и
+   параметры НПД (самозанятости). Обе карточки — одна форма: сохраняются
+   одним действием. #}
+{% from "tutor/_switch.html" import switch with context %}
 <form method="post" action="{{ action }}">
     <section class="card settings-card">
         <h2 class="card__title">Личная информация и Тарифы</h2>
@@ -30,6 +33,63 @@
                 <label class="label" for="tutor-experience">Опыт работы (лет)</label>
                 <input class="input" id="tutor-experience" type="text" name="experience"
                        value="{{ form.experience }}" inputmode="numeric">
+            </div>
+        </div>
+
+        <div class="settings-actions">
+            <button class="btn btn--primary btn--block" type="submit">Сохранить изменения</button>
+        </div>
+    </section>
+
+    {# НПД: флаг включает блок налога на странице «Финансы». Ставки и
+       годовой лимит — параметры, а не константы кода: закон меняется,
+       расчёт не должен требовать правки шаблона. #}
+    <section class="card settings-card" aria-label="Налог на профессиональный доход">
+        <h2 class="card__title">Налог на профессиональный доход (НПД)</h2>
+
+        {# Маркер блока: без него частичный POST (без полей НПД) не должен
+           сбрасывать настройки налога. У чекбокса отсутствие поля значит
+           «выключено», а у формы без карточки НПД — «не трогать». #}
+        <input type="hidden" name="npd_present" value="1">
+
+        <div class="settings-list">
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">Является ли пользователь плательщиком НПД (самозанятым)</span>
+                    <span class="switch-row__desc">
+                        Включает расчёт налога на странице «Финансы»: доход от физлиц и юрлиц
+                        облагается по разным ставкам, а годовой лимит дохода контролируется
+                        прогресс-баром
+                    </span>
+                </div>
+                {{ switch('is_npd_payer', 'Плательщик НПД (самозанятый)') }}
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-npd-rate-individual">Ставка с физлиц (%)</label>
+                <input class="input" id="tutor-npd-rate-individual" type="text"
+                       name="npd_rate_individual" value="{{ form.npd_rate_individual }}"
+                       inputmode="decimal" placeholder="4">
+                <p class="form-hint">По умолчанию 4 % — ставка НПД для доходов от физлиц</p>
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-npd-rate-legal">Ставка с юрлиц (%)</label>
+                <input class="input" id="tutor-npd-rate-legal" type="text"
+                       name="npd_rate_legal" value="{{ form.npd_rate_legal }}"
+                       inputmode="decimal" placeholder="6">
+                <p class="form-hint">По умолчанию 6 % — ставка НПД для доходов от юрлиц</p>
+            </div>
+            <div class="field form-grid__full">
+                <label class="label" for="tutor-npd-income-limit">Годовой лимит дохода (₽)</label>
+                <input class="input" id="tutor-npd-income-limit" type="text"
+                       name="npd_income_limit" value="{{ form.npd_income_limit }}"
+                       inputmode="numeric" placeholder="2 400 000">
+                <p class="form-hint">
+                    По умолчанию 2 400 000 ₽. Сумму налога считает приложение «Мой налог»:
+                    здесь она расчётная и может отличаться на остаток налогового вычета
+                </p>
             </div>
         </div>
 

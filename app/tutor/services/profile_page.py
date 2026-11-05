@@ -5,6 +5,8 @@
 из карточки и настроек (GET), либо берёт присланные (ошибка формы).
 """
 
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from app.common.services.timezones import timezone_options_json
@@ -69,6 +71,16 @@ def _form_defaults(tutor: Tutor, settings, tab: str) -> dict:
             "about": tutor.about or "",
             "hourly_rate": _decimal_text(tutor.hourly_rate),
             "experience": tutor.experience or "",
+            # НПД: ставки хранятся в базисных пунктах (400 = 4 %), а в поле
+            # формы показываются процентами — так же, как их вводил человек.
+            "is_npd_payer": settings.is_npd_payer,
+            "npd_rate_individual": _decimal_text(
+                Decimal(settings.npd_rate_individual_bp) / 100
+            ),
+            "npd_rate_legal": _decimal_text(
+                Decimal(settings.npd_rate_legal_bp) / 100
+            ),
+            "npd_income_limit": str(settings.npd_income_limit),
         }
     if tab == "security":
         return {"email": tutor.email, "new_password": "", "new_password_confirm": ""}

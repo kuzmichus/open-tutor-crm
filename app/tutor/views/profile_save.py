@@ -2,6 +2,9 @@
 
 Ошибка — ре-рендер вкладки с сообщениями; успех — 303 обратно на
 вкладку с плашкой сохранения.
+
+Одно действие пишет две таблицы: личные данные — в карточку `Tutor`,
+параметры НПД — в `tutor_settings` (через ленивый upsert `save_settings`).
 """
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -14,6 +17,7 @@ from app.templating import templates
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.profile_form import parse_profile_form
 from app.tutor.services.profile_page import profile_page_context
+from app.tutor.services.settings import save_settings
 
 router = APIRouter()
 
@@ -26,10 +30,15 @@ def profile_save(
     about: str = Form(""),
     hourly_rate: str = Form(""),
     experience: str = Form(""),
+    is_npd_payer: str = Form(""),
+    npd_rate_individual: str = Form(""),
+    npd_rate_legal: str = Form(""),
+    npd_income_limit: str = Form(""),
+    npd_present: str = Form(""),
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 ):
-    """Сохраняет личные данные вошедшего репетитора."""
+    """Сохраняет личные данные и параметры НПД вошедшего репетитора."""
     tutor = db.get(Tutor, tutor_id)
     if tutor is None:
         raise LoginRequired()
@@ -40,8 +49,13 @@ def profile_save(
         "about": about,
         "hourly_rate": hourly_rate,
         "experience": experience,
+        "is_npd_payer": is_npd_payer,
+        "npd_rate_individual": npd_rate_individual,
+        "npd_rate_legal": npd_rate_legal,
+        "npd_income_limit": npd_income_limit,
+        "npd_present": npd_present,
     }
-    values, errors = parse_profile_form(form)
+    values, settings_values, errors = parse_profile_form(form)
     if errors:
         context = profile_page_context(
             db, tutor, tab="profile", errors=errors, form=form,
@@ -51,5 +65,7 @@ def profile_save(
     for field, value in values.items():
         setattr(tutor, field, value)
     db.commit()
+    if settings_values is not None:
+        save_settings(db, tutor_id, settings_values)
 
     return RedirectResponse(url="/tutor/profile?tab=profile&saved=1", status_code=303)

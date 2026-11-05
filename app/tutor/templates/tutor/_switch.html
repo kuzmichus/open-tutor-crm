@@ -1,0 +1,11 @@
+{# Общий макрос переключателя вкладок настроек: чекбокс со
+   стилизованным треком. Имя — aria-label, потому что заголовок строки с
+   чекбоксом не связан. Состояние читается из `form` вкладки. #}
+{% macro switch(name, title) %}
+<label class="switch">
+    <input class="sr-only" type="checkbox" name="{{ name }}"
+           {% if form[name] %}checked{% endif %}
+           aria-label="{{ title }}">
+    <span class="switch__track" aria-hidden="true"></span>
+</label>
+{% endmacro %}
