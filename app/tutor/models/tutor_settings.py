@@ -51,6 +51,21 @@ PREPARATION_COEFFICIENT_MAX = Decimal("5")
 # включено: до появления флага цены на карточках были видны всегда.
 DEFAULT_SHOW_CALENDAR_PRICE = True
 
+# Налог на профессиональный доход (НПД, «самозанятость»). Ставки заданы
+# законом: 4 % с доходов от физлиц и 6 % — от юрлиц и ИП, поэтому они и
+# стоят по умолчанию. Репетитор может их поправить: ставки меняются
+# региональными решениями и льготами, а лимит дохода — федеральным законом.
+# Пока значения только хранятся и показываются: расчётов налогов в системе
+# нет, это настройка для будущих отчётов.
+DEFAULT_NPD_ENABLED = False
+DEFAULT_NPD_TAX_RATE_INDIVIDUAL = Decimal("4.00")
+DEFAULT_NPD_TAX_RATE_LEGAL_ENTITY = Decimal("6.00")
+DEFAULT_NPD_ANNUAL_INCOME_LIMIT = 2_400_000
+
+# Верхняя граница ставки налога — 100 %: больше ставки не бывает, а
+# опечатка вида «400» иначе сохранилась бы молча.
+NPD_TAX_RATE_MAX = Decimal("100")
+
 # Значения полей по умолчанию — один источник истины для column-defaults
 # и для объекта-заглушки, пока строка в БД не создана (column-defaults
 # применяются только при INSERT, у transient-объекта поля были бы None).
@@ -78,6 +93,12 @@ DEFAULTS = {
     "quarter2_end": QUARTER_DEFAULTS[1],
     "quarter3_end": QUARTER_DEFAULTS[2],
     "quarter4_end": QUARTER_DEFAULTS[3],
+    # НПД: до первого сохранения репетитор не плательщик, ставки и лимит —
+    # законодательные значения по умолчанию.
+    "npd_enabled": DEFAULT_NPD_ENABLED,
+    "npd_tax_rate_individual": DEFAULT_NPD_TAX_RATE_INDIVIDUAL,
+    "npd_tax_rate_legal_entity": DEFAULT_NPD_TAX_RATE_LEGAL_ENTITY,
+    "npd_annual_income_limit": DEFAULT_NPD_ANNUAL_INCOME_LIMIT,
 }
 
 
@@ -214,6 +235,35 @@ class TutorSettings(Base):
     )
     quarter4_end: Mapped[str] = mapped_column(
         String(5), nullable=False, default=DEFAULTS["quarter4_end"]
+    )
+
+    # НПД (налог на профессиональный доход, «самозанятость»). Флаг — только
+    # признак статуса: поля ставок и лимита при выключении не сбрасываются,
+    # чтобы репетитор не терял введённые значения при переключении.
+    npd_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=DEFAULTS["npd_enabled"]
+    )
+
+    # Ставки налога в процентах: 4 % с доходов от физлиц и 6 % — от юрлиц
+    # и ИП (значения закона по умолчанию). Numeric(5, 2): ставка вида 4.00
+    # или 6.50 хранится точно, без двоичной погрешности float; пять разрядов
+    # покрывают «100.00» — верхнюю допустимую границу.
+    npd_tax_rate_individual: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        nullable=False,
+        default=DEFAULTS["npd_tax_rate_individual"],
+    )
+    npd_tax_rate_legal_entity: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        nullable=False,
+        default=DEFAULTS["npd_tax_rate_legal_entity"],
+    )
+
+    # «Максимально допустимый доход в год со статусом НПД» (₽). Лимит
+    # 2 400 000 ₽ — условие применения НПД, поэтому поле не nullable:
+    # у настройки всегда есть осмысленное значение.
+    npd_annual_income_limit: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=DEFAULTS["npd_annual_income_limit"]
     )
 
     def __repr__(self) -> str:
