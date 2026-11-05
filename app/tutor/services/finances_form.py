@@ -10,6 +10,11 @@
 пустое числовое поле возвращает значение по умолчанию, а не ошибку —
 у каждой из настроек всегда есть осмысленное законодательное значение.
 Мусор и значения вне диапазона отклоняются с сообщением на той же вкладке.
+
+Поля ставок и лимита имеют смысл только у плательщика НПД: при выключенном
+переключателе они отключены в разметке, поэтому разбор их пропускает и
+сохранённые значения остаются как были — выключение статуса не сбрасывает
+настройки налога.
 """
 
 from decimal import Decimal
@@ -48,10 +53,18 @@ def _parse_tax_rate(form: dict, field: str, label: str, default: Decimal, errors
 
 
 def parse_finances_form(form: dict) -> tuple[dict | None, list[str]]:
-    """Разбирает форму вкладки «Финансы»: (значения для записи, ошибки)."""
+    """Разбирает форму вкладки «Финансы»: (значения для записи, ошибки).
+
+    При выключенном переключателе НПД ставки и лимит в разметке `disabled`,
+    браузер их не отправляет: разбор возвращает только сам признак, и
+    сохранённые значения полей не затираются дефолтами.
+    """
     errors: list[str] = []
 
-    values: dict = {"npd_enabled": checked(form, "npd_enabled")}
+    enabled = checked(form, "npd_enabled")
+    values: dict = {"npd_enabled": enabled}
+    if not enabled:
+        return values, []
 
     for field, (label, default) in TAX_RATE_FIELDS.items():
         rate = _parse_tax_rate(form, field, label, default, errors)

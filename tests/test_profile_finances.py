@@ -63,9 +63,27 @@ def _is_checked(html, name):
     return bool(re.search(rf'name="{re.escape(name)}"\s+checked', html))
 
 
+def _input_tag(html, name):
+    """Тег `<input>` с именем `name` (None — поля нет)."""
+    match = re.search(rf'<input[^>]*name="{re.escape(name)}"[^>]*>', html)
+    return match.group(0) if match else None
+
+
+def _is_disabled(html, name):
+    """Отключено ли поле `name` (атрибут `disabled` или Alpine-биндинг)."""
+    tag = _input_tag(html, name)
+    assert tag is not None, f"нет поля {name}"
+    return bool(re.search(r"(?<![:\w-])disabled", tag))
+
+
 def _payload(**overrides):
-    """Полный набор полей блока «Налоги» для POST."""
+    """Полный набор полей блока «Налоги» для POST.
+
+    По умолчанию НПД включён: при выключенном переключателе поля в разметке
+    отключены и браузер их не отправляет — так же поступают и тесты.
+    """
     data = {
+        "npd_enabled": "on",
         "npd_tax_rate_individual": "4",
         "npd_tax_rate_legal_entity": "6",
         "npd_annual_income_limit": "2400000",
@@ -142,6 +160,54 @@ def test_finances_defaults_without_settings_row(client):
 
 
 # ---------------------------------------------------------------------------
+# Доступность полей при выключенном переключателе
+# ---------------------------------------------------------------------------
+
+_FIELDS = (
+    "npd_tax_rate_individual",
+    "npd_tax_rate_legal_entity",
+    "npd_annual_income_limit",
+)
+
+
+def test_finances_fields_disabled_when_switch_off(client):
+    """Выключенный НПД: поля ставок и лимита отключены (в т.ч. без JS)."""
+    _login(client)
+    html = _finances_page(client)
+    assert not _is_checked(html, "npd_enabled")
+    for name in _FIELDS:
+        assert _is_disabled(html, name), name
+    # Переключатель остаётся доступным: иначе блок нельзя включить.
+    assert not _is_disabled(html, "npd_enabled")
+
+
+def test_finances_fields_enabled_when_switch_on(client):
+    """Включённый НПД: поля доступны для ввода."""
+    _login(client)
+    client.post(
+        "/tutor/profile/finances",
+        data=_payload(npd_enabled="on"),
+        follow_redirects=False,
+    )
+    html = _finances_page(client)
+    assert _is_checked(html, "npd_enabled")
+    for name in _FIELDS:
+        assert not _is_disabled(html, name), name
+
+
+def test_finances_switch_toggles_fields_without_reload(client):
+    """Без перезагрузки состояние полей переключает Alpine (`x-model`)."""
+    _login(client)
+    html = _finances_page(client)
+    # Переключатель связан с переменной Alpine, от которой зависят поля.
+    assert re.search(r'name="npd_enabled"[^>]*x-model="npd"', html)
+    for name in _FIELDS:
+        assert re.search(
+            rf'name="{re.escape(name)}"[^>]*:disabled="!npd"', html
+        ), name
+
+
+# ---------------------------------------------------------------------------
 # Сохранение
 # ---------------------------------------------------------------------------
 
@@ -210,6 +276,7 @@ def test_finances_empty_fields_return_defaults(client):
     response = client.post(
         "/tutor/profile/finances",
         data={
+            "npd_enabled": "on",
             "npd_tax_rate_individual": "",
             "npd_tax_rate_legal_entity": "",
             "npd_annual_income_limit": "",
@@ -224,26 +291,44 @@ def test_finances_empty_fields_return_defaults(client):
 
 
 def test_finances_toggle_off_is_saved(client):
-    """Выключенный переключатель сохраняется как False и не сбрасывает поля."""
+    """Выключенный переключатель сохраняется как False и не сбрасывает поля.
+
+    Отключённые поля браузер не отправляет — сервер не должен принять это
+    за «очищено» и вернуть дефолты.
+    """
     _login(client)
     client.post(
         "/tutor/profile/finances",
-        data=_payload(npd_enabled="on", npd_tax_rate_individual="5"),
+        data=_payload(
+            npd_enabled="on",
+            npd_tax_rate_individual="5",
+            npd_tax_rate_legal_entity="8",
+            npd_annual_income_limit="1000000",
+        ),
         follow_redirects=False,
     )
     assert _settings().npd_enabled is True
 
-    # Чекбокс не отмечен — поле в форму не приходит.
+    # Чекбокс не отмечен, поля отключены и в форму не приходят.
     response = client.post(
         "/tutor/profile/finances",
-        data=_payload(npd_tax_rate_individual="5"),
+        data={"npd_enabled": ""},
         follow_redirects=False,
     )
     assert response.status_code == 303
     settings = _settings()
     assert settings.npd_enabled is False
-    # Ставка при выключении статуса не потерялась.
+    # Ставки и лимит при выключении статуса не потерялись.
     assert settings.npd_tax_rate_individual == Decimal("5.00")
+    assert settings.npd_tax_rate_legal_entity == Decimal("8.00")
+    assert settings.npd_annual_income_limit == 1_000_000
+
+    # Вкладка показывает сохранённые значения (поля при этом отключены).
+    html = _finances_page(client)
+    assert _field_value(html, "npd_tax_rate_individual") == "5"
+    assert _field_value(html, "npd_annual_income_limit") == "1000000"
+    for name in _FIELDS:
+        assert _is_disabled(html, name), name
 
 
 # ---------------------------------------------------------------------------
@@ -337,10 +422,18 @@ def test_finances_settings_are_isolated(client, tutor_factory):
 
 
 def test_parse_finances_form_defaults():
+    """Без переключателя (НПД выключен) разбор возвращает только признак."""
     values, errors = parse_finances_form({})
     assert errors == []
+    assert values == {"npd_enabled": False}
+
+
+def test_parse_finances_form_enabled_defaults():
+    """Включённый НПД с пустыми полями — значения по умолчанию."""
+    values, errors = parse_finances_form({"npd_enabled": "on"})
+    assert errors == []
     assert values == {
-        "npd_enabled": False,
+        "npd_enabled": True,
         "npd_tax_rate_individual": Decimal("4.00"),
         "npd_tax_rate_legal_entity": Decimal("6.00"),
         "npd_annual_income_limit": 2_400_000,
@@ -349,6 +442,17 @@ def test_parse_finances_form_defaults():
 
 def test_parse_finances_form_rejects_nan_and_infinity():
     for raw in ("NaN", "Infinity", "-Infinity"):
-        values, errors = parse_finances_form({"npd_tax_rate_individual": raw})
+        values, errors = parse_finances_form(
+            {"npd_enabled": "on", "npd_tax_rate_individual": raw}
+        )
         assert values is None
         assert errors
+
+
+def test_parse_finances_form_ignores_fields_when_disabled():
+    """При выключенном НПД ставки и лимит не разбираются и не валидируются."""
+    values, errors = parse_finances_form(
+        {"npd_tax_rate_individual": "abc", "npd_annual_income_limit": "-1"}
+    )
+    assert errors == []
+    assert values == {"npd_enabled": False}
