@@ -961,3 +961,156 @@ def test_calendar_workday_isolation(client, tutor_factory):
         mine = db.get(TutorSettings, _tutor_by_email("workday-mine@example.com").id)
         assert mine.workday_start == "09:00"
         assert mine.workday_end == "18:00"
+
+
+# ---------------------------------------------------------------------------
+# Вкладка «Профиль»: параметры НПД
+# ---------------------------------------------------------------------------
+
+_NPD_FORM = {
+    "name": "Самозанятый",
+    "npd_present": "1",
+    "is_npd_payer": "on",
+    "npd_rate_individual": "4",
+    "npd_rate_legal": "6",
+    "npd_income_limit": "2 400 000",
+}
+
+
+def _npd_settings(email="profile-user@example.com"):
+    """Настройки НПД репетитора (None — строки в БД нет)."""
+    tutor = _tutor_by_email(email)
+    with SessionLocal() as db:
+        return db.get(TutorSettings, tutor.id)
+
+
+def test_profile_npd_defaults_shown_before_first_save(client):
+    """До первого сохранения форма показывает 4 %, 6 % и 2 400 000 ₽."""
+    _login(client)
+    html = client.get("/tutor/profile").text
+    assert 'name="is_npd_payer"' in html
+    assert 'name="npd_rate_individual"' in html
+    assert 'value="4"' in html
+    assert 'name="npd_rate_legal"' in html
+    assert 'value="6"' in html
+    assert 'name="npd_income_limit"' in html
+    assert "2 400 000" in html
+    # Строки настроек нет: дефолты приходят из transient-объекта.
+    assert _npd_settings() is None
+
+
+def test_profile_npd_save_and_show(client):
+    """Флаг, ставки и лимит сохраняются и возвращаются в форму."""
+    _login(client)
+    response = client.post(
+        "/tutor/profile/save", data=_NPD_FORM, follow_redirects=False
+    )
+    assert response.status_code == 303
+
+    settings = _npd_settings()
+    assert settings.is_npd_payer is True
+    assert settings.npd_rate_individual_bp == 400
+    assert settings.npd_rate_legal_bp == 600
+    assert settings.npd_income_limit == 2400000
+
+    html = client.get("/tutor/profile").text
+    assert 'name="is_npd_payer"' in html
+    # Переключатель отрисован включённым.
+    assert 'name="is_npd_payer"\n           checked' in html
+
+
+def test_profile_npd_flag_can_be_disabled(client):
+    """Повторное сохранение без чекбокса выключает флаг."""
+    _login(client)
+    client.post("/tutor/profile/save", data=_NPD_FORM, follow_redirects=False)
+    assert _npd_settings().is_npd_payer is True
+
+    data = dict(_NPD_FORM)
+    data.pop("is_npd_payer")
+    client.post("/tutor/profile/save", data=data, follow_redirects=False)
+    assert _npd_settings().is_npd_payer is False
+
+
+def test_profile_npd_custom_rates_saved(client):
+    """Нестандартные ставки сохраняются в базисных пунктах."""
+    _login(client)
+    data = dict(_NPD_FORM, npd_rate_individual="5", npd_rate_legal="6,5")
+    client.post("/tutor/profile/save", data=data, follow_redirects=False)
+
+    settings = _npd_settings()
+    assert settings.npd_rate_individual_bp == 500
+    assert settings.npd_rate_legal_bp == 650
+    # В форме проценты показываются без хвостовых нулей.
+    html = client.get("/tutor/profile").text
+    assert 'value="5"' in html
+    assert 'value="6.5"' in html
+
+
+def test_profile_npd_rate_over_limit_shows_error(client):
+    """Ставка 120 % не сохраняется, ошибка показывается на вкладке."""
+    _login(client)
+    data = dict(_NPD_FORM, npd_rate_individual="120")
+    response = client.post("/tutor/profile/save", data=data)
+    assert response.status_code == 200
+    assert "Ставка НПД с физлиц" in response.text
+    assert _npd_settings() is None
+
+
+def test_profile_npd_rate_zero_shows_error(client):
+    """Ставка 0 % — ошибка: ставка должна быть больше нуля."""
+    _login(client)
+    data = dict(_NPD_FORM, npd_rate_legal="0")
+    response = client.post("/tutor/profile/save", data=data)
+    assert "Ставка НПД с юрлиц" in response.text
+    assert _npd_settings() is None
+
+
+def test_profile_npd_limit_zero_shows_error(client):
+    """Нулевой лимит — ошибка, настройки не появляются."""
+    _login(client)
+    data = dict(_NPD_FORM, npd_income_limit="0")
+    response = client.post("/tutor/profile/save", data=data)
+    assert "Годовой лимит дохода" in response.text
+    assert _npd_settings() is None
+
+
+def test_profile_npd_limit_garbage_shows_error(client):
+    """Мусор в лимите — ошибка, а не 500."""
+    _login(client)
+    data = dict(_NPD_FORM, npd_income_limit="много")
+    response = client.post("/tutor/profile/save", data=data)
+    assert "Годовой лимит дохода" in response.text
+    assert _npd_settings() is None
+
+
+def test_profile_npd_partial_post_keeps_settings(client):
+    """Старый клиент без блока НПД не сбрасывает сохранённые настройки."""
+    _login(client)
+    client.post("/tutor/profile/save", data=_NPD_FORM, follow_redirects=False)
+
+    client.post(
+        "/tutor/profile/save",
+        data={"name": "Новое Имя Без НПД"},
+        follow_redirects=False,
+    )
+    settings = _npd_settings()
+    assert settings.is_npd_payer is True
+    assert settings.npd_rate_individual_bp == 400
+    assert _tutor_by_email("profile-user@example.com").name == "Новое Имя Без НПД"
+
+
+def test_profile_save_keeps_notification_settings(client):
+    """Сохранение профиля не затирает настройки уведомлений и календаря."""
+    _login(client)
+    from app.tutor.services.settings import save_settings
+
+    with SessionLocal() as db:
+        tutor = _tutor_by_email("profile-user@example.com")
+        save_settings(db, tutor.id, {"notify_birthday": False, "digest_time": "18:30"})
+
+    client.post("/tutor/profile/save", data=_NPD_FORM, follow_redirects=False)
+
+    settings = _npd_settings()
+    assert settings.notify_birthday is False
+    assert settings.digest_time == "18:30"
+    assert settings.is_npd_payer is True
