@@ -17,10 +17,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
-# Допустимые значения подтипа и статуса. Держим рядом с моделью, чтобы
-# CHECK-ограничение и валидация формы ссылались на один источник.
+# Допустимые значения подтипа, статуса и типа плательщика. Держим рядом с
+# моделью, чтобы CHECK-ограничение и валидация формы ссылались на один источник.
 STUDENT_KINDS = ("child", "adult")
 STUDENT_STATUSES = ("new", "active", "archived")
+# Тип плательщика: физическое лицо (по умолчанию) или юридическое.
+STUDENT_PAYER_TYPES = ("individual", "legal_entity")
 
 # Границы класса: 1–11 включительно (пустое значение = NULL).
 MIN_GRADE = 1
@@ -43,6 +45,10 @@ class Student(Base):
         CheckConstraint(
             "status IN ('new', 'active', 'archived')",
             name="ck_students_status",
+        ),
+        CheckConstraint(
+            "payer_type IN ('individual', 'legal_entity')",
+            name="ck_students_payer_type",
         ),
     )
 
@@ -91,6 +97,14 @@ class Student(Base):
         String(36),
         ForeignKey("contacts.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    # Тип плательщика: физлицо (по умолчанию) или юрлицо. Отдельный признак,
+    # а не свойство контакта: плательщиком может быть и сам ученик.
+    payer_type: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="individual",
+        server_default="individual",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
