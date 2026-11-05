@@ -81,14 +81,21 @@ def utilization_context(
     end,
     actual_minutes: int,
     available_minutes: int,
+    days: int | None = None,
 ) -> dict:
     """Контекст блока «Загрузка»: часы, проценты, тона и подсказка.
 
     `actual_minutes`/`available_minutes` приходят готовыми: их считают
     `hours.completed_minutes` и `availability.available_minutes`, чтобы блок
     не делал собственных запросов и не расходился с остальными карточками.
+
+    `days` — длина периода в локальных сутках. «Обзор» передаёт её готовой:
+    то же число нужно блоку внеурочной занятости, и второй перебор дат на
+    страницу был бы лишней работой. Без аргумента считается здесь — так
+    функцию можно звать изолированно.
     """
-    days = len(period_days(tutor, start=start, end=end))
+    if days is None:
+        days = len(period_days(tutor, start=start, end=end))
     weekly_hours = get_settings(db, tutor.id).weekly_load_hours
     target_minutes = (
         weekly_hours * MINUTES_PER_HOUR * days / WEEK_DAYS
