@@ -6,15 +6,22 @@
 источник истины живёт в модуле lesson (design D7). Рабочее время —
 целые часы «ЧЧ:ММ» (design D2), границы сетки календаря. Желаемая
 нагрузка в неделю — целые астрономические часы 1..168 (design D4),
-пустое поле = параметр не задан.
+пустое поле = параметр не задан. Коэффициент подготовки — доля
+длительности урока на подготовку и проверку ДЗ, 0..5; пустое поле
+возвращает значение по умолчанию 0.7.
 """
 
 import re
+from decimal import Decimal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from app.common.services.forms import int_or_none
+from app.common.services.forms import decimal_or_none, int_or_none
 from app.lesson.models.lesson import LESSON_DURATIONS
-from app.tutor.models.tutor_settings import WEEKLY_LOAD_MAX_HOURS
+from app.tutor.models.tutor_settings import (
+    DEFAULT_PREPARATION_COEFFICIENT,
+    PREPARATION_COEFFICIENT_MAX,
+    WEEKLY_LOAD_MAX_HOURS,
+)
 
 # «ММ-ДД»: месяц 01–12, день — по календарю месяца.
 _QUARTER_RE = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$")
@@ -100,6 +107,27 @@ def parse_calendar_form(form: dict) -> tuple[dict | None, list[str]]:
             )
         else:
             values["weekly_load_hours"] = load
+
+    # «Коэффициент подготовки» — доля длительности урока, уходящая на
+    # подготовку и проверку ДЗ. Пустое поле возвращает значение по
+    # умолчанию (0.7), а не ошибку: параметр всегда имеет осмысленное
+    # значение. Ноль допустим (репетитор не готовится отдельно), верхняя
+    # граница отсекает опечатки.
+    coefficient_raw = (form.get("preparation_coefficient") or "").strip()
+    if coefficient_raw == "":
+        values["preparation_coefficient"] = DEFAULT_PREPARATION_COEFFICIENT
+    else:
+        coefficient = decimal_or_none(coefficient_raw)
+        if (
+            coefficient is None
+            or not Decimal(0) <= coefficient <= PREPARATION_COEFFICIENT_MAX
+        ):
+            errors.append(
+                "Коэффициент подготовки — число от 0 до "
+                f"{PREPARATION_COEFFICIENT_MAX} (например, 0.7)."
+            )
+        else:
+            values["preparation_coefficient"] = coefficient
 
     # Рабочее время — границы сетки календаря. Целые часы только (дизайн
     # D2): строка сетки моделируется часом, нецелые интервалы ломали бы

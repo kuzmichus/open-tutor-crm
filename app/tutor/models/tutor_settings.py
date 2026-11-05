@@ -1,6 +1,8 @@
 """Модель «Настройки репетитора»: уведомления, учебный год, уроки по умолчанию."""
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String
+from decimal import Decimal
+
+from sqlalchemy import JSON, Boolean, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -37,6 +39,14 @@ DEFAULT_LOW_BALANCE_THRESHOLD = 0
 # верх заглушает ошибки ввода (нагрузка больше недели невозможна).
 WEEKLY_LOAD_MAX_HOURS = 168
 
+# «Коэффициент подготовки» — доля длительности урока, которая в среднем
+# уходит на подготовку к занятию и проверку домашнего задания. 0.7 значит:
+# на каждый час урока репетитор тратит ещё около 42 минут вне урока.
+# По умолчанию 0.7 — типовая оценка для школьной программы; верхняя
+# граница 5 отсекает опечатки (пять часов подготовки на час урока).
+DEFAULT_PREPARATION_COEFFICIENT = Decimal("0.70")
+PREPARATION_COEFFICIENT_MAX = Decimal("5")
+
 # Показывать ли стоимость занятий на карточках календаря. По умолчанию
 # включено: до появления флага цены на карточках были видны всегда.
 DEFAULT_SHOW_CALENDAR_PRICE = True
@@ -63,6 +73,7 @@ DEFAULTS = {
     "default_lesson_duration": DEFAULT_LESSON_DURATION,
     "default_lesson_price": None,
     "weekly_load_hours": None,
+    "preparation_coefficient": DEFAULT_PREPARATION_COEFFICIENT,
     "quarter1_end": QUARTER_DEFAULTS[0],
     "quarter2_end": QUARTER_DEFAULTS[1],
     "quarter3_end": QUARTER_DEFAULTS[2],
@@ -178,6 +189,18 @@ class TutorSettings(Base):
     # не задан (NULL), отдельный флаг «включено» не нужен. Значение пока
     # нигде не участвует в расчётах — это заявка на комфортную занятость.
     weekly_load_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # «Коэффициент подготовки» — доля длительности урока, которая в среднем
+    # уходит на подготовку к занятию и проверку ДЗ (см.
+    # DEFAULT_PREPARATION_COEFFICIENT). Numeric(4, 2): значения вида 0.70,
+    # 1.25; NOT NULL с ORM-дефолтом, потому что параметр всегда имеет
+    # осмысленное значение «по умолчанию». Пока не участвует в расчётах —
+    # это ориентир для планирования личного времени.
+    preparation_coefficient: Mapped[Decimal] = mapped_column(
+        Numeric(4, 2),
+        nullable=False,
+        default=DEFAULTS["preparation_coefficient"],
+    )
 
     # Учебный год: даты окончания четвертей, строки «ММ-ДД».
     quarter1_end: Mapped[str] = mapped_column(
