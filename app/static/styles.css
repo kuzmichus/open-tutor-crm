@@ -6789,6 +6789,175 @@
     color: var(--muted-foreground);
   }
 
+  /* Мелкая подпись под числом блока сравнения: «Проведено: 1 ч 30 мин».
+     Часы уточняют деньги, а не соревнуются с ними в весе. */
+  .fin-compare__sub {
+    margin: calc(var(--space) * 1) 0 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  /* Промежуточный итог «Средняя стоимость часа» — между арифметикой и
+     подсказкой: это производная величина, а не ещё одна карточка. */
+  .fin-compare__rate {
+    margin: calc(var(--space) * 4) 0 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+
+    & strong { color: var(--foreground); }
+  }
+
+  /* Упущенная выручка: цена простоя. Тон красный — это потеря, а не
+     ошибка, поэтому фон карточки нейтральный, а цветом говорит число. */
+  .fin-idle {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 4);
+    padding: calc(var(--space) * 4);
+    border-left: 3px solid var(--destructive);
+  }
+
+  /* Простой без суммы (нечем оценить час) — спокойный тон: совет остаётся,
+     тревоги без цифры нет. */
+  .fin-idle--quiet {
+    border-left-color: var(--border);
+  }
+
+  .fin-idle__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+  }
+
+  .fin-idle__title {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-idle__icon {
+    display: inline-flex;
+    color: var(--destructive);
+
+    & [data-lucide] { width: 18px; height: 18px; }
+  }
+
+  .fin-idle--quiet .fin-idle__icon { color: var(--muted-foreground); }
+
+  .fin-idle__value {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--destructive);
+  }
+
+  .fin-idle--quiet .fin-idle__value { color: var(--foreground); }
+
+  .fin-idle__note {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  /* Кнопка «Посмотреть свободные окна» — по ширине текста, не на всю
+     карточку: это переход, а не основное действие страницы. */
+  .fin-idle__link {
+    align-self: flex-start;
+    text-decoration: none;
+  }
+
+  /* Доходы по типам занятий: две колонки сравнения. На мобиле — одна,
+     с 640px — две: суммы и часы короткие, тесно им не будет. */
+  .fin-types {
+    margin-top: calc(var(--space) * 4);
+    padding: calc(var(--space) * 4);
+  }
+
+  .fin-types__title {
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .fin-types__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: calc(var(--space) * 4);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .fin-types__column {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    padding: calc(var(--space) * 3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--muted);
+  }
+
+  .fin-types__label {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--muted-foreground);
+  }
+
+  .fin-types__value {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--foreground);
+  }
+
+  .fin-types__stats {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 1);
+    margin: calc(var(--space) * 2) 0 0;
+  }
+
+  .fin-types__stat {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: calc(var(--space) * 2);
+
+    & dt {
+      font-size: var(--text-xs);
+      color: var(--muted-foreground);
+    }
+
+    & dd {
+      margin: 0;
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--foreground);
+    }
+  }
+
+  /* Инсайт «группа выгоднее»: совет, а не данные — фон-плашка отделяет
+     его от колонок и не спорит с числами по весу. */
+  .fin-types__insight {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    margin: calc(var(--space) * 4) 0 0;
+    padding: calc(var(--space) * 3);
+    border-radius: var(--radius);
+    background: var(--warning-soft);
+    color: var(--warning-fg);
+    font-size: var(--text-sm);
+
+    & [data-lucide] { width: 18px; height: 18px; flex-shrink: 0; }
+  }
+
   /* Корень сводки — обновляемый контейнер: после сохранения платежа блок
      приходит заново целиком (design D6 finance-page). */
   .fin-summary {

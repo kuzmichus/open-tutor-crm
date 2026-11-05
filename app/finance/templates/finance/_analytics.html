@@ -39,7 +39,7 @@
 
         {% if analytics.bar_chart %}
         <svg class="fin-chart__svg" role="img"
-             aria-label="Столбчатая диаграмма: доход, заработано за уроки и расходы по месяцам"
+             aria-label="Столбчатая диаграмма: получено, заработано за уроки и расходы по месяцам"
              viewBox="0 0 {{ analytics.bar_chart.width }} {{ analytics.bar_chart.height }}">
             {% for line in analytics.bar_chart.gridlines %}
             <line class="fin-grid" x1="{{ analytics.bar_chart.pad_left }}" y1="{{ line.y }}"
