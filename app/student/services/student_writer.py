@@ -55,6 +55,9 @@ def _apply_student_fields(student: Student, data: dict) -> None:
         if field in _EMPTY_TO_NONE and value == "":
             value = None
         setattr(student, field, value)
+    # Тип плательщика есть не во всех вызовах сервиса (например, при
+    # создании ученика из других модулей): без значения — физлицо.
+    student.payer_type = data.get("payer_type") or "individual"
     # Статус меняется только явным выбором репетитора.
     if data.get("status"):
         student.status = data["status"]

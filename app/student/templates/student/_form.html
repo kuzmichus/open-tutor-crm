@@ -285,6 +285,23 @@
                             </select>
                             <p class="card__desc">Выбрать можно только контакт, привязанный к ученику.</p>
                         </div>
+                        {# Тип плательщика — рядом с выбором плательщика. По умолчанию
+                           физлицо: это же значение подставляет модель и миграция. #}
+                        <div class="field">
+                            <span class="label" id="payer-type-label">Тип плательщика</span>
+                            <div class="tabs" role="radiogroup" aria-labelledby="payer-type-label">
+                                <label class="tab">
+                                    <input class="sr-only" type="radio" name="payer_type" value="individual"
+                                           {% if form.payer_type != 'legal_entity' %}checked{% endif %}>
+                                    Физлицо
+                                </label>
+                                <label class="tab">
+                                    <input class="sr-only" type="radio" name="payer_type" value="legal_entity"
+                                           {% if form.payer_type == 'legal_entity' %}checked{% endif %}>
+                                    Юрлицо
+                                </label>
+                            </div>
+                        </div>
                     </fieldset>
                 </div>
 

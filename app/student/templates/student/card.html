@@ -150,6 +150,7 @@
                     <div class="field mt-4">
                         <span class="label">Плательщик</span>
                         <span>{% if card.payer %}{{ card.payer.full_name }}{% else %}платит сам ученик{% endif %}</span>
+                        <span class="card__desc">{{ payer_type_label(student.payer_type) }}</span>
                     </div>
                 </section>
             </div>

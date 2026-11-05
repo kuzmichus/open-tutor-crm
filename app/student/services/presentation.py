@@ -62,6 +62,12 @@ _KIND_LABELS = {
     "adult": "Взрослый",
 }
 
+# Подписи типа плательщика. Значение по умолчанию — физлицо.
+_PAYER_TYPE_LABELS = {
+    "individual": "Физлицо",
+    "legal_entity": "Юрлицо",
+}
+
 
 def status_label(status: str | None) -> str:
     """Человекочитаемая подпись статуса (неизвестное значение — как есть)."""
@@ -71,6 +77,11 @@ def status_label(status: str | None) -> str:
 def kind_label(kind: str | None) -> str:
     """Человекочитаемая подпись подтипа ученика."""
     return _KIND_LABELS.get(kind or "", kind or "")
+
+
+def payer_type_label(payer_type: str | None) -> str:
+    """Подпись типа плательщика: «Физлицо» / «Юрлицо»."""
+    return _PAYER_TYPE_LABELS.get(payer_type or "", payer_type or "")
 
 
 def student_full_name(student: Student) -> str:
@@ -127,6 +138,7 @@ def student_to_form(student: Student) -> dict:
         "remind_homework": bool(student.remind_homework),
         "remind_cancel": bool(student.remind_cancel),
         "payer_contact_id": student.payer_contact_id or "",
+        "payer_type": student.payer_type or "individual",
     }
 
 
@@ -134,6 +146,9 @@ def form_from_data(data: dict) -> dict:
     """Значения формы из очищенных данных (для повторной отрисовки с ошибкой)."""
     form = {key: data.get(key, "") for key in empty_student_form()}
     form["grade"] = "" if data.get("grade") is None else str(data["grade"])
+    # Тип плательщика — переключатель; без значения показываем физлицо,
+    # как и при создании нового ученика.
+    form["payer_type"] = data.get("payer_type") or "individual"
     # Парсер формы отдаёт дату объектом `date`, а поле `type="date"` ждёт
     # ISO-строку — иначе после ошибки валидации выбранная дата теряется.
     form["birth_date"] = (
@@ -164,6 +179,7 @@ def empty_student_form() -> dict:
         "remind_homework": False,
         "remind_cancel": False,
         "payer_contact_id": "",
+        "payer_type": "individual",
     }
 
 
@@ -270,6 +286,7 @@ def register_template_helpers() -> None:
     templates.env.globals.update(
         status_label=status_label,
         kind_label=kind_label,
+        payer_type_label=payer_type_label,
         student_full_name=student_full_name,
         student_initials=student_initials,
         receives_reminders=receives_reminders,
