@@ -1,0 +1,85 @@
+{# Вкладка «Финансы»: блок «Налоги» — статус плательщика НПД и параметры
+   налога. Одна форма на карточку: значения независимы, но сохраняются
+   вместе — репетитор настраивает налог за один проход.
+
+   Поля ставок и лимита имеют смысл только у плательщика НПД, поэтому при
+   выключенном переключателе они `disabled`: браузер не отправляет их и не
+   даёт править. Состояние переключается на клиенте через Alpine (`x-data`
+   на карточке), а серверный `disabled` в разметке оставляет блок корректным
+   и без JS. #}
+
+{# Переключатель: чекбокс со стилизованным треком (та же разметка, что на
+   вкладке «Уведомления»). Имя — aria-label, потому что заголовок строки с
+   чекбоксом не связан. `model` — переменная Alpine, которую переключатель
+   меняет: от неё зависит доступность полей блока. #}
+{% macro switch(name, title, model=None) %}
+<label class="switch">
+    <input class="sr-only" type="checkbox" name="{{ name }}"
+           {% if form[name] %}checked{% endif %}
+           {% if model %}x-model="{{ model }}"{% endif %}
+           aria-label="{{ title }}">
+    <span class="switch__track" aria-hidden="true"></span>
+</label>
+{% endmacro %}
+
+{% set npd_on = form.npd_enabled %}
+<form method="post" action="{{ action }}">
+    <section class="card settings-card" x-data="{ npd: {{ 'true' if npd_on else 'false' }} }">
+        <h2 class="card__title">Налоги</h2>
+
+        <div class="settings-list">
+            <div class="switch-row">
+                <div class="switch-row__main">
+                    <span class="switch-row__title">НПД</span>
+                    <span class="switch-row__desc">
+                        Является ли пользователь плательщиком НПД (самозанятым)
+                    </span>
+                </div>
+                {{ switch('npd_enabled', 'Является ли пользователь плательщиком НПД (самозанятым)', 'npd') }}
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-npd-rate-individual">Ставка налога для физических лиц, %</label>
+                <input class="input" id="tutor-npd-rate-individual" type="number"
+                       name="npd_tax_rate_individual" min="0" max="100" step="0.01"
+                       value="{{ form.npd_tax_rate_individual }}" placeholder="4"
+                       :disabled="!npd"{% if not npd_on %} disabled{% endif %}>
+                <p class="card__desc">
+                    Ставка налога на профессиональную деятельность, если плательщик
+                    является физическим лицом.
+                </p>
+            </div>
+            <div class="field">
+                <label class="label" for="tutor-npd-rate-legal">Ставка налога для юридических лиц и ИП, %</label>
+                <input class="input" id="tutor-npd-rate-legal" type="number"
+                       name="npd_tax_rate_legal_entity" min="0" max="100" step="0.01"
+                       value="{{ form.npd_tax_rate_legal_entity }}" placeholder="6"
+                       :disabled="!npd"{% if not npd_on %} disabled{% endif %}>
+                <p class="card__desc">
+                    Ставка налога на профессиональную деятельность, если плательщик
+                    является юридическим лицом или ИП.
+                </p>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <div class="field">
+                <label class="label" for="tutor-npd-income-limit">Максимально допустимый доход в год со статусом НПД (₽)</label>
+                <input class="input" id="tutor-npd-income-limit" type="number"
+                       name="npd_annual_income_limit" min="0" step="1"
+                       value="{{ form.npd_annual_income_limit }}" placeholder="2400000"
+                       :disabled="!npd"{% if not npd_on %} disabled{% endif %}>
+                <p class="card__desc">
+                    Годовой доход, при превышении которого статус плательщика НПД
+                    утрачивается. По умолчанию 2 400 000 ₽.
+                </p>
+            </div>
+        </div>
+
+        <div class="settings-actions">
+            <button class="btn btn--primary" type="submit">Сохранить</button>
+        </div>
+    </section>
+</form>

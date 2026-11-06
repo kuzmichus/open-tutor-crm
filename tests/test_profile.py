@@ -67,15 +67,15 @@ def test_default_tab_is_profile(client):
     # Заголовок страницы — «Профиль» и в тайтле вкладки, и в h1.
     assert "<title>Профиль — Open Tutor CRM</title>" in response.text
     assert "<h1>Профиль</h1>" in response.text
-    assert "Профиль, безопасность, уведомления и календарь" in response.text
+    assert "Профиль, безопасность, уведомления, календарь и финансы" in response.text
     # Активна вкладка «Профиль»: только у неё aria-current.
     assert 'aria-current="page"\n                   href="/tutor/profile?tab=profile"' in response.text
 
 
-def test_all_four_tabs_present(client):
+def test_all_tabs_present(client):
     _login(client)
     response = client.get("/tutor/profile")
-    for tab in ("profile", "security", "notifications", "calendar"):
+    for tab in ("profile", "security", "notifications", "calendar", "finances"):
         assert f"/tutor/profile?tab={tab}" in response.text
 
 
