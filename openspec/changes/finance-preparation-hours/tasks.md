@@ -15,6 +15,10 @@
   `номинал × (1 + коэффициент)`.
 - [x] 1.4 Docstring модуля и `summary.py`: подготовка считается по проведённым
   урокам, база и формула совпадают со «Статистикой».
+- [x] 1.5 `time_metrics.idle_context`: цена простоя считается по реальной
+  ставке (`real_rev`, `coefficient`), в контексте — `real_rate_label` и
+  `has_preparation`; `summary.py` передаёт ставку и коэффициент из
+  `time_context`.
 
 ## 2. Шаблон и стили
 
@@ -45,6 +49,11 @@
 - [x] 4.4 Прогон `tests/test_finance_preparation.py`, `test_finance_time.py`,
   `test_finance_page.py`, `test_finance_npd.py`, `test_css_styles.py`,
   `test_stats_preparation.py`, `test_profile.py` и полного набора.
+- [x] 4.5 `test_idle_profit_uses_real_rate` и
+  `test_idle_profit_zero_coefficient_uses_nominal_rate`: сумма простоя
+  считается по реальной ставке, подпись упоминает подготовку только при
+  ненулевом коэффициенте; тесты `test_finance_time.py` обновлены под новое
+  название блока.
 
 ## 5. Документация
 
