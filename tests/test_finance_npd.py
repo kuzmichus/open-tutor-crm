@@ -12,6 +12,7 @@
 
 import re
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import select
 
@@ -81,7 +82,7 @@ def _set_npd(tutor_id: str, **values):
         if row is None:
             row = TutorSettings(tutor_id=tutor_id, **default_values())
             session.add(row)
-        row.is_npd_payer = True
+        row.npd_enabled = True
         for name, value in values.items():
             setattr(row, name, value)
         session.commit()
@@ -205,7 +206,7 @@ def test_npd_compare_block_tax_line(client, tutor_factory, student_factory):
     individual = student_factory(tutor_id=tutor_id, payer_type="individual")
     now = utcnow()
     # Ставка 5 % из настроек: 20 000 × 5 % = 1 000 — арифметика примера ТЗ.
-    _set_npd(tutor_id, npd_rate_individual_bp=500)
+    _set_npd(tutor_id, npd_tax_rate_individual=Decimal("5.00"))
     _operation(individual, "lesson", 20000, now)
     _expense(tutor_id, 5000, now)
 
@@ -258,7 +259,11 @@ def test_npd_lead_row_has_four_cards(client, tutor_factory):
 def test_npd_custom_rates(client, tutor_factory, student_factory):
     """Ставки 5 % / 7 % из настроек меняют расчёт без правок кода."""
     tutor_id = _login(client, tutor_factory)
-    _set_npd(tutor_id, npd_rate_individual_bp=500, npd_rate_legal_bp=700)
+    _set_npd(
+        tutor_id,
+        npd_tax_rate_individual=Decimal("5.00"),
+        npd_tax_rate_legal_entity=Decimal("7.00"),
+    )
     individual = student_factory(tutor_id=tutor_id, payer_type="individual")
     legal = student_factory(tutor_id=tutor_id, payer_type="legal_entity")
     now = utcnow()
@@ -275,7 +280,7 @@ def test_npd_custom_rates(client, tutor_factory, student_factory):
 def test_npd_custom_limit_warning(client, tutor_factory, student_factory):
     """Изменённый лимит 1 000 000 и доход с начала года — предупреждение."""
     tutor_id = _login(client, tutor_factory)
-    _set_npd(tutor_id, npd_income_limit=1000000)
+    _set_npd(tutor_id, npd_annual_income_limit=1000000)
     student_id = student_factory(tutor_id=tutor_id)
     _operation(student_id, "lesson", 900000, utcnow())
 
@@ -301,7 +306,7 @@ def test_npd_limit_half_no_warning(client, tutor_factory, student_factory):
 def test_npd_limit_yearly_ignores_period(client, tutor_factory, student_factory):
     """Лимит считается по календарному году, а не по выбранному периоду."""
     tutor_id = _login(client, tutor_factory)
-    _set_npd(tutor_id, npd_income_limit=1000000)
+    _set_npd(tutor_id, npd_annual_income_limit=1000000)
     student_id = student_factory(tutor_id=tutor_id)
     # Доход прошлого года в лимит не входит.
     _operation(student_id, "lesson", 800000, datetime(2020, 3, 1, 12, tzinfo=UTC))

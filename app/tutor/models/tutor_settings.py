@@ -66,20 +66,6 @@ DEFAULT_NPD_ANNUAL_INCOME_LIMIT = 2_400_000
 # опечатка вида «400» иначе сохранилась бы молча.
 NPD_TAX_RATE_MAX = Decimal("100")
 
-# Налог на профессиональный доход (НПД, самозанятые). Ставки хранятся в
-# базисных пунктах (1 % = 100 bp): 400 bp = 4 %, 600 bp = 6 %. Целое число
-# вместо Decimal — деньги на странице «Финансы» считаются в целых рублях,
-# и налог не должен зависеть от float. Годовой лимит дохода и порог
-# предупреждения — значения из закона о НПД; их можно поменять в профиле.
-NPD_RATE_INDIVIDUAL_BP = 400
-NPD_RATE_LEGAL_BP = 600
-NPD_INCOME_LIMIT = 2_400_000
-NPD_LIMIT_WARN_PERCENT = 80
-
-# Верхняя граница ставки НПД в форме профиля (50 %) отсекает опечатки:
-# ставки закона — 4 % и 6 %, но профиль позволяет изменить их.
-NPD_RATE_MAX_BP = 5_000
-
 # Значения полей по умолчанию — один источник истины для column-defaults
 # и для объекта-заглушки, пока строка в БД не создана (column-defaults
 # применяются только при INSERT, у transient-объекта поля были бы None).
@@ -103,12 +89,6 @@ DEFAULTS = {
     "default_lesson_price": None,
     "weekly_load_hours": None,
     "preparation_coefficient": DEFAULT_PREPARATION_COEFFICIENT,
-    # НПД: по умолчанию репетитор не самозанятый — страница «Финансы»
-    # выглядит как раньше, пока флаг не включён в профиле.
-    "is_npd_payer": False,
-    "npd_rate_individual_bp": NPD_RATE_INDIVIDUAL_BP,
-    "npd_rate_legal_bp": NPD_RATE_LEGAL_BP,
-    "npd_income_limit": NPD_INCOME_LIMIT,
     "quarter1_end": QUARTER_DEFAULTS[0],
     "quarter2_end": QUARTER_DEFAULTS[1],
     "quarter3_end": QUARTER_DEFAULTS[2],
@@ -241,24 +221,6 @@ class TutorSettings(Base):
         Numeric(4, 2),
         nullable=False,
         default=DEFAULTS["preparation_coefficient"],
-    )
-
-    # НПД (самозанятость). Флаг «Является плательщиком НПД» включает блок
-    # налога на странице «Финансы»; при выключенном значении страница
-    # выглядит и считается как раньше. Ставки — базисные пункты (4 % = 400)
-    # и годовой лимит дохода — параметры профиля, а не константы кода:
-    # закон может измениться, а расчёт не должен требовать правки.
-    is_npd_payer: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=DEFAULTS["is_npd_payer"]
-    )
-    npd_rate_individual_bp: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=DEFAULTS["npd_rate_individual_bp"]
-    )
-    npd_rate_legal_bp: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=DEFAULTS["npd_rate_legal_bp"]
-    )
-    npd_income_limit: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=DEFAULTS["npd_income_limit"]
     )
 
     # Учебный год: даты окончания четвертей, строки «ММ-ДД».

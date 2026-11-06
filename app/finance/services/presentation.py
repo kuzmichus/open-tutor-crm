@@ -17,6 +17,7 @@
 """
 
 from datetime import datetime
+from decimal import Decimal
 
 from app.common.services.tutor_time import to_local
 from app.finance.models.account_operation import (
@@ -178,18 +179,17 @@ def rate_label(value: int | None) -> str:
         return "—"
     return f"{money(value)}/ч"
 
-def npd_rate_label(basis_points: int) -> str:
-    """Ставка НПД из базисных пунктов: «4 %», «6 %», «4,5 %».
+def npd_rate_label(rate: Decimal) -> str:
+    """Ставка НПД в процентах: «4 %», «6 %», «4,5 %».
 
-    Ставки хранятся целыми базисными пунктами (400 = 4 %): дробная часть
-    появляется только у нестандартных значений из профиля, и тогда она
-    печатается через запятую, как принято в русской типографике.
+    Ставка приходит из настроек профиля (`npd_tax_rate_individual` и
+    `npd_tax_rate_legal_entity`) как Decimal: хвостовые нули не печатаются,
+    дробная часть — через запятую, как принято в русской типографике.
     """
-    whole, rest = divmod(int(basis_points), 100)
-    if rest == 0:
-        return f"{whole}\u00a0%"
-    fraction = f"{rest:02d}".rstrip("0")
-    return f"{whole},{fraction}\u00a0%"
+    value = Decimal(rate).normalize()
+    if value == value.to_integral_value():
+        return f"{int(value)}\u00a0%"
+    return f"{value}".replace(".", ",") + "\u00a0%"
 
 def _hours_word(hours: float) -> str:
     """Склонение «час/часа/часов» для дробного или целого значения."""

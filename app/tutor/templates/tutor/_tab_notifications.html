@@ -2,7 +2,16 @@
    диплинку бота) и переключатели с параметрами. Каждый параметр
    внутри своей строки. #}
 
-{% from "tutor/_switch.html" import switch with context %}
+{# Переключатель: чекбокс со стилизованным треком. Имя — aria-label,
+   потому что заголовок строки с чекбоксом не связан. #}
+{% macro switch(name, title) %}
+<label class="switch">
+    <input class="sr-only" type="checkbox" name="{{ name }}"
+           {% if form[name] %}checked{% endif %}
+           aria-label="{{ title }}">
+    <span class="switch__track" aria-hidden="true"></span>
+</label>
+{% endmacro %}
 
 {% include "tutor/_channels_block.html" %}
 
