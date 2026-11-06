@@ -1,0 +1,71 @@
+{# Блок «Налог на профессиональный доход» (НПД) страницы «Финансы».
+   Показывается только при включённом флаге самозанятого в профиле —
+   `summary.npd.enabled`. Партиал сам проверяет флаг: include безусловный,
+   поэтому при выключенном флаге в разметке нет ни одного нового узла.
+
+   Налог считается по начисленному доходу за период: доход физлиц × ставка
+   физлиц + доход юрлиц × ставка юрлиц. Ставки и годовой лимит приходят из
+   настроек профиля, поэтому текст подписей — из контекста, а не из
+   литералов шаблона. #}
+{% if summary.npd.enabled %}
+<section class="card fin-npd" aria-label="Налог на профессиональный доход">
+    <div class="fin-npd__head">
+        <h2 class="fin-npd__title">Налог на профессиональный доход</h2>
+        <span class="fin-npd__icon" aria-hidden="true">
+            <i data-lucide="percent"></i>
+        </span>
+    </div>
+
+    {# Итог — нейтральным цветом: налог не ошибка и не потеря, а платёж,
+       который предстоит сделать. Красный зарезервирован за расходами и
+       отрицательными итогами. #}
+    <div class="fin-npd__total">
+        <p class="fin-npd__total-label">Итого налог к уплате</p>
+        <p class="fin-npd__value">{{ money(summary.npd.tax.total) }}</p>
+    </div>
+
+    <dl class="fin-npd__details">
+        <div class="fin-npd__row">
+            <dt class="fin-npd__row-label">С физлиц ({{ summary.npd.individual_rate_label }})</dt>
+            <dd class="fin-npd__row-value">{{ money(summary.npd.tax.individual_tax) }}</dd>
+        </div>
+        <div class="fin-npd__row">
+            <dt class="fin-npd__row-label">С юрлиц ({{ summary.npd.legal_rate_label }})</dt>
+            <dd class="fin-npd__row-value">{{ money(summary.npd.tax.legal_tax) }}</dd>
+        </div>
+    </dl>
+
+    <p class="fin-npd__note">* {{ summary.npd.note }}</p>
+
+    {# Лимит дохода: шкала по календарному году (не по выбранному периоду),
+       ширина полосы — инлайново, как у блока загрузки статистики. #}
+    <div class="fin-npd__limit">
+        <div class="fin-npd__bar{% if summary.npd.limit.is_warning %} fin-npd__bar--warning{% endif %}"
+             role="progressbar"
+             aria-valuenow="{{ summary.npd.limit.bar }}"
+             aria-valuemin="0" aria-valuemax="100"
+             aria-label="Доход с начала года к лимиту самозанятого">
+            <span class="fin-npd__fill" style="width: {{ summary.npd.limit.bar }}%"></span>
+        </div>
+        <p class="fin-npd__limit-text">
+            Доход с начала года: {{ summary.npd.limit.income_label }}
+            из {{ summary.npd.limit.limit_label }} ({{ summary.npd.limit.percent }} %)
+        </p>
+    </div>
+
+    {% if summary.npd.limit.is_warning %}
+    <p class="fin-npd__warning" role="alert">
+        <i data-lucide="triangle-alert" aria-hidden="true"></i>
+        Внимание: приближается лимит дохода для самозанятых. При превышении
+        вы потеряете статус НПД.
+    </p>
+    {% endif %}
+
+    {% if summary.npd.insight %}
+    <p class="fin-npd__insight">
+        <i data-lucide="info" aria-hidden="true"></i>
+        {{ summary.npd.insight }}
+    </p>
+    {% endif %}
+</section>
+{% endif %}

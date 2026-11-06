@@ -23,7 +23,8 @@
 
    Контекст: period (key), summary (income — начисленный доход, refunds,
    expenses, profit, left_for_tutor, earned, received, debts,
-   overpayments, compare_note, time, idle, types, type_insight). #}
+   overpayments, compare_note, time, idle, types, type_insight, npd,
+   net_after_tax, net_after_tax_is_negative). #}
 <div class="fin-summary" id="finance-summary"
      hx-get="/tutor/finance/summary?period={{ period.key }}"
      hx-trigger="payment-saved from:body, expense-saved from:body"
@@ -31,8 +32,9 @@
 
     {# Главный ярус: ответ на вопрос, с которым открывают «Финансы».
        «Чистая прибыль», а не «Чистый доход»: прибыль учитывает расходы,
-       то есть это деньги, которые остались у репетитора. #}
-    <div class="fin-kpis fin-kpis--lead">
+       то есть это деньги, которые остались у репетитора. Самозанятому
+       рядом показывается прибыль после налогов — она и есть «на руки». #}
+    <div class="fin-kpis fin-kpis--lead{% if summary.npd.enabled %} fin-kpis--npd{% endif %}">
         <section class="card fin-kpi fin-kpi--lead" aria-label="Доход за период">
             <div class="fin-kpi__head">
                 <span class="fin-kpi__title">Доход</span>
@@ -60,6 +62,24 @@
             <p class="fin-kpi__value fin-kpi__value--violet">{{ balance_label(summary.profit) }}</p>
             <p class="fin-kpi__sub">Получено от учеников минус расходы</p>
         </section>
+
+        {# НПД: прибыль «на руки» — начисленный доход минус расходы и
+           расчётный налог. Стоит сразу за кассовой «Чистой прибылью»:
+           репетитор сравнивает два числа — «пришло» и «останется после
+           налога». Только при включённом флаге самозанятого: иначе ярус
+           остаётся из трёх карточек, как раньше. #}
+        {% if summary.npd.enabled %}
+        <section class="card fin-kpi fin-kpi--lead" aria-label="Чистая прибыль (после налогов)">
+            <div class="fin-kpi__head">
+                <span class="fin-kpi__title">Чистая прибыль (после налогов)</span>
+                <span class="fin-kpi__icon fin-kpi__icon--green" aria-hidden="true">
+                    <i data-lucide="hand-coins"></i>
+                </span>
+            </div>
+            <p class="fin-kpi__value{% if summary.net_after_tax_is_negative %} fin-kpi__value--red{% else %} fin-kpi__value--green{% endif %}">{{ balance_label(summary.net_after_tax) }}</p>
+            <p class="fin-kpi__sub">Прибыль с учётом НПД</p>
+        </section>
+        {% endif %}
 
         <section class="card fin-kpi fin-kpi--lead" aria-label="Долги учеников">
             <div class="fin-kpi__head">
@@ -136,6 +156,11 @@
         </section>
     </div>
 
+    {# Налог НПД: блок под карточками доходов (п. 1 ТЗ). Include
+       безусловный — внутри партиала свой `{% if %}` по флагу, поэтому при
+       выключенном флаге разметка страницы не меняется. #}
+    {% include "finance/_npd.html" %}
+
     {# Упущенная выручка: цена простоя в текущем/будущем месяце. Красный —
        это не ошибка, а потеря, которую видно только в деньгах. #}
     <section class="card fin-idle{% if not summary.idle.has_loss %} fin-idle--quiet{% endif %}"
@@ -162,7 +187,7 @@
         </a>
     </section>
 
-    <section class="card fin-compare" aria-label="Заработано и получено">
+    <section class="card fin-compare{% if summary.npd.enabled %} fin-compare--tax{% endif %}" aria-label="Заработано и получено">
         <h2 class="fin-compare__title">Заработано и получено</h2>
         <div class="fin-compare__grid">
             <div class="fin-compare__item">
@@ -178,11 +203,25 @@
                 <p class="fin-compare__label fin-compare__label--minus">− Расходы</p>
                 <p class="fin-compare__value fin-compare__value--red">{{ money(summary.expenses) }}</p>
             </div>
+            {% if summary.npd.enabled %}
+            {# Налоговая строка: сумма расчётная, но вычитается из арифметики
+               так же, как расходы — поэтому тот же красный минус. #}
             <div class="fin-compare__item">
+                <p class="fin-compare__label fin-compare__label--minus">− Налог НПД (расчётный)</p>
+                <p class="fin-compare__value fin-compare__value--red">{{ money(summary.npd.tax.total) }}</p>
+            </div>
+            {% endif %}
+            <div class="fin-compare__item">
+                {% if summary.npd.enabled %}
+                <p class="fin-compare__label">= Чистая прибыль (с учётом налогов)</p>
+                {# По начислению: доход − расходы − налог (арифметика ТЗ). #}
+                <p class="fin-compare__value{% if summary.net_after_tax_is_negative %} fin-compare__value--red{% else %} fin-compare__value--green{% endif %}">{{ balance_label(summary.net_after_tax) }}</p>
+                {% else %}
                 <p class="fin-compare__label">= Осталось репетитору</p>
                 {# Цвет по знаку решает сервер (`left_is_negative`):
                    отрицательный итог — расход превышает полученное. #}
                 <p class="fin-compare__value{% if summary.left_is_negative %} fin-compare__value--red{% else %} fin-compare__value--green{% endif %}">{{ balance_label(summary.left_for_tutor) }}</p>
+                {% endif %}
             </div>
         </div>
         <p class="fin-compare__rate">Средняя стоимость часа: <strong>{{ summary.time.rev_per_hour_label }}</strong></p>
