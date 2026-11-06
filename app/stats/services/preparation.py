@@ -50,14 +50,30 @@ NO_PREPARATION_TEXT = (
 )
 
 
-def _coefficient_label(value: Decimal | float) -> str:
-    """Коэффициент для подписи: «0,7», «1,2», «2» — без хвостовых нулей."""
+def coefficient_label(value: Decimal | float) -> str:
+    """Коэффициент для подписи: «0,7», «1,2», «2» — без хвостовых нулей.
+
+    Публичная: ту же подпись печатает страница финансов («подготовка по
+    коэффициенту 0,7»), и второй форматтер разошёлся бы со «Статистикой».
+    """
     number = float(value)
     text = f"{number:.2f}".rstrip("0").rstrip(".")
     return text.replace(".", ",") if text else "0"
 
 
-def _minutes_per_hour(coefficient: float) -> int:
+def preparation_minutes(actual_minutes: int, coefficient: float) -> int:
+    """Сколько минут подготовки приходится на `actual_minutes` уроков.
+
+    Публичная и единственная формула внеурочной занятости: «Статистика»
+    показывает по ней часы подготовки, «Финансы» — реальную стоимость
+    часа. Своя копия в финансах дала бы другое число минут на тех же
+    данных. Отрицательный коэффициент (теоретически возможный при кривых
+    данных) не вычитает время: подготовки не меньше нуля.
+    """
+    return max(0, round(actual_minutes * coefficient))
+
+
+def minutes_per_hour(coefficient: float) -> int:
     """Сколько минут подготовки приходится на час урока."""
     return round(coefficient * 60)
 
@@ -137,7 +153,7 @@ def _insight(
         return NO_LESSONS_TEXT
     if coefficient <= 0:
         return NO_PREPARATION_TEXT
-    per_hour = _minutes_per_hour(coefficient)
+    per_hour = minutes_per_hour(coefficient)
     phrase = _weekly_phrase(weekly_total_minutes, days)
     weekly_hours = minutes_to_hours(
         workload.weekly_minutes(weekly_total_minutes, days)
@@ -201,8 +217,8 @@ def preparation_context(
     странице, повторных запросов здесь нет.
     """
     coefficient = float(get_settings(db, tutor.id).preparation_coefficient or 0)
-    preparation_minutes = max(0, round(actual_minutes * coefficient))
-    total_minutes = actual_minutes + preparation_minutes
+    prep_minutes = preparation_minutes(actual_minutes, coefficient)
+    total_minutes = actual_minutes + prep_minutes
     has_lessons = actual_minutes > 0
     weekly_total_hours = minutes_to_hours(
         workload.weekly_minutes(total_minutes, days)
@@ -210,19 +226,19 @@ def preparation_context(
 
     return {
         "coefficient": coefficient,
-        "coefficient_label": _coefficient_label(coefficient),
-        "minutes_per_hour": _minutes_per_hour(coefficient),
+        "coefficient_label": coefficient_label(coefficient),
+        "minutes_per_hour": minutes_per_hour(coefficient),
         "has_lessons": has_lessons,
-        "has_preparation": preparation_minutes > 0,
+        "has_preparation": prep_minutes > 0,
         "lesson_hours": minutes_to_hours(actual_minutes),
-        "preparation_hours": minutes_to_hours(preparation_minutes),
-        "preparation_minutes": preparation_minutes,
+        "preparation_hours": minutes_to_hours(prep_minutes),
+        "preparation_minutes": prep_minutes,
         "total_hours": minutes_to_hours(total_minutes),
         "weekly_lesson_hours": minutes_to_hours(
             workload.weekly_minutes(actual_minutes, days)
         ),
         "weekly_preparation_hours": minutes_to_hours(
-            workload.weekly_minutes(preparation_minutes, days)
+            workload.weekly_minutes(prep_minutes, days)
         ),
         "weekly_total_hours": weekly_total_hours,
         # Уровень недельной нагрузки: по нему красятся шкала и инсайт.
@@ -236,9 +252,9 @@ def preparation_context(
         "alert": _alert(
             has_lessons=has_lessons,
             weekly_lesson_minutes=actual_minutes,
-            weekly_preparation_minutes=preparation_minutes,
+            weekly_preparation_minutes=prep_minutes,
             days=days,
         ),
-        "legend": _legend(actual_minutes, preparation_minutes),
-        "chart": _chart(actual_minutes, preparation_minutes),
+        "legend": _legend(actual_minutes, prep_minutes),
+        "chart": _chart(actual_minutes, prep_minutes),
     }

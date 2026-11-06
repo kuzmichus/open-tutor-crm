@@ -16,6 +16,22 @@
 - **упущенная выручка** — денежный эквивалент свободных часов:
   `свободные часы × RevPTH`.
 
+Внеурочная занятость (change finance-preparation-hours): за проведённым
+уроком стоит подготовка к нему и проверка ДЗ, её объём задаёт
+«Коэффициент подготовки» профиля. Часы подготовки считает **та же**
+формула, что «Статистика» (`stats/services/preparation.preparation_minutes`),
+поэтому числа двух страниц не расходятся:
+
+- **часы подготовки** = `проведённые минуты × коэффициент`;
+- **реальная стоимость часа** = `начисленный доход / (проведённые часы +
+  часы подготовки)` — сколько на самом деле приносит час работы, а не час
+  у доски.
+
+Подготовка считается только по проведённым урокам периода. Цена простоя и
+ставки по типам занятий остаются номинальными: простой — это свободные
+окна уроков, а как распределить подготовку между типами занятий, не
+определено (осознанно вне объёма change).
+
 Окно простоя — «текущий/будущий месяц» из ТЗ: от начала сегодняшних суток
 до начала следующего календарного месяца в зоне педагога. Прошедшие дни
 текущего месяца не считаются: потерять можно только то время, которое ещё
@@ -50,7 +66,9 @@ from app.group.models.group import Group
 from app.lesson.models.lesson import Lesson
 from app.stats.services.availability import available_minutes
 from app.stats.services.hours import MINUTES_PER_HOUR, completed_minutes, planned_minutes
+from app.stats.services.preparation import coefficient_label, preparation_minutes
 from app.student.models.student import Student
+from app.tutor.services.settings import get_settings
 
 # Ключи типов занятий в контексте шаблона и их подписи-колонки.
 TYPE_INDIVIDUAL = "individual"
@@ -75,20 +93,67 @@ def rev_per_hour(earned: int, minutes: int) -> int | None:
     return round(earned / (minutes / MINUTES_PER_HOUR))
 
 def time_context(db: Session, tutor, *, earned: int, start, end) -> dict:
-    """Проведённые часы периода, их подпись и средняя стоимость часа.
+    """Проведённые часы периода, подготовка и обе стоимости часа.
 
     Часы берутся из того же источника, что «Статистика» (`completed_minutes`),
     поэтому числа разделов не расходятся. RevPTH считается по начисленному
     доходу: его передаёт `summary_context`, чтобы деньги не считались дважды.
+
+    Подготовка добавляет к учебным часам внеурочные (коэффициент профиля) и
+    вторую ставку — реальную: доход делится на всё потраченное время.
+    Номинальная «Средняя стоимость часа» остаётся: репетитору нужны обе
+    цифры — цена урока и цена часа работы.
     """
     minutes = completed_minutes(db, tutor.id, start=start, end=end)
     rev = rev_per_hour(earned, minutes)
+
+    coefficient = float(get_settings(db, tutor.id).preparation_coefficient or 0)
+    prep_minutes = preparation_minutes(minutes, coefficient)
+    total_minutes = minutes + prep_minutes
+    real = rev_per_hour(earned, total_minutes)
+
     return {
         "minutes": minutes,
         "duration_label": duration_label(minutes),
         "rev_per_hour": rev,
         "rev_per_hour_label": rate_label(rev),
+        "coefficient": coefficient,
+        "coefficient_label": coefficient_label(coefficient),
+        "preparation_minutes": prep_minutes,
+        "preparation_label": duration_label(prep_minutes),
+        "has_preparation": prep_minutes > 0,
+        "total_minutes": total_minutes,
+        "total_label": duration_label(total_minutes),
+        "real_rev_per_hour": real,
+        "real_rev_per_hour_label": rate_label(real),
+        "real_insight": real_rate_insight(
+            nominal=rev, real=real, coefficient=coefficient
+        ),
     }
+
+
+def real_rate_insight(
+    *, nominal: int | None, real: int | None, coefficient: float
+) -> str | None:
+    """Совет по реальной ставке: цена «чистыми» или меньше подготовки.
+
+    Показывается только когда есть что сравнивать: ненулевая подготовка,
+    номинальная ставка и реальная. Иначе рекомендация «поднять цену» была
+    бы шумом на пустом периоде (правило показа нулей).
+
+    Цена, при которой час работы снова приносит номинальную ставку:
+    `номинал × (1 + коэффициент)` — во столько раз больше времени стало,
+    во столько же должна вырасти цена урока.
+    """
+    if coefficient <= 0 or not nominal or real is None:
+        return None
+    target = round(nominal * (1 + coefficient))
+    return (
+        f"Ваша фактическая ставка с учётом подготовки — {rate_label(real)}. "
+        f"Чтобы зарабатывать {rate_label(nominal)} чистыми, нужно либо "
+        f"поднять цену до {rate_label(target)}, либо сократить время "
+        "подготовки — например, автоматизировать конспекты."
+    )
 
 def free_minutes(db: Session, tutor, *, start: datetime, end: datetime) -> int:
     """Свободные минуты окна: доступное минус занятое, не ниже нуля.
