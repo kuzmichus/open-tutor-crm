@@ -27,12 +27,13 @@ from app.finance.models.account_operation import (
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
 from app.lesson.models.lesson import Lesson
-from app.stats.services.availability import available_minutes
+from app.stats.services.availability import available_minutes, period_days
 from app.stats.services.heatmap import heatmap_context
 from app.stats.services.hours import (
     completed_minutes,
     minutes_to_hours,
 )
+from app.stats.services.preparation import preparation_context
 from app.stats.services.utilization import utilization_context
 from app.student.models.student import Student
 
@@ -168,6 +169,10 @@ def overview_context(
     0 ₽», хотя занятий просто не было. LTV — средняя выручка на ученика за всё
     время (карточка стоит первой в ряду). Retention передаётся парой
     «числитель/знаменатель»: процент считает хелпер отображения.
+
+    Длина периода в сутках считается один раз: её используют и «Загрузка»
+    (масштабирование недельной цели), и «Баланс времени» (недельная
+    занятость с подготовкой).
     """
     studied = [row for row in rows if row["last_lesson_at"] is not None]
     active_status = sum(
@@ -178,6 +183,7 @@ def overview_context(
     actual_minutes = completed_minutes(db, tutor.id, start=start, end=end)
     hours = minutes_to_hours(actual_minutes)
     revenue_per_hour = round(revenue / hours) if hours > 0 else None
+    days = len(period_days(tutor, start=start, end=end))
 
     # LTV — средняя выручка на ученика за всё время: это «ценность клиента»,
     # поэтому она не сужается до выбранного периода, в отличие от «Выручки
@@ -191,6 +197,14 @@ def overview_context(
         key=lambda row: row["last_lesson_at"],
     )
     declining_rows = _declining_rows(rows)
+
+    # Внеурочная занятость: подготовка к урокам и проверка ДЗ. База та же,
+    # что у «Загрузки», — фактические минуты периода. Считается до неё:
+    # шкала «Загрузка ресурса» сравнивает с календарём общую занятость
+    # (уроки плюс подготовка), а не только уроки.
+    preparation = preparation_context(
+        db, tutor, actual_minutes=actual_minutes, days=days
+    )
 
     return {
         "revenue_per_hour": revenue_per_hour,
@@ -206,7 +220,10 @@ def overview_context(
             available_minutes=available_minutes(
                 db, tutor, start=start, end=end
             ),
+            preparation_minutes=preparation["preparation_minutes"],
+            days=days,
         ),
+        "preparation": preparation,
         "heatmap": heatmap_context(db, tutor, now=now),
         "retention_active": active_status,
         "retention_total": len(studied),

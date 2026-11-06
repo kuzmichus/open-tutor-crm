@@ -6314,8 +6314,8 @@
   }
 
   .stats-util__bar--ok .stats-util__fill { background: var(--success); }
-  .stats-util__bar--low .stats-util__fill { background: var(--warning-fg); }
-  .stats-util__bar--high .stats-util__fill { background: var(--destructive); }
+  .stats-util__bar--warn .stats-util__fill { background: var(--warning-fg); }
+  .stats-util__bar--danger .stats-util__fill { background: var(--destructive); }
 
   .stats-util__sub {
     margin: calc(var(--space) * 2) 0 0;
@@ -6332,6 +6332,161 @@
     color: var(--muted-foreground);
 
     & [data-lucide] { width: 14px; height: 14px; flex: none; }
+  }
+
+  /* Подпись-инсайт «с учётом подготовки»: заметнее обычной подсказки —
+     это главный вывод блока, а не сноска. Тон вердикта — по уровню
+     недельной нагрузки (workload): комфорт, высокая, риск выгорания. */
+  .stats-util__insight {
+    margin: calc(var(--space) * 4) 0 0;
+    padding: calc(var(--space) * 3);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  .stats-util__insight--comfort {
+    border-left: 3px solid var(--success);
+    background: color-mix(in srgb, var(--success) 8%, var(--muted));
+  }
+
+  .stats-util__insight--high {
+    border-left: 3px solid var(--warning-fg);
+    background: var(--warning-soft);
+    color: var(--warning-fg);
+  }
+
+  .stats-util__insight--burnout {
+    border-left: 3px solid var(--destructive);
+    background: color-mix(in srgb, var(--destructive) 8%, var(--muted));
+    color: var(--destructive);
+  }
+
+  /* Баланс времени: пончик «уроки vs подготовка» и легенда с часами. */
+  .stats-balance {
+    margin-bottom: calc(var(--space) * 5);
+  }
+
+  .stats-balance__title {
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .stats-balance__body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 5);
+  }
+
+  .stats-balance__donut {
+    flex: none;
+    width: 140px;
+    height: 140px;
+  }
+
+  .stats-balance__track {
+    fill: none;
+    stroke: var(--muted);
+  }
+
+  .stats-balance__slice {
+    fill: none;
+  }
+
+  .stats-balance__slice--lesson { stroke: var(--chart-income); }
+  .stats-balance__slice--preparation { stroke: var(--chart-earned); }
+
+  .stats-balance__total-value {
+    fill: var(--foreground);
+    font-size: var(--text-lg);
+    font-weight: 700;
+  }
+
+  .stats-balance__total-label {
+    fill: var(--muted-foreground);
+    font-size: var(--text-xs);
+  }
+
+  .stats-balance__legend {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+
+  .stats-balance__legend-item {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+  }
+
+  .stats-balance__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: var(--radius-full);
+    flex: none;
+  }
+
+  .stats-balance__dot--lesson { background: var(--chart-income); }
+  .stats-balance__dot--preparation { background: var(--chart-earned); }
+  .stats-balance__dot--total { background: var(--muted-foreground); }
+
+  .stats-balance__legend-name {
+    color: var(--muted-foreground);
+  }
+
+  .stats-balance__legend-value {
+    margin-left: auto;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .stats-balance__note {
+    margin: calc(var(--space) * 4) 0 0;
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: var(--muted-foreground);
+
+    & a { color: var(--brand); }
+  }
+
+  .stats-balance__empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--muted-foreground);
+  }
+
+  /* Алерт выгорания: недельная занятость выше разумного порога. */
+  .stats-burnout {
+    margin-bottom: calc(var(--space) * 5);
+    border: 1px solid var(--warning-border);
+    background: var(--warning-soft);
+  }
+
+  .stats-burnout__head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin: 0 0 calc(var(--space) * 3);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--warning-fg);
+
+    & [data-lucide] { width: 18px; height: 18px; }
+  }
+
+  .stats-burnout__text {
+    margin: 0;
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--warning-fg);
   }
 
   /* Подпись «52,5 часа» под числом запланированных занятий. */

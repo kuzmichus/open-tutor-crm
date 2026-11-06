@@ -30,13 +30,17 @@
 </section>
 {% endif %}
 
-{# Загрузка: факт к комфортной цели и факт к доступному максимуму. #}
+{# Загрузка: факт к комфортной цели и загрузка ресурса общей занятостью. #}
 <section class="card stats-util" aria-label="Загрузка">
     <h2 class="stats-util__title">Загрузка</h2>
     <p class="stats-hint">Фактические часы — длительность проведённых занятий за
         период (пробные входят: это реально потраченное время). Цель — «Желаемая
         нагрузка в неделю» из профиля, пересчитанная на длину периода.
-        Жёлтый — недогруз, зелёный — норма, красный — риск выгорания.</p>
+        «Загрузка ресурса» сравнивает с доступным календарём общую занятость —
+        уроки вместе с подготовкой. Цвет «Факта к цели» — по проценту
+        (жёлтый — недогруз, зелёный — норма, красный — больше запланированного),
+        цвет «Загрузки ресурса» — по абсолютным часам в неделю: до 35 ч —
+        комфортно, 35–45 ч — высокая нагрузка, больше 45 ч — риск выгорания.</p>
     <div class="stats-util__rows">
         <div class="stats-util__row">
             <div class="stats-util__head">
@@ -62,27 +66,101 @@
         </div>
         <div class="stats-util__row">
             <div class="stats-util__head">
-                <span class="stats-util__label">Факт к максимуму</span>
-                <span class="stats-util__value">{{ percent_or_dash(overview.utilization.fact_to_max) }}</span>
+                <span class="stats-util__label">Загрузка ресурса</span>
+                <span class="stats-util__value">{{ percent_or_dash(overview.utilization.resource_percent) }}</span>
             </div>
-            <div class="stats-util__bar stats-util__bar--{{ overview.utilization.max_tone }}"
-                 role="progressbar" aria-valuenow="{{ overview.utilization.max_bar }}"
+            <div class="stats-util__bar stats-util__bar--{{ overview.utilization.resource_tone }}"
+                 role="progressbar" aria-valuenow="{{ overview.utilization.resource_bar }}"
                  aria-valuemin="0" aria-valuemax="100"
-                 aria-label="Фактические часы к доступным часам календаря">
+                 aria-label="Общая занятость к доступным часам календаря">
                 <span class="stats-util__fill"
-                      style="width: {{ overview.utilization.max_bar }}%"></span>
+                      style="width: {{ overview.utilization.resource_bar }}%"></span>
             </div>
             <p class="stats-util__sub">
-                {{ hours_label(overview.utilization.actual_hours) }} из
+                {{ hours_label(overview.utilization.resource_hours) }} из
                 {{ hours_label(overview.utilization.available_hours) }} доступных
             </p>
         </div>
     </div>
+    <p class="stats-util__insight{% if overview.preparation.level %} stats-util__insight--{{ overview.preparation.level }}{% endif %}">{{ overview.preparation.insight }}</p>
     <p class="stats-util__hint" title="{{ overview.utilization.hint }}">
         <i data-lucide="info" aria-hidden="true"></i>
         {{ overview.utilization.hint }}
     </p>
 </section>
+
+{# Баланс времени: сколько занимают уроки, а сколько — подготовка к ним и
+   проверка домашних заданий. Геометрию пончика считает сервис
+   (`preparation.py`): шаблон только печатает готовые числа. #}
+<section class="card stats-balance" aria-label="Баланс времени: уроки и подготовка">
+    <h2 class="stats-balance__title">Баланс времени (Уроки vs Подготовка)</h2>
+    {% if overview.preparation.chart %}
+    <div class="stats-balance__body">
+        <svg class="stats-balance__donut" role="img"
+             aria-label="Кольцевая диаграмма: уроки {{ hours_label(overview.preparation.lesson_hours) }}, подготовка {{ hours_label(overview.preparation.preparation_hours) }}, всего {{ hours_label(overview.preparation.total_hours) }}"
+             viewBox="0 0 {{ overview.preparation.chart.size }} {{ overview.preparation.chart.size }}">
+            <g transform="rotate(-90 {{ overview.preparation.chart.center }} {{ overview.preparation.chart.center }})">
+                <circle class="stats-balance__track"
+                        cx="{{ overview.preparation.chart.center }}"
+                        cy="{{ overview.preparation.chart.center }}"
+                        r="{{ overview.preparation.chart.ring_radius }}"
+                        stroke-width="{{ overview.preparation.chart.width }}"/>
+                <circle class="stats-balance__slice stats-balance__slice--lesson"
+                        cx="{{ overview.preparation.chart.center }}"
+                        cy="{{ overview.preparation.chart.center }}"
+                        r="{{ overview.preparation.chart.ring_radius }}"
+                        stroke-width="{{ overview.preparation.chart.width }}"
+                        stroke-dasharray="{{ overview.preparation.chart.lesson_dash }} {{ overview.preparation.chart.circumference }}"/>
+                <circle class="stats-balance__slice stats-balance__slice--preparation"
+                        cx="{{ overview.preparation.chart.center }}"
+                        cy="{{ overview.preparation.chart.center }}"
+                        r="{{ overview.preparation.chart.ring_radius }}"
+                        stroke-width="{{ overview.preparation.chart.width }}"
+                        stroke-dasharray="{{ overview.preparation.chart.prep_dash }} {{ overview.preparation.chart.circumference }}"
+                        stroke-dashoffset="{{ overview.preparation.chart.prep_offset }}"/>
+            </g>
+            <text class="stats-balance__total-value"
+                  x="{{ overview.preparation.chart.center }}"
+                  y="{{ overview.preparation.chart.center }}"
+                  text-anchor="middle">{{ hours_label(overview.preparation.total_hours) }}</text>
+            <text class="stats-balance__total-label"
+                  x="{{ overview.preparation.chart.center }}"
+                  y="{{ overview.preparation.chart.center + 18 }}"
+                  text-anchor="middle">всего</text>
+        </svg>
+        <ul class="stats-balance__legend" aria-label="Уроки, подготовка и общая занятость">
+            {% for row in overview.preparation.legend %}
+            <li class="stats-balance__legend-item">
+                <span class="stats-balance__dot stats-balance__dot--{{ row.key }}"
+                      aria-hidden="true"></span>
+                <span class="stats-balance__legend-name">{{ row.label }}</span>
+                <span class="stats-balance__legend-value">{{ row.value }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <p class="stats-balance__note">
+        Подготовка — {{ overview.preparation.coefficient_label }} от
+        длительности уроков: около
+        {{ overview.preparation.minutes_per_hour }} мин на каждый час занятия.
+        Коэффициент меняется в
+        <a href="/tutor/profile?tab=calendar">настройках профиля</a>.
+    </p>
+    {% else %}
+    <p class="stats-balance__empty">{{ overview.preparation.insight }}</p>
+    {% endif %}
+</section>
+
+{# Алерт выгорания: недельная занятость выше разумного порога. #}
+{% if overview.preparation.alert %}
+<section class="card stats-burnout" aria-label="Риск выгорания">
+    <h2 class="stats-burnout__head">
+        <i data-lucide="alert-triangle" aria-hidden="true"></i>
+        Риск выгорания
+    </h2>
+    <p class="stats-burnout__text">{{ overview.preparation.alert.text }}</p>
+</section>
+{% endif %}
 
 <div class="stats-kpis">
     <section class="card stats-kpi">

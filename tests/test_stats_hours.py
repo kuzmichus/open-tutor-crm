@@ -27,10 +27,10 @@ from app.stats.services.hours import (
     student_regular_minutes,
 )
 from app.stats.services.utilization import (
-    TONE_HIGH,
-    TONE_LOW,
+    TONE_DANGER,
     TONE_NONE,
     TONE_OK,
+    TONE_WARN,
     tone,
     utilization_context,
 )
@@ -196,14 +196,14 @@ def test_broken_workday_gives_zero_available(client, tutor_factory):
 
 
 def test_utilization_tones():
-    """Пороги ТЗ: <70 недогруз, 70–90 норма, >90 риск выгорания."""
+    """Пороги «факта к цели»: <70 недогруз, 70–100 норма, >100 перегруз."""
     assert tone(None) == TONE_NONE
-    assert tone(0) == TONE_LOW
-    assert tone(69) == TONE_LOW
+    assert tone(0) == TONE_WARN
+    assert tone(69) == TONE_WARN
     assert tone(70) == TONE_OK
     assert tone(85) == TONE_OK
-    assert tone(90) == TONE_OK
-    assert tone(91) == TONE_HIGH
+    assert tone(100) == TONE_OK
+    assert tone(101) == TONE_DANGER
 
 
 def test_utilization_scales_target_to_period(tutor_factory):
@@ -230,11 +230,91 @@ def test_utilization_scales_target_to_period(tutor_factory):
     assert context["target_hours"] == 10
     # 8 часов из 10 комфортных — 80%, «норма».
     assert context["fact_to_target"] == 80
-    assert context["fact_to_max"] == 13
+    # Без подготовки «Загрузка ресурса» — те же 8 ч из 63 доступных.
+    assert context["resource_hours"] == 8
+    assert context["resource_percent"] == 13
+    assert context["weekly_resource_hours"] == 8
     assert context["target_tone"] == TONE_OK
-    assert context["max_tone"] == TONE_LOW
+    # Цвет второй шкалы — по часам: 8 ч в неделю — комфорт.
+    assert context["resource_tone"] == TONE_OK
     assert context["target_missing"] is False
     assert "рабочему шаблону" in context["hint"]
+
+
+def test_resource_scale_counts_preparation(tutor_factory):
+    """Вторая шкала считает общую занятость: уроки плюс подготовка."""
+    tutor_id = tutor_factory(timezone="UTC")
+    _save(tutor_id, workday_start="09:00", workday_end="18:00")
+
+    with SessionLocal() as db:
+        tutor = db.get(Tutor, tutor_id)
+        start, end = _day_bounds(tutor, 7)
+        context = utilization_context(
+            db,
+            tutor,
+            start=start,
+            end=end,
+            actual_minutes=600,
+            available_minutes=WORKDAY_MINUTES * 7,
+            preparation_minutes=420,
+        )
+
+    # 10 ч уроков + 7 ч подготовки = 17 ч общей занятости.
+    assert context["actual_hours"] == 10
+    assert context["preparation_hours"] == 7
+    assert context["resource_hours"] == 17
+    assert context["resource_percent"] == 27
+    assert context["weekly_resource_hours"] == 17
+    assert context["resource_tone"] == TONE_OK
+
+
+def test_resource_tone_depends_on_hours_not_percent(tutor_factory):
+    """90% от большого календаря — красный, 90% от малого — зелёный."""
+    tutor_id = tutor_factory(timezone="UTC")
+    _save(tutor_id, workday_start="09:00", workday_end="18:00")
+
+    with SessionLocal() as db:
+        tutor = db.get(Tutor, tutor_id)
+        start, end = _day_bounds(tutor, 7)
+
+        # 40 ч работы при 90 доступных — 44% полосы, но высокая нагрузка.
+        wide = utilization_context(
+            db,
+            tutor,
+            start=start,
+            end=end,
+            actual_minutes=2400,
+            available_minutes=90 * 60,
+            preparation_minutes=0,
+        )
+        assert wide["resource_percent"] == 44
+        assert wide["resource_tone"] == TONE_WARN
+
+        # 46 ч работы — красный, даже если календарь огромный.
+        burnout = utilization_context(
+            db,
+            tutor,
+            start=start,
+            end=end,
+            actual_minutes=2760,
+            available_minutes=200 * 60,
+            preparation_minutes=0,
+        )
+        assert burnout["resource_percent"] == 23
+        assert burnout["resource_tone"] == TONE_DANGER
+
+        # 20 ч работы при 21 доступном — 95% полосы, но нагрузка комфортная.
+        narrow = utilization_context(
+            db,
+            tutor,
+            start=start,
+            end=end,
+            actual_minutes=1200,
+            available_minutes=21 * 60,
+            preparation_minutes=0,
+        )
+        assert narrow["resource_percent"] == 95
+        assert narrow["resource_tone"] == TONE_OK
 
 
 def test_utilization_without_target(tutor_factory):
@@ -254,8 +334,10 @@ def test_utilization_without_target(tutor_factory):
     assert context["target_missing"] is True
     assert context["fact_to_target"] is None
     # Доступных часов нет — процента тоже нет, а не деление на ноль.
-    assert context["fact_to_max"] is None
+    assert context["resource_percent"] is None
     assert context["target_tone"] == TONE_NONE
+    # Часы при этом считаются: цвет шкалы не зависит от процента.
+    assert context["resource_tone"] == TONE_OK
 
 
 def test_overview_shows_utilization_and_heatmap(client, tutor_factory):
@@ -264,7 +346,7 @@ def test_overview_shows_utilization_and_heatmap(client, tutor_factory):
     html = client.get("/tutor/stats").text
     assert "Загрузка" in html
     assert "Факт к цели" in html
-    assert "Факт к максимуму" in html
+    assert "Загрузка ресурса" in html
     # Цели нет — вместо процента подсказка со ссылкой на настройки.
     assert "Цель не задана" in html
     assert "/tutor/profile?tab=calendar" in html
