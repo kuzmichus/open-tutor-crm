@@ -24,9 +24,14 @@ from decimal import Decimal
 
 from app.database import SessionLocal
 from app.finance.services.charges import sync_lesson_charge
-from app.finance.services.time_metrics import real_rate_insight
+from app.finance.services.time_metrics import (
+    free_minutes,
+    idle_window,
+    real_rate_insight,
+)
 from app.lesson.models.lesson import Lesson
 from app.stats.services.preparation import coefficient_label, preparation_minutes
+from app.tutor.models.tutor import Tutor
 from app.tutor.models.tutor_settings import TutorSettings, default_values
 from app.tutor.services.clock import utcnow
 from app.tutor.services.settings import save_settings
@@ -70,6 +75,23 @@ def _compare_block(html: str) -> str:
     )
     assert match, "нет блока сравнения"
     return match.group(0)
+
+
+def _idle_block(html: str) -> str:
+    """Разметка блока «Упущенная чистая прибыль»."""
+    match = re.search(
+        r'<section class="card fin-idle.*?</section>', html, flags=re.S
+    )
+    assert match, "нет блока упущенной прибыли"
+    return match.group(0)
+
+
+def _free_minutes(tutor_id: str) -> int:
+    """Свободные минуты окна простоя — тем же сервисом, что страница."""
+    with SessionLocal() as session:
+        tutor = session.get(Tutor, tutor_id)
+        start, end = idle_window(tutor)
+        return free_minutes(session, tutor, start=start, end=end)
 
 
 def _lesson(
@@ -288,3 +310,60 @@ def test_preparation_shown_with_npd_enabled(
     assert "+ 42 мин на подготовку" in compare
     assert f"Реальная стоимость часа: <strong>{_money(706)}/ч</strong>" in compare
     assert "поднять цену до" in compare
+
+
+# --------------------------------------------------------------------------
+# «Упущенная чистая прибыль» считается по реальной ставке
+# --------------------------------------------------------------------------
+
+
+def test_idle_profit_uses_real_rate(client, tutor_factory, student_factory):
+    """Свободные окна × реальная ставка, а не средняя стоимость часа.
+
+    Замечание ревью: чтобы получить деньги за новое окно, к уроку придётся
+    подготовиться, поэтому сумма считается по ставке с учётом подготовки
+    (706 ₽/ч при коэффициенте 0,7), а не по номинальной 1 200 ₽/ч.
+    """
+    tutor_id = _login(client, tutor_factory)
+    _settings(tutor_id, workday_start="09:00", workday_end="10:00")
+    student_id = student_factory(tutor_id=tutor_id)
+    _lesson(tutor_id, student_id=student_id, duration_min=60, price=1200)
+
+    html = client.get("/tutor/finance").text
+    idle = _idle_block(html)
+    minutes = _free_minutes(tutor_id)
+    assert minutes > 0, "тест требует свободных окон в рабочем шаблоне"
+
+    real_lost = round(minutes / 60 * 706)
+    nominal_lost = round(minutes / 60 * 1200)
+    assert real_lost != nominal_lost
+
+    assert "Упущенная чистая прибыль" in idle
+    assert _money(real_lost) in idle
+    assert _money(nominal_lost) not in idle
+    assert f"реальная стоимость часа ({_money(706)}/ч" in idle
+    assert "с учётом времени на подготовку" in idle
+
+
+def test_idle_profit_zero_coefficient_uses_nominal_rate(
+    client, tutor_factory, student_factory
+):
+    """Коэффициент 0: подготовки нет, подпись не обещает её учёт."""
+    tutor_id = _login(client, tutor_factory)
+    _settings(
+        tutor_id,
+        workday_start="09:00",
+        workday_end="10:00",
+        preparation_coefficient=Decimal(0),
+    )
+    student_id = student_factory(tutor_id=tutor_id)
+    _lesson(tutor_id, student_id=student_id, duration_min=60, price=1200)
+
+    html = client.get("/tutor/finance").text
+    idle = _idle_block(html)
+    minutes = _free_minutes(tutor_id)
+    assert minutes > 0
+
+    # Реальная ставка равна средней: 1 200 ₽/ч.
+    assert _money(round(minutes / 60 * 1200)) in idle
+    assert "с учётом времени на подготовку" not in idle
