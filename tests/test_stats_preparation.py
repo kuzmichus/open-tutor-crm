@@ -507,4 +507,3 @@ def test_resource_scale_high_load_is_yellow(
     assert "stats-util__bar--warn" in html
     assert "Это высокий уровень нагрузки." in html
     assert "Риск выгорания" not in html
-
