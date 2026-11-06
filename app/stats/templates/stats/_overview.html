@@ -30,13 +30,17 @@
 </section>
 {% endif %}
 
-{# Загрузка: факт к комфортной цели и факт к доступному максимуму. #}
+{# Загрузка: факт к комфортной цели и загрузка ресурса общей занятостью. #}
 <section class="card stats-util" aria-label="Загрузка">
     <h2 class="stats-util__title">Загрузка</h2>
     <p class="stats-hint">Фактические часы — длительность проведённых занятий за
         период (пробные входят: это реально потраченное время). Цель — «Желаемая
         нагрузка в неделю» из профиля, пересчитанная на длину периода.
-        Жёлтый — недогруз, зелёный — норма, красный — риск выгорания.</p>
+        «Загрузка ресурса» сравнивает с доступным календарём общую занятость —
+        уроки вместе с подготовкой. Цвет «Факта к цели» — по проценту
+        (жёлтый — недогруз, зелёный — норма, красный — больше запланированного),
+        цвет «Загрузки ресурса» — по абсолютным часам в неделю: до 35 ч —
+        комфортно, 35–45 ч — высокая нагрузка, больше 45 ч — риск выгорания.</p>
     <div class="stats-util__rows">
         <div class="stats-util__row">
             <div class="stats-util__head">
@@ -62,23 +66,23 @@
         </div>
         <div class="stats-util__row">
             <div class="stats-util__head">
-                <span class="stats-util__label">Факт к максимуму</span>
-                <span class="stats-util__value">{{ percent_or_dash(overview.utilization.fact_to_max) }}</span>
+                <span class="stats-util__label">Загрузка ресурса</span>
+                <span class="stats-util__value">{{ percent_or_dash(overview.utilization.resource_percent) }}</span>
             </div>
-            <div class="stats-util__bar stats-util__bar--{{ overview.utilization.max_tone }}"
-                 role="progressbar" aria-valuenow="{{ overview.utilization.max_bar }}"
+            <div class="stats-util__bar stats-util__bar--{{ overview.utilization.resource_tone }}"
+                 role="progressbar" aria-valuenow="{{ overview.utilization.resource_bar }}"
                  aria-valuemin="0" aria-valuemax="100"
-                 aria-label="Фактические часы к доступным часам календаря">
+                 aria-label="Общая занятость к доступным часам календаря">
                 <span class="stats-util__fill"
-                      style="width: {{ overview.utilization.max_bar }}%"></span>
+                      style="width: {{ overview.utilization.resource_bar }}%"></span>
             </div>
             <p class="stats-util__sub">
-                {{ hours_label(overview.utilization.actual_hours) }} из
+                {{ hours_label(overview.utilization.resource_hours) }} из
                 {{ hours_label(overview.utilization.available_hours) }} доступных
             </p>
         </div>
     </div>
-    <p class="stats-util__insight">{{ overview.preparation.insight }}</p>
+    <p class="stats-util__insight{% if overview.preparation.level %} stats-util__insight--{{ overview.preparation.level }}{% endif %}">{{ overview.preparation.insight }}</p>
     <p class="stats-util__hint" title="{{ overview.utilization.hint }}">
         <i data-lucide="info" aria-hidden="true"></i>
         {{ overview.utilization.hint }}

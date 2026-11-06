@@ -15,9 +15,10 @@
 - недельные значения — минуты периода × 7 / число дней периода: порог
   выгорания задан в часах **в неделю**, а период «Обзора» может быть любым.
 
-Порог выгорания — константа модуля, а не настройка профиля: в задаче он
-приведён как разумное значение, и отдельный параметр в форме сделал бы
-страницу статистики вторым местом правки настроек.
+Уровни недельной нагрузки (комфорт / высокая / риск выгорания) и пороги
+живут в `workload`: по ним же красится шкала «Загрузка ресурса» и
+показывается алерт. Один источник правды не даёт инсайту, шкале и алерту
+разойтись в трактовке «много это сколько».
 
 Шаблон не считает бизнес-данные: он получает готовые подписи и геометрию
 пончика (правило модуля stats).
@@ -28,16 +29,10 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.stats.services import workload
 from app.stats.services.hours import minutes_to_hours
 from app.stats.services.presentation import hours_label, hours_phrase
 from app.tutor.services.settings import get_settings
-
-# Порог недельной общей занятости, после которого показывается алерт
-# выгорания. Строго больше: ровно 40 часов — ещё норма.
-BURNOUT_WEEKLY_HOURS = 40
-
-# Дней в неделе: база пересчёта занятости периода в недельную.
-WEEK_DAYS = 7
 
 # Геометрия пончика «Уроки vs Подготовка» (SVG, пиксели).
 DONUT_SIZE = 140
@@ -120,7 +115,7 @@ def _weekly_phrase(total_minutes: int, days: int) -> str:
     """Общая занятость, пересчитанная на неделю: «35 часов»."""
     if days <= 0:
         return hours_phrase(minutes_to_hours(total_minutes))
-    weekly = minutes_to_hours(round(total_minutes * WEEK_DAYS / days))
+    weekly = minutes_to_hours(workload.weekly_minutes(total_minutes, days))
     return hours_phrase(weekly)
 
 
@@ -131,16 +126,26 @@ def _insight(
     weekly_total_minutes: int,
     days: int,
 ) -> str:
-    """Подпись-инсайт под блоком «Загрузка» (формулировка задачи)."""
+    """Подпись-инсайт под блоком «Загрузка» (формулировка задачи).
+
+    Последнее предложение — вердикт по абсолютной недельной занятости:
+    «Это комфортный уровень нагрузки», «Это высокий уровень нагрузки» или
+    «Высокий риск выгорания!». Без него подпись сообщала бы число, но не
+    отвечала на вопрос «и что мне с этим делать».
+    """
     if not has_lessons:
         return NO_LESSONS_TEXT
     if coefficient <= 0:
         return NO_PREPARATION_TEXT
     per_hour = _minutes_per_hour(coefficient)
     phrase = _weekly_phrase(weekly_total_minutes, days)
+    weekly_hours = minutes_to_hours(
+        workload.weekly_minutes(weekly_total_minutes, days)
+    )
+    verdict = workload.verdict(weekly_hours)
     return (
         f"С учётом подготовки (около {per_hour} мин на час урока) ваша "
-        f"общая занятость составляет {phrase} в неделю."
+        f"общая занятость составляет {phrase} в неделю. {verdict}"
     )
 
 
@@ -153,16 +158,17 @@ def _alert(
 ) -> dict | None:
     """Алерт выгорания, если недельная общая занятость выше порога.
 
-    Порог сравнивается с общей занятостью в часах: 40 часов ровно — норма,
+    Порог тот же, что у красной «Загрузки ресурса» (`workload`): больше
+    45 часов в неделю. Ровно 45 — ещё высокая, но допустимая нагрузка,
     предупреждение начинается со следующей минуты.
     """
     if not has_lessons or days <= 0:
         return None
     weekly_total_minutes = weekly_lesson_minutes + weekly_preparation_minutes
     weekly_hours = minutes_to_hours(
-        round(weekly_total_minutes * WEEK_DAYS / days)
+        workload.weekly_minutes(weekly_total_minutes, days)
     )
-    if weekly_hours <= BURNOUT_WEEKLY_HOURS:
+    if workload.level(weekly_hours) != workload.LEVEL_BURNOUT:
         return None
     lesson_phrase = _weekly_phrase(weekly_lesson_minutes, days)
     preparation_phrase = _weekly_phrase(weekly_preparation_minutes, days)
@@ -175,7 +181,8 @@ def _alert(
             "сокращение учеников."
         ),
         "weekly_total_hours": weekly_hours,
-        "threshold": BURNOUT_WEEKLY_HOURS,
+        "threshold": workload.HIGH_WEEKLY_HOURS,
+        "level": workload.LEVEL_BURNOUT,
     }
 
 
@@ -197,6 +204,9 @@ def preparation_context(
     preparation_minutes = max(0, round(actual_minutes * coefficient))
     total_minutes = actual_minutes + preparation_minutes
     has_lessons = actual_minutes > 0
+    weekly_total_hours = minutes_to_hours(
+        workload.weekly_minutes(total_minutes, days)
+    )
 
     return {
         "coefficient": coefficient,
@@ -206,16 +216,17 @@ def preparation_context(
         "has_preparation": preparation_minutes > 0,
         "lesson_hours": minutes_to_hours(actual_minutes),
         "preparation_hours": minutes_to_hours(preparation_minutes),
+        "preparation_minutes": preparation_minutes,
         "total_hours": minutes_to_hours(total_minutes),
         "weekly_lesson_hours": minutes_to_hours(
-            round(actual_minutes * WEEK_DAYS / days) if days > 0 else 0
+            workload.weekly_minutes(actual_minutes, days)
         ),
         "weekly_preparation_hours": minutes_to_hours(
-            round(preparation_minutes * WEEK_DAYS / days) if days > 0 else 0
+            workload.weekly_minutes(preparation_minutes, days)
         ),
-        "weekly_total_hours": minutes_to_hours(
-            round(total_minutes * WEEK_DAYS / days) if days > 0 else 0
-        ),
+        "weekly_total_hours": weekly_total_hours,
+        # Уровень недельной нагрузки: по нему красятся шкала и инсайт.
+        "level": workload.level(weekly_total_hours) if has_lessons else None,
         "insight": _insight(
             coefficient=coefficient,
             has_lessons=has_lessons,

@@ -1,40 +1,45 @@
-"""Блок «Загрузка (Utilization)»: факт к цели и факт к максимуму.
+"""Блок «Загрузка (Utilization)»: факт к цели и загрузка ресурса.
 
-Два процента отвечают на два разных вопроса репетитора:
+Две шкалы отвечают на два разных вопроса репетитора и поэтому красятся
+по-разному:
 
 - **факт к цели** — сколько отработано от комфортной нагрузки
-  (`tutor_settings.weekly_load_hours`, задаётся в профиле вручную);
-- **факт к максимуму** — сколько отработано от времени, которое физически
-  доступно по рабочему шаблону (см. `availability`).
+  (`tutor_settings.weekly_load_hours`, задаётся в профиле вручную).
+  Цель задана в часах **в неделю**, а период «Обзора» может быть любым,
+  поэтому она масштабируется на длину периода: `weekly_load_hours × дни / 7`.
+  Тон — по проценту: меньше 70% — недогруз (жёлтый), 70–100% — норма
+  (зелёный), больше 100% — взял больше, чем планировал (красный).
+- **загрузка ресурса** — сколько занимает **общая** работа (уроки плюс
+  подготовка) от времени, которое физически доступно по рабочему шаблону
+  (см. `availability`). Тон — по абсолютным часам **в неделю**, а не по
+  проценту: 90% от 90 доступных часов — это 81 час работы, физически
+  невозможная нагрузка, а 36% тех же часов (32,7 часа) — отличная норма.
+  Процент на полосе остаётся справочной цифрой, цвет говорит о нагрузке.
 
-Цель задана в часах **в неделю**, а период «Обзора» может быть любым,
-поэтому она масштабируется на длину периода: `weekly_load_hours × дни / 7`.
-Иначе «Всё время» сравнивало бы месяцы работы с недельной нормой.
+Уровни недельной нагрузки и их границы (35 и 45 часов) живут в `workload`:
+там же их читают инсайт-вердикт и алерт выгорания.
 
-Цветовая индикация — из ТЗ: меньше 70% — недогруз (жёлтый), 70–90% —
-норма (зелёный), больше 90% — риск выгорания (красный). Значения 85–90%
-ТЗ не описывает; они попадают в «норму», чтобы не красить красным
-безобидные 88%.
-
-Ширина полосы (`target_bar`/`max_bar`) зажата в 0..100: переработка
+Ширина полосы (`target_bar`/`resource_bar`) зажата в 0..100: переработка
 показывается полностью заполненной полосой, а не вылезает за карточку.
 """
 
 from sqlalchemy.orm import Session
 
+from app.stats.services import workload
 from app.stats.services.availability import period_days
 from app.stats.services.hours import MINUTES_PER_HOUR, minutes_to_hours
 from app.tutor.services.settings import get_settings
 
 # Тона полос: классы `stats-util__bar--<tone>` в styles.css.
 TONE_OK = "ok"
-TONE_LOW = "low"
-TONE_HIGH = "high"
+TONE_WARN = "warn"
+TONE_DANGER = "danger"
 TONE_NONE = "none"
 
-# Пороги из ТЗ, проценты.
+# Пороги «факта к цели», проценты: < 70 — недогруз, 70–100 — норма,
+# > 100 — больше запланированного.
 LOW_PERCENT = 70
-HIGH_PERCENT = 90
+OVER_PERCENT = 100
 
 # Дней в неделе: база для масштабирования недельной цели на период.
 WEEK_DAYS = 7
@@ -47,6 +52,13 @@ AVAILABILITY_HINT = (
     "отпусков и перерывов. Перерывы внутри рабочего дня пока не учитываются."
 )
 
+# Уровень недельной нагрузки → тон полосы «Загрузка ресурса».
+_LEVEL_TONES = {
+    workload.LEVEL_COMFORT: TONE_OK,
+    workload.LEVEL_HIGH: TONE_WARN,
+    workload.LEVEL_BURNOUT: TONE_DANGER,
+}
+
 
 def percent_of(part: int, total: int) -> int | None:
     """Доля в процентах; нулевой знаменатель — `None` («—», а не «0%»)."""
@@ -56,14 +68,23 @@ def percent_of(part: int, total: int) -> int | None:
 
 
 def tone(percent: int | None) -> str:
-    """Тон полосы по проценту: недогруз / норма / риск выгорания."""
+    """Тон «факта к цели» по проценту: недогруз / норма / перегруз."""
     if percent is None:
         return TONE_NONE
     if percent < LOW_PERCENT:
-        return TONE_LOW
-    if percent > HIGH_PERCENT:
-        return TONE_HIGH
+        return TONE_WARN
+    if percent > OVER_PERCENT:
+        return TONE_DANGER
     return TONE_OK
+
+
+def resource_tone(weekly_hours: float) -> str:
+    """Тон «Загрузки ресурса» по абсолютной недельной занятости.
+
+    Процент от доступных часов здесь сознательно не участвует: 50% от
+    большого календаря — это всё равно 45 часов работы в неделю.
+    """
+    return _LEVEL_TONES[workload.level(weekly_hours)]
 
 
 def _bar(percent: int | None) -> int:
@@ -81,6 +102,7 @@ def utilization_context(
     end,
     actual_minutes: int,
     available_minutes: int,
+    preparation_minutes: int = 0,
     days: int | None = None,
 ) -> dict:
     """Контекст блока «Загрузка»: часы, проценты, тона и подсказка.
@@ -88,6 +110,8 @@ def utilization_context(
     `actual_minutes`/`available_minutes` приходят готовыми: их считают
     `hours.completed_minutes` и `availability.available_minutes`, чтобы блок
     не делал собственных запросов и не расходился с остальными карточками.
+    `preparation_minutes` — подготовка к урокам и проверка ДЗ: вторая шкала
+    сравнивает с календарём именно общую занятость, а не только уроки.
 
     `days` — длина периода в локальных сутках. «Обзор» передаёт её готовой:
     то же число нужно блоку внеурочной занятости, и второй перебор дат на
@@ -107,20 +131,28 @@ def utilization_context(
         if target_minutes
         else None
     )
-    fact_to_max = percent_of(actual_minutes, available_minutes)
+    # Общая занятость — то, из чего складывается реальная рабочая неделя.
+    resource_minutes = actual_minutes + preparation_minutes
+    resource_percent = percent_of(resource_minutes, available_minutes)
+    weekly_resource_hours = minutes_to_hours(
+        workload.weekly_minutes(resource_minutes, days)
+    )
     return {
         "days": days,
         "actual_hours": minutes_to_hours(actual_minutes),
+        "preparation_hours": minutes_to_hours(preparation_minutes),
+        "resource_hours": minutes_to_hours(resource_minutes),
         "available_hours": minutes_to_hours(available_minutes),
         "target_hours": (
             minutes_to_hours(round(target_minutes)) if target_minutes else None
         ),
         "fact_to_target": fact_to_target,
-        "fact_to_max": fact_to_max,
+        "resource_percent": resource_percent,
+        "weekly_resource_hours": weekly_resource_hours,
         "target_bar": _bar(fact_to_target),
-        "max_bar": _bar(fact_to_max),
+        "resource_bar": _bar(resource_percent),
         "target_tone": tone(fact_to_target),
-        "max_tone": tone(fact_to_max),
+        "resource_tone": resource_tone(weekly_resource_hours),
         # Цель не задана в профиле — вместо процента шаблон покажет подсказку
         # со ссылкой на настройки, а не «0%».
         "target_missing": not weekly_hours,

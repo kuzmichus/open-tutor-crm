@@ -198,6 +198,14 @@ def overview_context(
     )
     declining_rows = _declining_rows(rows)
 
+    # Внеурочная занятость: подготовка к урокам и проверка ДЗ. База та же,
+    # что у «Загрузки», — фактические минуты периода. Считается до неё:
+    # шкала «Загрузка ресурса» сравнивает с календарём общую занятость
+    # (уроки плюс подготовка), а не только уроки.
+    preparation = preparation_context(
+        db, tutor, actual_minutes=actual_minutes, days=days
+    )
+
     return {
         "revenue_per_hour": revenue_per_hour,
         "revenue_period": revenue,
@@ -212,13 +220,10 @@ def overview_context(
             available_minutes=available_minutes(
                 db, tutor, start=start, end=end
             ),
+            preparation_minutes=preparation["preparation_minutes"],
             days=days,
         ),
-        # Внеурочная занятость: подготовка к урокам и проверка ДЗ. База та же,
-        # что у «Загрузки», — фактические минуты периода.
-        "preparation": preparation_context(
-            db, tutor, actual_minutes=actual_minutes, days=days
-        ),
+        "preparation": preparation,
         "heatmap": heatmap_context(db, tutor, now=now),
         "retention_active": active_status,
         "retention_total": len(studied),
