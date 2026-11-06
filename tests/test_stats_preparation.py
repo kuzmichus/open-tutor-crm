@@ -14,9 +14,15 @@ from decimal import Decimal
 
 from app.common.services.tutor_time import local_day_bounds, today_local
 from app.database import SessionLocal
-from app.stats.services.preparation import (
-    BURNOUT_WEEKLY_HOURS,
-    preparation_context,
+from app.stats.services.preparation import preparation_context
+from app.stats.services.workload import (
+    COMFORT_WEEKLY_HOURS,
+    HIGH_WEEKLY_HOURS,
+    LEVEL_BURNOUT,
+    LEVEL_COMFORT,
+    LEVEL_HIGH,
+    level,
+    verdict,
 )
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.clock import utcnow
@@ -129,26 +135,72 @@ def test_no_lessons_gives_empty_state(tutor_factory):
     assert "нет проведённых уроков" in context["insight"]
 
 
-def test_burnout_alert_starts_above_forty_hours(tutor_factory):
-    """Порог 40 ч: ровно 40 — норма, 40,1 — предупреждение."""
+def test_burnout_alert_starts_above_forty_five_hours(tutor_factory):
+    """Порог 45 ч: ровно 45 — высокая нагрузка, 45,1 — предупреждение."""
     tutor_id = tutor_factory(timezone="UTC")
     _save(tutor_id, preparation_coefficient=Decimal("1.00"))
 
-    # 20 ч уроков + 20 ч подготовки = 40 ч в неделю — ровно на пороге.
-    at_threshold = _context(tutor_id, actual_minutes=1200, days=7)
-    assert at_threshold["weekly_total_hours"] == BURNOUT_WEEKLY_HOURS
+    # 22 ч уроков + 22 ч подготовки = 44 ч в неделю — высокая, но без алерта.
+    below = _context(tutor_id, actual_minutes=1320, days=7)
+    assert below["weekly_total_hours"] == 44
+    assert below["level"] == LEVEL_HIGH
+    assert below["alert"] is None
+
+    # 22,5 ч уроков + 22,5 ч подготовки = 45 ч в неделю — ровно на пороге.
+    at_threshold = _context(tutor_id, actual_minutes=1350, days=7)
+    assert at_threshold["weekly_total_hours"] == HIGH_WEEKLY_HOURS
+    assert at_threshold["level"] == LEVEL_HIGH
     assert at_threshold["alert"] is None
 
-    # 21 ч уроков + 21 ч подготовки = 42 ч в неделю — выше порога.
-    above = _context(tutor_id, actual_minutes=1260, days=7)
-    assert above["weekly_total_hours"] == 42
+    # 23 ч уроков + 23 ч подготовки = 46 ч в неделю — выше порога.
+    above = _context(tutor_id, actual_minutes=1380, days=7)
+    assert above["weekly_total_hours"] == 46
+    assert above["level"] == LEVEL_BURNOUT
     assert above["alert"] is not None
     text = above["alert"]["text"]
-    assert "Учебная нагрузка 21 час" in text
-    assert "подготовка 21 час" in text
-    assert "42 часа работы в неделю" in text
+    assert "Учебная нагрузка 23 часа" in text
+    assert "подготовка 23 часа" in text
+    assert "46 часов работы в неделю" in text
     assert "Высокий риск выгорания" in text
     assert "повышение цен или сокращение учеников" in text
+
+
+def test_weekly_load_levels():
+    """Уровни недельной нагрузки: до 35 — комфорт, 35–45 — высокая, >45 — риск."""
+    assert level(0) == LEVEL_COMFORT
+    assert level(COMFORT_WEEKLY_HOURS - 0.1) == LEVEL_COMFORT
+    # Ровно 35 — уже высокая нагрузка.
+    assert level(COMFORT_WEEKLY_HOURS) == LEVEL_HIGH
+    assert level(40) == LEVEL_HIGH
+    # Ровно 45 — ещё высокая, а не риск выгорания.
+    assert level(HIGH_WEEKLY_HOURS) == LEVEL_HIGH
+    assert level(HIGH_WEEKLY_HOURS + 0.1) == LEVEL_BURNOUT
+
+    assert verdict(32.7) == "Это комфортный уровень нагрузки."
+    assert verdict(38) == "Это высокий уровень нагрузки."
+    assert verdict(47) == "Высокий риск выгорания!"
+
+
+def test_insight_has_load_verdict(tutor_factory):
+    """Инсайт заканчивается вердиктом по абсолютной недельной занятости."""
+    tutor_id = tutor_factory(timezone="UTC")
+
+    # 10 ч уроков × 1.7 = 17 ч общей занятости — комфорт.
+    comfort = _context(tutor_id, actual_minutes=600, days=7)
+    assert comfort["weekly_total_hours"] == 17
+    assert "17 часов в неделю" in comfort["insight"]
+    assert comfort["insight"].endswith("Это комфортный уровень нагрузки.")
+
+    # 24 ч уроков × 1.7 = 40,8 ч — высокая нагрузка.
+    high = _context(tutor_id, actual_minutes=1440, days=7)
+    assert high["level"] == LEVEL_HIGH
+    assert high["insight"].endswith("Это высокий уровень нагрузки.")
+
+    # 30 ч уроков × 1.7 = 51 ч — риск выгорания.
+    burnout = _context(tutor_id, actual_minutes=1800, days=7)
+    assert burnout["level"] == LEVEL_BURNOUT
+    assert burnout["insight"].endswith("Высокий риск выгорания!")
+
 
 
 def test_donut_geometry_is_proportional(tutor_factory):
@@ -246,14 +298,14 @@ def test_overview_balance_empty_state(client, tutor_factory):
 def test_overview_burnout_alert_above_threshold(
     client, tutor_factory, student_factory, lesson_factory
 ):
-    """Много часов за неделю + подготовка выше 40 ч — алерт выгорания."""
+    """Много часов за неделю + подготовка выше 45 ч — алерт выгорания."""
     tutor_id = _login(client, tutor_factory)
     _save(tutor_id, preparation_coefficient=Decimal("1.00"))
     student_id = student_factory(tutor_id=tutor_id)
     now = utcnow()
-    # 24 урока по 60 минут за 7 дней = 24 ч + 24 ч подготовки = 48 ч.
+    # 28 уроков по 60 минут за 7 дней = 28 ч + 28 ч подготовки = 56 ч.
     for day in range(7):
-        for hour in range(3):
+        for hour in range(4):
             lesson_factory(
                 student_id=student_id,
                 starts_at=now - timedelta(days=day, hours=hour * 2),
@@ -311,3 +363,148 @@ def test_saved_coefficient_changes_page_numbers(
     # Коэффициент 0.5: 2 ч уроков + 1 ч подготовки, итого 3 ч.
     assert "1 ч" in html
     assert "3 ч" in html
+
+
+# --------------------------------------------------------------------------
+# «Загрузка ресурса»: общая занятость против календаря, цвет по часам
+# --------------------------------------------------------------------------
+
+
+def test_resource_scale_uses_lessons_plus_preparation(
+    client, tutor_factory, student_factory, lesson_factory
+):
+    """«Загрузка ресурса» сравнивает с календарём уроки вместе с подготовкой."""
+    tutor_id = _login(client, tutor_factory)
+    # Рабочий день 09:00–18:00 = 9 ч × 7 дней = 63 доступных часа.
+    _save(tutor_id, workday_start="09:00", workday_end="18:00")
+    student_id = student_factory(tutor_id=tutor_id)
+    now = utcnow()
+    # 10 уроков по 60 минут за 7 дней: 10 ч уроков + 7 ч подготовки = 17 ч.
+    for day in range(7):
+        lesson_factory(
+            student_id=student_id,
+            starts_at=now - timedelta(days=day),
+            duration_min=60,
+        )
+    for hour in range(3):
+        lesson_factory(
+            student_id=student_id,
+            starts_at=now - timedelta(days=1, hours=hour + 2),
+            duration_min=60,
+        )
+
+    html = client.get("/tutor/stats?period=7d").text
+
+    assert "Загрузка ресурса" in html
+    # «Факт к максимуму» больше не выводится.
+    assert "Факт к максимуму" not in html
+    # 17 ч общей занятости из 63 доступных — 27%, цвет при этом зелёный.
+    assert "17 ч из" in html
+    assert "63 ч доступных" in html
+    assert "27%" in html
+    assert "stats-util__bar--ok" in html
+
+
+def test_resource_scale_is_green_despite_high_percent(
+    client, tutor_factory, student_factory, lesson_factory
+):
+    """Цвет шкалы — по часам, а не по проценту: 81% полосы ещё комфорт."""
+    tutor_id = _login(client, tutor_factory)
+    # Узкий календарь: 6 ч в день × 7 = 42 доступных часа.
+    _save(tutor_id, workday_start="09:00", workday_end="15:00")
+    student_id = student_factory(tutor_id=tutor_id)
+    now = utcnow()
+    # 20 уроков по 60 минут = 20 ч уроков + 14 ч подготовки = 34 ч — комфорт.
+    for day in range(7):
+        for hour in range(2):
+            lesson_factory(
+                student_id=student_id,
+                starts_at=now - timedelta(days=day, hours=hour * 2),
+                duration_min=60,
+            )
+    for day in range(6):
+        lesson_factory(
+            student_id=student_id,
+            starts_at=now - timedelta(days=day, hours=6),
+            duration_min=60,
+        )
+
+    html = client.get("/tutor/stats?period=7d").text
+
+    # 34 ч из 42 доступных — 81% полосы, но нагрузка комфортная: зелёный.
+    assert "34 ч из" in html
+    assert "81%" in html
+    assert "stats-util__bar--ok" in html
+    assert "stats-util__bar--danger" not in html
+    assert "Это комфортный уровень нагрузки." in html
+
+
+def test_resource_scale_turns_red_above_forty_five_hours(
+    client, tutor_factory, student_factory, lesson_factory
+):
+    """Больше 45 ч недельной занятости — красная шкала и вердикт выгорания."""
+    tutor_id = _login(client, tutor_factory)
+    _save(
+        tutor_id,
+        workday_start="09:00",
+        workday_end="18:00",
+        preparation_coefficient=Decimal("1.00"),
+    )
+    student_id = student_factory(tutor_id=tutor_id)
+    now = utcnow()
+    # 24 урока по 60 минут = 24 ч уроков + 24 ч подготовки = 48 ч в неделю.
+    for day in range(7):
+        for hour in range(3):
+            lesson_factory(
+                student_id=student_id,
+                starts_at=now - timedelta(days=day, hours=hour * 2),
+                duration_min=60,
+            )
+    for hour in range(3):
+        lesson_factory(
+            student_id=student_id,
+            starts_at=now - timedelta(days=1, hours=hour + 7),
+            duration_min=60,
+        )
+
+    html = client.get("/tutor/stats?period=7d").text
+
+    assert "stats-util__bar--danger" in html
+    assert "Высокий риск выгорания!" in html
+    assert "Риск выгорания" in html
+
+
+def test_resource_scale_high_load_is_yellow(
+    client, tutor_factory, student_factory, lesson_factory
+):
+    """Недельная занятость 35–45 ч — жёлтая шкала и вердикт высокой нагрузки."""
+    tutor_id = _login(client, tutor_factory)
+    _save(
+        tutor_id,
+        workday_start="09:00",
+        workday_end="18:00",
+        preparation_coefficient=Decimal("1.00"),
+    )
+    student_id = student_factory(tutor_id=tutor_id)
+    now = utcnow()
+    # 19 уроков по 60 минут = 19 ч уроков + 19 ч подготовки = 38 ч в неделю.
+    for day in range(7):
+        for hour in range(2):
+            lesson_factory(
+                student_id=student_id,
+                starts_at=now - timedelta(days=day, hours=hour * 2),
+                duration_min=60,
+            )
+    for day in range(5):
+        lesson_factory(
+            student_id=student_id,
+            starts_at=now - timedelta(days=day, hours=6),
+            duration_min=60,
+        )
+
+    html = client.get("/tutor/stats?period=7d").text
+
+    assert "stats-util__bar--warn" in html
+    assert "Это высокий уровень нагрузки." in html
+    assert "Риск выгорания" not in html
+
