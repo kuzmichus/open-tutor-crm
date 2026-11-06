@@ -6993,6 +6993,22 @@
     & strong { color: var(--foreground); }
   }
 
+  /* Совет по реальной ставке — плашка того же тона, что инсайт «Доходов
+     по типам занятий»: это подсказка-вывод, а не ещё одно число сводки. */
+  .fin-compare__insight {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--space) * 2);
+    margin: calc(var(--space) * 4) 0 0;
+    padding: calc(var(--space) * 3);
+    border-radius: var(--radius);
+    background: var(--warning-soft);
+    color: var(--warning-fg);
+    font-size: var(--text-sm);
+
+    & [data-lucide] { width: 18px; height: 18px; flex-shrink: 0; }
+  }
+
   /* Упущенная выручка: цена простоя. Тон красный — это потеря, а не
      ошибка, поэтому фон карточки нейтральный, а цветом говорит число. */
   .fin-idle {

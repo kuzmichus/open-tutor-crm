@@ -24,7 +24,14 @@
    Контекст: period (key), summary (income — начисленный доход, refunds,
    expenses, profit, left_for_tutor, earned, received, debts,
    overpayments, compare_note, time, idle, types, type_insight, npd,
-   net_after_tax, net_after_tax_is_negative). #}
+   net_after_tax, net_after_tax_is_negative).
+
+   Время с учётом внеурочной занятости (change finance-preparation-hours):
+   `summary.time` кроме уроков отдаёт `preparation_minutes`,
+   `preparation_label`, `has_preparation`, `total_minutes`, `total_label`,
+   `coefficient`, `coefficient_label`, `real_rev_per_hour`,
+   `real_rev_per_hour_label` и готовый текст `real_insight`. Шаблон только
+   печатает их: часы подготовки и цену «чистыми» считает сервер. #}
 <div class="fin-summary" id="finance-summary"
      hx-get="/tutor/finance/summary?period={{ period.key }}"
      hx-trigger="payment-saved from:body, expense-saved from:body"
@@ -142,6 +149,9 @@
             </div>
             <p class="fin-kpi__value fin-kpi__value--violet">{{ summary.time.duration_label }}</p>
             <p class="fin-kpi__sub">Астрономическое время проведённых уроков</p>
+            {% if summary.time.has_preparation %}
+            <p class="fin-kpi__sub">+ {{ summary.time.preparation_label }} на подготовку</p>
+            {% endif %}
         </section>
 
         <section class="card fin-kpi fin-kpi--compact" aria-label="Переплата учеников">
@@ -194,6 +204,12 @@
                 <p class="fin-compare__label">Заработано уроками</p>
                 <p class="fin-compare__value">{{ money(summary.earned) }}</p>
                 <p class="fin-compare__sub">Проведено: {{ summary.time.duration_label }}</p>
+                {% if summary.time.has_preparation %}
+                {# Часы подготовки — мелкой строкой: цифра «Заработано»
+                   остаётся по урокам, но видно, сколько времени работа
+                   заняла на самом деле. #}
+                <p class="fin-compare__sub">+ {{ summary.time.preparation_label }} на подготовку</p>
+                {% endif %}
             </div>
             <div class="fin-compare__item">
                 <p class="fin-compare__label">Получено от учеников</p>
@@ -225,7 +241,21 @@
             </div>
         </div>
         <p class="fin-compare__rate">Средняя стоимость часа: <strong>{{ summary.time.rev_per_hour_label }}</strong></p>
+        {% if summary.time.has_preparation %}
+        {# Реальная ставка: доход делится не только на уроки, но и на
+           подготовку к ним. Номинальная строка выше остаётся — репетитору
+           нужны обе цифры: цена урока и цена часа работы. #}
+        <p class="fin-compare__rate">Реальная стоимость часа: <strong>{{ summary.time.real_rev_per_hour_label }}</strong></p>
+        <p class="fin-compare__note">Подготовка считается по коэффициенту {{ summary.time.coefficient_label }} из <a href="/tutor/profile?tab=calendar">профиля</a>.</p>
+        {% endif %}
         <p class="fin-compare__note">{{ summary.compare_note }}</p>
+        {% if summary.time.real_insight %}
+        {# Совет по реальной ставке: цена «чистыми» или меньше подготовки. #}
+        <p class="fin-compare__insight">
+            <i data-lucide="sparkles" aria-hidden="true"></i>
+            {{ summary.time.real_insight }}
+        </p>
+        {% endif %}
     </section>
 
     {# Доходы по типам занятий: «сколько приносит час» у индивидуальных и
