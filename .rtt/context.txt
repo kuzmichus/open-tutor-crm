@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-04 21:56 | 650 files | 190130 tokens
+# rtt index | generated 2026-11-06 18:48 | 671 files | 203673 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -39,6 +39,11 @@ def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
 
 # alembic/versions/5b38b6d8c1a1_add_tutor_weekly_load.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
+# alembic/versions/5eb0e460963e_add_preparation_coefficient.py [python]
 imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
@@ -104,6 +109,16 @@ def downgrade() -> None  # Downgrade schema.
 # alembic/versions/b4d18c6f5a27_add_student_messenger_invites.py [python]
 imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def _has_table(bind, name: str) -> bool  # True, если таблица уже есть (create_all мог создать её до миграции).
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
+# alembic/versions/b7d24c9e5f10_add_npd_tax_settings.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
+def upgrade() -> None  # Upgrade schema.
+def downgrade() -> None  # Downgrade schema.
+
+# alembic/versions/c3f1a9d7e2b4_add_student_payer_type.py [python]
+imports: typing.Sequence, typing.Union, alembic.op, sqlalchemy
 def upgrade() -> None  # Upgrade schema.
 def downgrade() -> None  # Downgrade schema.
 
@@ -890,10 +905,11 @@ imports: logging, collections.abc.Callable, typing.TYPE_CHECKING, app.database.S
 def run_tasks() -> int  # Выполняет все задания из `TASKS`; возвращает 0, либо 1 при падении.
 
 # app/common/services/forms.py [python]
-imports: collections.abc.Mapping
+imports: collections.abc.Mapping, decimal.Decimal, decimal.InvalidOperation
 def text_value(form: Mapping, key: str) -> str  # Строковое значение поля формы (отсутствие = пустая строка).
 def checked(form: Mapping, key: str) -> bool  # Флаг чекбокса/переключателя: `on`/`1`/`true`/`yes` — включён.
 def int_or_none(raw: str | None) -> int | None  # Целое число из строки; пусто, мусор или не-строка — None.
+def decimal_or_none(raw: str | None) -> Decimal | None  # Десятичное число из строки; пусто, мусор или не-строка — None.
 def parse_rubles(raw: str, label: str, errors: list[str]) -> int | None  # Сумма в рублях: целое число больше нуля; ошибки — в `errors`.
 
 # app/common/services/timezones.py [python]
@@ -1160,7 +1176,7 @@ imports: math, datetime.date, datetime.timedelta, sqlalchemy.select, sqlalchemy.
 def parse_analytics_months(params) -> int  # Горизонт из query; мусор и опечатки — умолчание 6.
 def _month_keys(tutor, *, months: int) -> list[tuple[int, int]]  # Ключи (год, месяц) от старейшего к текущему — по зоне педагога.
 def _month_window(month_keys: list[tuple[int, int]], tutor) -> tuple  # Окно `[start, end)` всех месяцев списка как aware-UTC-границы.
-def _flow_by_month(db: Session, tutor_id: str, tutor, *, start, end) -> tuple  # «Доход» и «Заработано» по месяцам зоны педагога.
+def _flow_by_month(db: Session, tutor_id: str, tutor, *, start, end) -> tuple  # «Получено» и «Заработано» по месяцам зоны педагога.
 def _expenses_by_month_and_category(db: Session, tutor_id: str, tutor, *, start, end) -> tuple  # Траты одним проходом: по месяцам для столбцов и по категориям для пирога.
 def _thousands(value: int) -> str  # «10 000» — подпись деления оси без ₽, с неразрывным пробелом.
 def _y_ticks(max_value: int) -> list[int]  # Деления оси Y из ряда 1/2/5×10ⁿ — не больше пяти подписей.
@@ -1322,6 +1338,19 @@ def invoice_context(
     use_balance: bool = True,
 ) -> dict  # Контекст `finance/_invoice_dialog.html`: период, строки и сумма.
 
+# app/finance/services/npd.py [python]
+imports: datetime.date, decimal.ROUND_HALF_UP, decimal.Decimal, sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.local_day_bounds, app.common.services.tutor_time.today_local, app.finance.models.account_operation.AccountOperation, app.finance.services.presentation.money, app.finance.services.presentation.npd_rate_label, app.student.models.student.Student, app.tutor.services.settings.get_settings
+def _lesson_conditions(tutor_id: str, *, start, end) -> list  # Условия выборки начисленного дохода репетитора за окно.
+def earned_split(db: Session, tutor_id: str, *, start, end) -> dict[str, int]  # Начисленный доход периода по типу плательщика — одним запросом.
+def tax_amount(income: int, rate_percent: Decimal) -> int  # Налог с суммы по ставке в процентах: целые рубли.
+def tax_context(split: dict[str, int], settings) -> dict  # Итог и детализация налога: числа и подписи ставок для шаблона.
+def ytd_income(db: Session, tutor) -> int  # Начисленный доход с 1 января текущего года до «сейчас».
+def limit_context(income: int, limit: int) -> dict  # Прогресс годового лимита: проценты, ширина полосы, предупреждение.
+def legal_insight(
+    split: dict[str, int], rate_individual: Decimal, rate_legal: Decimal
+) -> str | None  # Совет про юрлиц: доля их дохода выше порога — ставка дороже.
+def npd_context(db: Session, tutor, *, start, end) -> dict  # Контекст блока НПД: налог, лимит и подсказка.
+
 # app/finance/services/operations.py [python]
 imports: sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.BALANCE_PAYMENT_STATUS, app.finance.models.account_operation.AccountOperation, app.finance.services.balance.DEBIT_KINDS
 def student_payments(db: Session, student_id: str) -> list[AccountOperation]  # Все платежи ученика в любом статусе, от новых к старым.
@@ -1417,7 +1446,7 @@ def _month_bounds(day: date, tutor) -> tuple[datetime, datetime]  # Окно к�
 def parse_finance_period(params, tutor) -> dict  # Период сводки как aware-UTC-окно `[start, end)`; «всё время» — без границ.
 
 # app/finance/services/presentation.py [python]
-imports: datetime.datetime, app.common.services.tutor_time.to_local, app.finance.models.account_operation.OPERATION_KIND_LABELS, app.finance.models.account_operation.PAYMENT_FALLBACK_LABEL, app.finance.models.account_operation.PAYMENT_METHOD_LABELS, app.finance.models.account_operation.PAYMENT_STATUS_LABELS, app.finance.models.account_operation.AccountOperation, app.finance.models.expense.EXPENSE_CATEGORY_LABELS, app.finance.services.balance.signed_amount
+imports: datetime.datetime, decimal.Decimal, app.common.services.tutor_time.to_local, app.finance.models.account_operation.OPERATION_KIND_LABELS, app.finance.models.account_operation.PAYMENT_FALLBACK_LABEL, app.finance.models.account_operation.PAYMENT_METHOD_LABELS, app.finance.models.account_operation.PAYMENT_STATUS_LABELS, app.finance.models.account_operation.AccountOperation, app.finance.models.expense.EXPENSE_CATEGORY_LABELS, app.finance.services.balance.signed_amount
 def money(value: int | None) -> str  # «1 200 ₽»; нет значения — пустая строка (блока суммы нет).
 def signed_money(operation: AccountOperation) -> str  # Сумма со знаком: «+2 000 ₽» у платежа, «−1 200 ₽» у возврата и урока.
 def balance_label(value: int) -> str  # Баланс со знаком: «−200 ₽» при долге, «0 ₽» и «800 ₽» без плюса.
@@ -1427,6 +1456,13 @@ def payment_method_label(method: str | None) -> str  # Подпись спосо
 def expense_category_label(category: str | None) -> str  # Подпись категории расхода: «Аренда», «Реклама», …; вне списка — как есть.
 def lessons_count_label(count: int) -> str  # «1 занятие» / «2 занятия» / «5 занятий» — русская плюрализация.
 def operation_datetime(value: datetime | None, tutor) -> str  # «22 окт. 2026, 01:31» — дата и время операции в зоне педагога.
+def duration_label(minutes: int) -> str  # Длительность астрономическим временем: «1 ч 30 мин», «45 мин», «0 мин».
+def _decimal(value: float) -> str  # Число с одним знаком после запятой; целые — без дробной части.
+def rate_label(value: int | None) -> str  # Средняя стоимость часа: «800 ₽/ч»; значения нет — «—».
+def npd_rate_label(rate: Decimal) -> str  # Ставка НПД в процентах: «4 %», «6 %», «4,5 %».
+def _hours_word(hours: float) -> str  # Склонение «час/часа/часов» для дробного или целого значения.
+def free_hours_phrase(minutes: int) -> str  # «10,5 свободных часов», «1 свободный час», «2 свободных часа».
+def ratio_label(ratio: float) -> str  # Во сколько раз: «2 раза», «1,5 раза», «3 раза».
 def register_template_helpers() -> None  # Регистрирует функции отображения в общем Jinja-окружении.
 
 # app/finance/services/recalculate.py [python]
@@ -1465,11 +1501,28 @@ def create_refund(
 ) -> tuple[AccountOperation | None, list[str]]  # Создаёт возврат по платежу; при ошибке ничего не сохраняет.
 
 # app/finance/services/summary.py [python]
-imports: sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.AccountOperation, app.finance.services.balance.signed_amount, app.finance.services.expenses.period_expenses, app.student.models.student.Student
+imports: sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.AccountOperation, app.finance.services.balance.signed_amount, app.finance.services.expenses.period_expenses, app.finance.services.npd.npd_context, app.finance.services.time_metrics.idle_context, app.finance.services.time_metrics.time_context, app.finance.services.time_metrics.type_insight, app.finance.services.time_metrics.type_split, app.student.models.student.Student
 def period_flow(db: Session, tutor_id: str, *, start, end) -> dict[str, int]  # Суммы операций за окно по видам: `income`, `refunds`, `earned`.
 def balance_sides(db: Session, tutor_id: str) -> dict[str, int]  # Долги и переплаты учеников на текущий момент.
 def compare_note(received: int, earned: int) -> str  # Подсказка блока «Заработано и получено» о разнице сумм (design D4).
-def summary_context(db: Session, tutor_id: str, *, start, end) -> dict  # Контекст `finance/_summary.html`: суммы, прибыль и сравнение.
+def summary_context(db: Session, tutor, *, start, end) -> dict  # Контекст `finance/_summary.html`: суммы, касса, время и сравнение.
+
+# app/finance/services/time_metrics.py [python]
+imports: datetime.datetime, datetime.timedelta, sqlalchemy.func, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.local_day_bounds, app.common.services.tutor_time.today_local, app.finance.models.account_operation.AccountOperation, app.finance.services.presentation.duration_label, app.finance.services.presentation.free_hours_phrase, app.finance.services.presentation.rate_label, app.finance.services.presentation.ratio_label, app.group.models.group.Group, app.lesson.models.lesson.Lesson, app.stats.services.availability.available_minutes, app.stats.services.hours.MINUTES_PER_HOUR, app.stats.services.hours.completed_minutes, app.stats.services.hours.planned_minutes, app.stats.services.preparation.coefficient_label, app.stats.services.preparation.preparation_minutes, app.student.models.student.Student, app.tutor.services.settings.get_settings
+def rev_per_hour(earned: int, minutes: int) -> int | None  # Средняя стоимость астрономического часа; часов нет — `None`.
+def time_context(db: Session, tutor, *, earned: int, start, end) -> dict  # Проведённые часы периода, подготовка и обе стоимости часа.
+def real_rate_insight(
+    *, nominal: int | None, real: int | None, coefficient: float
+) -> str | None  # Совет по реальной ставке: цена «чистыми» или меньше подготовки.
+def free_minutes(db: Session, tutor, *, start: datetime, end: datetime) -> int  # Свободные минуты окна: доступное минус занятое, не ниже нуля.
+def idle_window(tutor) -> tuple[datetime, datetime]  # Окно простоя: начало сегодняшних суток — начало следующего месяца.
+def idle_context(
+    db: Session, tutor, *, real_rev: int | None, coefficient: float = 0
+) -> dict  # Блок «Упущенная чистая прибыль»: свободные часы, их цена и подписи.
+def _group_earned(db: Session, tutor_id: str, *, start, end) -> int  # Начисленный доход групповых занятий за период — одним запросом.
+def _minutes_by_type(db: Session, tutor_id: str, *, start, end) -> dict[str, int]  # Проведённые минуты по типам: групповой урок входит один раз.
+def type_split(db: Session, tutor, *, earned: int, start, end) -> list[dict]  # Доходы по типам занятий: выручка, часы и средняя стоимость часа.
+def type_insight(columns: list[dict]) -> str | None  # Подсказка о выгодном типе занятий; сравнивать нечего — `None`.
 
 # app/finance/views/__init__.py [python]
 imports: fastapi.APIRouter, app.finance.views.balance_recalculate, app.finance.views.card_summary, app.finance.views.expense_create, app.finance.views.expense_new, app.finance.views.forecast_csv, app.finance.views.forecast_pin, app.finance.views.group_panel, app.finance.views.income_create, app.finance.views.income_new, app.finance.views.index, app.finance.views.invoice, app.finance.views.operations, app.finance.views.panel, app.finance.views.payment_create, app.finance.views.payment_edit, app.finance.views.payment_new, app.finance.views.payment_update, app.finance.views.refund_create, app.finance.views.refund_new, app.finance.views.summary, app.finance.views.tab
@@ -3289,9 +3342,91 @@ function dropColumn(node)
 # app/stats/services/access.py [python]
 imports: app.common.access.LOGIN_URL, app.common.access.LoginRequired, app.common.access.require_tutor_id
 
+# app/stats/services/availability.py [python]
+imports: datetime.date, datetime.datetime, datetime.timedelta, sqlalchemy.orm.Session, app.calendar.services.presentation.clock_to_minutes, app.common.services.tutor_time.to_local, app.common.services.tutor_time.today_local, app.tutor.services.clock.as_utc, app.tutor.services.settings.get_settings, app.unavailability.services.marks.day_reasons, app.unavailability.services.marks.list_marks
+def workday_minutes(settings) -> int  # Длительность рабочего дня в минутах из настроек; битые границы — 0.
+def period_days(
+    tutor,
+    *,
+    start: datetime | None,
+    end: datetime | None,
+) -> list[date]  # Локальные даты периода `[start, end)` в зоне педагога.
+def available_minutes(
+    db: Session,
+    tutor,
+    *,
+    start: datetime | None,
+    end: datetime | None,
+) -> int  # Доступные минуты периода: рабочие дни за вычетом отметок недоступности.
+
 # app/stats/services/csv_export.py [python]
-imports: csv, io.StringIO, app.student.services.presentation.next_lesson_label, app.student.services.presentation.short_date_label, app.student.services.presentation.status_label, app.student.services.presentation.student_full_name, app.stats.services.presentation.week_rate_label, app.stats.services.student_rows.ACTIVITY_LABELS
+imports: csv, io.StringIO, app.stats.services.presentation.hours_label, app.stats.services.presentation.week_rate_label, app.stats.services.student_rows.ACTIVITY_LABELS, app.student.services.presentation.next_lesson_label, app.student.services.presentation.short_date_label, app.student.services.presentation.status_label, app.student.services.presentation.student_full_name
 def students_csv_text(rows: list[dict], tutor) -> str  # CSV-текст списка учеников; BOM добавляется вызывающей стороной записи.
+
+# app/stats/services/heatmap.py [python]
+imports: datetime.date, datetime.datetime, datetime.timedelta, sqlalchemy.orm.Session, app.calendar.services.presentation.clock_to_minutes, app.calendar.services.presentation.format_minutes, app.common.services.tutor_time.local_week_bounds, app.common.services.tutor_time.to_local, app.common.services.tutor_time.today_local, app.stats.services.availability.workday_minutes, app.stats.services.hours.week_busy_intervals, app.tutor.services.settings.get_settings, app.unavailability.models.unavailability.REASON_LABELS, app.unavailability.models.unavailability.WEEKDAY_LABELS, app.unavailability.services.marks.day_reasons, app.unavailability.services.marks.list_marks, app.unavailability.services.marks.week_days
+def free_hours_phrase(hours: int) -> str  # «6 свободных астрономических часов» — со склонением по числу.
+def _day_minutes(starts_at: datetime, duration_min: int, day: date, tutor) -> tuple[int, int]  # Отрезок урока в минутах суток `day` с прижиманием к суткам.
+def _busy_hours(
+    day: date,
+    hours: list[int],
+    intervals: list[tuple[datetime, int]],
+    tutor,
+) -> set[int]  # Часы суток, пересекающиеся хотя бы с одним уроком.
+def _largest_window(
+    rows: list[dict], hours: list[int]
+) -> tuple[int, int, int, int] | None  # Самое длинное непрерывное окно свободных часов: `(день, с, до)`.
+def _insight(rows: list[dict], hours: list[int], total_free: int) -> str  # Готовая фраза инсайта под картой.
+def heatmap_context(db: Session, tutor, *, now: datetime) -> dict  # Контекст карты загрузки на текущую календарную неделю.
+
+# app/stats/services/hours.py [python]
+imports: datetime.datetime, sqlalchemy.func, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.services.clock.as_utc
+def minutes_to_hours(minutes: int) -> float  # Минуты → астрономические часы (45 мин → 0,75).
+def _lesson_bounds(stmt, *, start: datetime | None, end: datetime | None)  # Добавляет к запросу границы периода `[start, end)`, если они заданы.
+def _owned_lessons(tutor_id: str, status: str)  # Уроки репетитора нужного статуса — индивидуальные и групповые.
+def completed_minutes(
+    db: Session,
+    tutor_id: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> int  # Фактические минуты за период: проведённые уроки, включая пробные.
+def planned_minutes(
+    db: Session,
+    tutor_id: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> int  # Запланированные минуты за период: сумма длительности будущих уроков.
+def _student_minutes(
+    db: Session,
+    tutor_id: str,
+    *,
+    start: datetime | None,
+    end: datetime | None,
+    regular_only: bool,
+) -> dict[str, int]  # Минуты по ученикам: индивидуальные плюс групповые через состав групп.
+def student_completed_minutes(
+    db: Session,
+    tutor_id: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> dict[str, int]  # «Время на ученика»: минуты с каждым учеником, включая пробные.
+def student_regular_minutes(
+    db: Session,
+    tutor_id: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> dict[str, int]  # Минуты регулярных занятий по ученикам — база «Часов/нед» и флага падения.
+def week_busy_intervals(
+    db: Session,
+    tutor_id: str,
+    *,
+    start: datetime,
+    end: datetime,
+) -> list[tuple[datetime, int]]  # Интервалы уроков недели для карты загрузки: `(начало UTC, минуты)`.
 
 # app/stats/services/new_and_trials.py [python]
 imports: sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.BALANCE_PAYMENT_STATUS, app.finance.models.account_operation.AccountOperation, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.tutor.services.clock.as_utc
@@ -3300,29 +3435,81 @@ def new_students_stats(db: Session, tutor, *, start, end) -> dict  # «Заве�
 def trial_conversion(db: Session, tutor, *, start, end, now) -> dict  # Проведённые пробные за период: кто остался и по какой причине.
 
 # app/stats/services/overview.py [python]
-imports: datetime.timedelta, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.BALANCE_PAYMENT_STATUS, app.finance.models.account_operation.AccountOperation, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.student.models.student.Student
-def _revenue(db: Session, tutor_id: str) -> int  # Выручка за всё время: оплаченные платежи минус возвраты, рубли.
+imports: datetime.datetime, datetime.timedelta, sqlalchemy.or_, sqlalchemy.select, sqlalchemy.orm.Session, app.finance.models.account_operation.BALANCE_PAYMENT_STATUS, app.finance.models.account_operation.AccountOperation, app.group.models.group.Group, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.stats.services.availability.available_minutes, app.stats.services.availability.period_days, app.stats.services.heatmap.heatmap_context, app.stats.services.hours.completed_minutes, app.stats.services.hours.minutes_to_hours, app.stats.services.preparation.preparation_context, app.stats.services.utilization.utilization_context, app.student.models.student.Student
+def _revenue(
+    db: Session,
+    tutor_id: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> int  # Выручка за период: оплаченные платежи минус возвраты, рубли.
 def _forecast(db: Session, tutor, *, now) -> dict  # Ожидаемая выручка запланированных уроков на `FORECAST_DAYS` дней.
-def overview_context(db: Session, tutor, *, rows, now, forecast: bool) -> dict  # Контекст вкладки «Обзор» из готовых строк `collect_rows` (design D2).
+def _declining_rows(rows: list[dict]) -> list[dict]  # Ученики с падением нагрузки — от самого сильного падения к слабому.
+def overview_context(
+    db: Session,
+    tutor,
+    *,
+    rows: list[dict],
+    now,
+    forecast: bool,
+    start: datetime | None,
+    end: datetime | None,
+) -> dict  # Контекст вкладки «Обзор» из готовых строк `collect_rows` (design D2).
 
 # app/stats/services/periods.py [python]
 imports: datetime.date, datetime.datetime, datetime.timedelta, app.common.services.tutor_time.local_day_bounds, app.common.services.tutor_time.today_local
 def _parse_date(raw: str | None) -> date | None  # YYYY-MM-DD` из input[type=date]; пустое или мусорное — `None`.
-def parse_period(params, tutor) -> dict  # Окно периода как aware-UTC-границы `[start, end)`; без границ — всё время.
+def _preset_bounds(key: str, tutor) -> tuple[datetime | None, datetime | None]  # Границы пресета `[start, end)`; «Весь период» — без границ.
+def parse_period(params, tutor, *, default: str = "all") -> dict  # Окно периода как aware-UTC-границы `[start, end)`; без границ — всё время.
+
+# app/stats/services/preparation.py [python]
+imports: math, decimal.Decimal, sqlalchemy.orm.Session, app.stats.services.workload, app.stats.services.hours.minutes_to_hours, app.stats.services.presentation.hours_label, app.stats.services.presentation.hours_phrase, app.tutor.services.settings.get_settings
+def coefficient_label(value: Decimal | float) -> str  # Коэффициент для подписи: «0,7», «1,2», «2» — без хвостовых нулей.
+def preparation_minutes(actual_minutes: int, coefficient: float) -> int  # Сколько минут подготовки приходится на `actual_minutes` уроков.
+def minutes_per_hour(coefficient: float) -> int  # Сколько минут подготовки приходится на час урока.
+def _chart(lesson_minutes: int, preparation_minutes: int) -> dict | None  # Геометрия SVG-пончика: дуга уроков и дуга подготовки.
+def _legend(lesson_minutes: int, preparation_minutes: int) -> list[dict]  # Строки легенды: «Уроки: 20 ч», «Подготовка: 10 ч», «Всего: 30 ч».
+def _weekly_phrase(total_minutes: int, days: int) -> str  # Общая занятость, пересчитанная на неделю: «35 часов».
+def _insight(
+    *,
+    coefficient: float,
+    has_lessons: bool,
+    weekly_total_minutes: int,
+    days: int,
+) -> str  # Подпись-инсайт под блоком «Загрузка» (формулировка задачи).
+def _alert(
+    *,
+    has_lessons: bool,
+    weekly_lesson_minutes: int,
+    weekly_preparation_minutes: int,
+    days: int,
+) -> dict | None  # Алерт выгорания, если недельная общая занятость выше порога.
+def preparation_context(
+    db: Session,
+    tutor,
+    *,
+    actual_minutes: int,
+    days: int,
+) -> dict  # Контекст внеурочной занятости: часы, инсайт, алерт и геометрия.
 
 # app/stats/services/presentation.py [python]
-imports: datetime.datetime, app.common.services.tutor_time.to_local, app.stats.services.student_rows.ACTIVITY_LABELS, app.stats.services.new_and_trials.MIN_TRIALS_FOR_RATE
+imports: datetime.datetime, app.common.services.tutor_time.to_local, app.stats.services.new_and_trials.MIN_TRIALS_FOR_RATE, app.stats.services.student_rows.ACTIVITY_LABELS
 def week_rate_label(count: int) -> str  # «Занятий/нед»: среднее за 4 недели — «0,5»; занятий нет — «0».
 def percent_label(part: int, total: int) -> str  # Доля в процентах — «75%»; знаменатель нулевой — «—» (данных нет).
 def conversion_label(trials: int, kept: int) -> str  # Конверсия из пробного: «—», «мало данных» или процент (design D7).
 def kept_reason_label(reason: str | None) -> str  # Причина в списке пробных: «есть занятие после пробного» и т.п.
 def activity_label(value: str | None) -> str  # Состояние активности в таблице: «Активен»/«Отвалился»/«Ушёл»; нет — «».
+def _hours_number(hours: float) -> str  # Число часов «52,5» / «52»: целые — без дробной части.
+def _hours_word(hours: float) -> str  # Склонение «час/часа/часов» для значения в часах.
+def hours_label(hours: float) -> str  # Астрономические часы коротко: «52,5 ч», «1,5 ч», «0 ч».
+def hours_phrase(hours: float) -> str  # Часы со склонением: «1,5 часа», «1 час», «2 часа», «5 часов».
+def percent_or_dash(value: int | None) -> str  # Процент из готового числа: «80%»; значения нет — «—».
 def lesson_datetime_label(value: datetime | None, tutor) -> str  # «26.10.2026, 15:00» — момент занятия в зоне педагога; нет — «».
 def day_label(value: datetime | None, tutor) -> str  # «26 окт.» — короткая дата для строки риска и раскрытий.
 def register_template_helpers() -> None  # Регистрирует функции отображения в общем Jinja-окружении.
 
 # app/stats/services/student_rows.py [python]
-imports: datetime.datetime, datetime.timedelta, sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.student.models.student.Student, app.student.services.list_metrics.attach_metrics, app.tutor.services.clock.as_utc
+imports: datetime.datetime, datetime.timedelta, sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.group.models.group_member.GroupMember, app.lesson.models.lesson.Lesson, app.stats.services.hours.MINUTES_PER_HOUR, app.stats.services.hours.student_regular_minutes, app.student.models.student.Student, app.student.services.list_metrics.attach_metrics, app.tutor.services.clock.as_utc
 def _tutor_students(db: Session, tutor_id: str) -> list[Student]  # Все ученики репетитора, включая архивные.
 def _last_regular_lessons(db: Session, tutor_id: str) -> dict[str, datetime]  # Момент последнего проведённого обычного занятия каждого ученика (UTC).
 def _regular_counts_since(
@@ -3337,6 +3524,7 @@ def classify(
     now: datetime,
 ) -> str | None  # Состояние активности ученика; состояния нет — `None` («—» в таблице).
 def collect_rows(db: Session, tutor, *, now: datetime) -> list[dict]  # Строки всех учеников репетитора с метриками и состоянием активности.
+def sort_rows(rows: list[dict], sort: str = "date") -> list[dict]  # Упорядочивание строк таблицы; `sort` вне `SORT_OPTIONS` — по дате.
 def _matches_q(student: Student, needle: str) -> bool  # Поиск по ФИО без учёта регистра, включая кириллицу (как в списке учеников).
 def apply_filters(
     rows: list[dict],
@@ -3345,14 +3533,38 @@ def apply_filters(
     status: str = "",
     activity: str = "",
     no_future: bool = False,
-) -> list[dict]  # Фильтрация строк вкладки; неизвестные значения фильтров игнорируются.
+    sort: str = "",
+) -> list[dict]  # Фильтрация и сортировка строк вкладки; неизвестные значения игнорируются.
 def paginate(rows: list[dict], page_raw: str) -> tuple[list[dict], dict]  # Срез страницы и метки пагинации; мусорный номер страницы — первая.
+
+# app/stats/services/utilization.py [python]
+imports: sqlalchemy.orm.Session, app.stats.services.workload, app.stats.services.availability.period_days, app.stats.services.hours.MINUTES_PER_HOUR, app.stats.services.hours.minutes_to_hours, app.tutor.services.settings.get_settings
+def percent_of(part: int, total: int) -> int | None  # Доля в процентах; нулевой знаменатель — `None` («—», а не «0%»).
+def tone(percent: int | None) -> str  # Тон «факта к цели» по проценту: недогруз / норма / перегруз.
+def resource_tone(weekly_hours: float) -> str  # Тон «Загрузки ресурса» по абсолютной недельной занятости.
+def _bar(percent: int | None) -> int  # Ширина полосы в процентах с зажимом в 0..100.
+def utilization_context(
+    db: Session,
+    tutor,
+    *,
+    start,
+    end,
+    actual_minutes: int,
+    available_minutes: int,
+    preparation_minutes: int = 0,
+    days: int | None = None,
+) -> dict  # Контекст блока «Загрузка»: часы, проценты, тона и подсказка.
+
+# app/stats/services/workload.py [python]
+def level(weekly_hours: float) -> str  # Уровень недельной общей занятости по абсолютным часам.
+def verdict(weekly_hours: float) -> str  # Готовая фраза-вердикт для инсайта: «Это комфортный уровень нагрузки.»
+def weekly_minutes(total_minutes: int, days: int) -> int  # Минуты периода → минуты средней недели; период нулевой длины — 0.
 
 # app/stats/views/__init__.py [python]
 imports: fastapi.APIRouter, app
 
 # app/stats/views/index.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.database.get_db, app.stats.services.access.LoginRequired, app.stats.services.access.require_tutor_id, app.stats.services.new_and_trials.new_students_stats, app.stats.services.new_and_trials.trial_conversion, app.stats.services.overview.overview_context, app.stats.services.periods.parse_period, app.stats.services.student_rows.apply_filters, app.stats.services.student_rows.collect_rows, app.stats.services.student_rows.paginate, app.student.models.student.Student, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.clock.as_utc, app.tutor.services.clock.utcnow
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.func, sqlalchemy.select, sqlalchemy.orm.Session, app.database.get_db, app.stats.services.access.LoginRequired, app.stats.services.access.require_tutor_id, app.stats.services.new_and_trials.new_students_stats, app.stats.services.new_and_trials.trial_conversion, app.stats.services.overview.overview_context, app.stats.services.periods.parse_period, app.stats.services.student_rows.SORT_OPTIONS, app.stats.services.student_rows.apply_filters, app.stats.services.student_rows.collect_rows, app.stats.services.student_rows.paginate, app.student.models.student.Student, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.clock.as_utc, app.tutor.services.clock.utcnow
 def _students_total(db: Session, tutor_id: str) -> int  # Всего учеников репетитора — для счётчика в чипе вкладки.
 def _students_context(db: Session, request: Request, tutor, *, now) -> dict  # Контекст вкладки «Ученики»: строки, фильтры, пагинация, ссылка на CSV.
 def stats_index(
@@ -3518,6 +3730,7 @@ def format_phone(value: str | None) -> str  # Приводит номер к в�
 imports: datetime.date, datetime.datetime, app.common.services.tutor_time.today_local, app.common.services.tutor_time.to_local, app.student.models.contact.Contact, app.student.models.student.Student, app.student.models.student_contact.StudentContact, app.student.services.birthdays.age_on, app.student.services.birthdays.full_years
 def status_label(status: str | None) -> str  # Человекочитаемая подпись статуса (неизвестное значение — как есть).
 def kind_label(kind: str | None) -> str  # Человекочитаемая подпись подтипа ученика.
+def payer_type_label(payer_type: str | None) -> str  # Подпись типа плательщика: «Физлицо» / «Юрлицо».
 def student_full_name(student: Student) -> str  # Имя и фамилия одной строкой.
 def student_initials(student: Student) -> str  # Инициалы для аватара: первые буквы имени и фамилии.
 def receives_reminders(link: StudentContact) -> bool  # True, если привязка включена хотя бы в одну настройку напоминаний.
@@ -3551,7 +3764,7 @@ def report_context(
 ) -> dict  # Контекст `_report_modal.html`: карточки-итоги и навигация по месяцам.
 
 # app/student/services/student_form.py [python]
-imports: re, collections.abc.Mapping, datetime.date, app.common.services.forms.checked, app.common.services.forms.text_value, app.student.models.student.MAX_GRADE, app.student.models.student.MIN_GRADE, app.student.models.student.STUDENT_KINDS, app.student.models.student.STUDENT_STATUSES, app.student.services.phone.format_phone
+imports: re, collections.abc.Mapping, datetime.date, app.common.services.forms.checked, app.common.services.forms.text_value, app.student.models.student.MAX_GRADE, app.student.models.student.MIN_GRADE, app.student.models.student.STUDENT_KINDS, app.student.models.student.STUDENT_PAYER_TYPES, app.student.models.student.STUDENT_STATUSES, app.student.services.phone.format_phone
 def parse_student_form(form: Mapping) -> tuple[dict, list[str]]  # Разбирает и проверяет поля карточки ученика.
 def parse_contact_rows(form: Mapping) -> list[dict]  # Собирает строки контактов из проиндексированных полей формы.
 def validate_contacts(rows: list[dict]) -> list[str]  # Проверяет строки контактов: ФИО обязательно, email корректен.
@@ -3992,7 +4205,7 @@ class TutorSession(Base)
   def __repr__(self) -> str
 
 # app/tutor/models/tutor_settings.py [python]
-imports: sqlalchemy.JSON, sqlalchemy.Boolean, sqlalchemy.ForeignKey, sqlalchemy.Integer, sqlalchemy.String, sqlalchemy.orm.Mapped, sqlalchemy.orm.mapped_column, app.database.Base
+imports: decimal.Decimal, sqlalchemy.JSON, sqlalchemy.Boolean, sqlalchemy.ForeignKey, sqlalchemy.Integer, sqlalchemy.Numeric, sqlalchemy.String, sqlalchemy.orm.Mapped, sqlalchemy.orm.mapped_column, app.database.Base
 def default_values() -> dict  # Свежий словарь значений по умолчанию.
 class TutorSettings(Base)
   def __repr__(self) -> str
@@ -4000,7 +4213,7 @@ class TutorSettings(Base)
 # app/tutor/services/__init__.py [python]
 
 # app/tutor/services/calendar_form.py [python]
-imports: re, zoneinfo.ZoneInfo, zoneinfo.ZoneInfoNotFoundError, app.common.services.forms.int_or_none, app.lesson.models.lesson.LESSON_DURATIONS, app.tutor.models.tutor_settings.WEEKLY_LOAD_MAX_HOURS
+imports: re, decimal.Decimal, zoneinfo.ZoneInfo, zoneinfo.ZoneInfoNotFoundError, app.common.services.forms.decimal_or_none, app.common.services.forms.int_or_none, app.lesson.models.lesson.LESSON_DURATIONS, app.tutor.models.tutor_settings.DEFAULT_PREPARATION_COEFFICIENT, app.tutor.models.tutor_settings.PREPARATION_COEFFICIENT_MAX, app.tutor.models.tutor_settings.WEEKLY_LOAD_MAX_HOURS
 def _parse_whole_hour(raw: str) -> str | None  # «ЧЧ:ММ» с минутами 00 → та же строка; иначе None.
 def _is_valid_timezone(name: str) -> bool  # True, если имя распознаётся IANA TZDB (без fallback на UTC).
 def parse_calendar_form(form: dict) -> tuple[dict | None, list[str]]  # Разбирает форму календаря: (значения для записи, ошибки).
@@ -4028,6 +4241,11 @@ class TodayLesson
 # app/tutor/services/dashboard_payment.py [python]
 imports: dataclasses.dataclass, datetime.datetime, app.finance.models.account_operation.AccountOperation
 class RecentPayment
+
+# app/tutor/services/finances_form.py [python]
+imports: decimal.Decimal, app.common.services.forms.checked, app.common.services.forms.decimal_or_none, app.common.services.forms.int_or_none, app.tutor.models.tutor_settings.DEFAULT_NPD_ANNUAL_INCOME_LIMIT, app.tutor.models.tutor_settings.DEFAULT_NPD_TAX_RATE_INDIVIDUAL, app.tutor.models.tutor_settings.DEFAULT_NPD_TAX_RATE_LEGAL_ENTITY, app.tutor.models.tutor_settings.NPD_TAX_RATE_MAX
+def _parse_tax_rate(form: dict, field: str, label: str, default: Decimal, errors: list[str])  # Ставка налога: пусто → дефолт, иначе конечное число 0..100.
+def parse_finances_form(form: dict) -> tuple[dict | None, list[str]]  # Разбирает форму вкладки «Финансы»: (значения для записи, ошибки).
 
 # app/tutor/services/messenger_form.py [python]
 imports: re, app.messenger.services.messengers.MESSENGER_LABELS, app.messenger.services.messengers.SUPPORTED, app.messenger.services.messengers.token_key
@@ -4077,6 +4295,7 @@ def parse_profile_form(form: dict) -> tuple[dict | None, list[str]]  # Разб�
 # app/tutor/services/profile_page.py [python]
 imports: sqlalchemy.orm.Session, app.common.services.timezones.timezone_options_json, app.gcalendar.services.presentation.google_calendar_context, app.messenger.services.binding.channels_block_context, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_settings.REMINDER_OFFSETS, app.tutor.models.tutor_settings.REMINDER_OFFSET_LABELS, app.tutor.services.settings.get_settings
 def normalize_tab(raw: str | None) -> str  # Ключ вкладки из query-параметра; неизвестное значение — «Профиль».
+def _decimal_text(value) -> str  # Decimal из Numeric-колонки → строка для поля формы без хвостовых нулей.
 def _form_defaults(tutor: Tutor, settings, tab: str) -> dict  # Значения полей активной вкладки из текущего состояния карточки.
 def profile_page_context(
     db: Session,
@@ -4148,7 +4367,7 @@ imports: re
 def is_valid_email(value: str) -> bool  # True, если `value` похож на email (есть локальная часть, @ и домен).
 
 # app/tutor/views/__init__.py [python]
-imports: fastapi.APIRouter, app.tutor.views.home, app.tutor.views.login, app.tutor.views.logout, app.tutor.views.profile, app.tutor.views.profile_calendar, app.tutor.views.profile_channels, app.tutor.views.profile_google_callback, app.tutor.views.profile_google_connect, app.tutor.views.profile_google_disconnect, app.tutor.views.profile_notifications, app.tutor.views.profile_save, app.tutor.views.profile_security, app.tutor.views.register, app.tutor.views.remember_password, app.tutor.views.reset_password, app.tutor.views.settings, app.tutor.views.settings_messengers
+imports: fastapi.APIRouter, app.tutor.views.home, app.tutor.views.login, app.tutor.views.logout, app.tutor.views.profile, app.tutor.views.profile_calendar, app.tutor.views.profile_channels, app.tutor.views.profile_finances, app.tutor.views.profile_google_callback, app.tutor.views.profile_google_connect, app.tutor.views.profile_google_disconnect, app.tutor.views.profile_notifications, app.tutor.views.profile_save, app.tutor.views.profile_security, app.tutor.views.register, app.tutor.views.remember_password, app.tutor.views.reset_password, app.tutor.views.settings, app.tutor.views.settings_messengers
 
 # app/tutor/views/home.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.dashboard.dashboard_context
@@ -4199,9 +4418,10 @@ def profile_calendar(
     default_lesson_duration: str = Form(""),
     default_lesson_price: str = Form(""),
     weekly_load_hours: str = Form(""),
+    preparation_coefficient: str = Form(""),
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
-)  # Сохраняет часовой пояс, учебный год, рабочее время, уроки и нагрузку.
+)  # Сохраняет часовой пояс, учебный год, рабочее время, уроки, нагрузку и
 
 # app/tutor/views/profile_channels.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.common.responses.is_htmx, app.database.get_db, app.messenger.services.binding.BINDING_FAILED_HINT, app.messenger.services.binding.channels_block_context, app.messenger.services.binding.confirm_binding, app.messenger.services.binding.start_binding, app.messenger.services.binding.unbind_channel, app.messenger.services.messengers.SUPPORTED, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.profile_page.profile_page_context
@@ -4231,6 +4451,18 @@ def _channels_response(
     tutor: Tutor,
     errors: list[str] | None = None,
 ) -> HTMLResponse  # Ответ с обновлённым состоянием каналов: htmx — фрагмент, иначе
+
+# app/tutor/views/profile_finances.py [python]
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.finances_form.parse_finances_form, app.tutor.services.profile_page.profile_page_context, app.tutor.services.settings.save_settings
+def profile_finances(
+    request: Request,
+    npd_enabled: str = Form(""),
+    npd_tax_rate_individual: str = Form(""),
+    npd_tax_rate_legal_entity: str = Form(""),
+    npd_annual_income_limit: str = Form(""),
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+)  # Сохраняет настройки НПД вкладки «Финансы».
 
 # app/tutor/views/profile_google_callback.py [python]
 imports: logging, fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.gcalendar.services.connection, app.gcalendar.services.initial_sync, app.gcalendar.services.oauth, app.gcalendar.services.errors.GoogleError, app.gcalendar.services.redirect.redirect_uri, app.tutor.models.tutor.Tutor
@@ -4578,6 +4810,10 @@ def _create_expenses(db, tutor: Tutor) -> None  # Расходы репетит�
 def _create_misc(db, tutor: Tutor) -> None  # Шаблоны рассылок и недоступность: отпуск и постоянный выходной.
 def _print_report(db, tutor: Tutor, students: dict[str, Student]) -> None  # Короткая сводка: что получилось и у кого какой баланс.
 def main() -> None  # Точка входа: сброс демо-данных и сборка учебного года заново.
+
+# scripts/seed_minimal.py [python]
+imports: sys, pathlib.Path, app.database.SessionLocal, scripts.seed_demo.TUTOR_EMAIL, scripts.seed_demo.TUTOR_PASSWORD, scripts.seed_demo._create_tutor, scripts.seed_demo._reset_demo_data
+def main() -> None  # Сброс демо-данных и карточка репетитора; идемпотентно.
 
 # scripts/smoke_demo.py [python]
 imports: sys, pathlib.Path, fastapi.testclient.TestClient, sqlalchemy.select, app.database.SessionLocal, app.group.models.group.Group, app.student.models.student.Student, app.task.models.task.Task, main.app
@@ -5543,6 +5779,38 @@ def test_refund_keeps_history_when_payment_disappears(student_factory)  # paymen
 def test_operation_requires_existing_student(expect_integrity_error)  # Операция без существующего ученика не сохраняется (FK).
 def test_all_operation_kinds_are_saved(student_factory, kind)  # Каждый вид из закрытого списка проходит CHECK-ограничение.
 
+# tests/test_finance_npd.py [python]
+imports: re, datetime.UTC, datetime.datetime, decimal.Decimal, sqlalchemy.select, app.database.SessionLocal, app.finance.models.account_operation.AccountOperation, app.finance.models.expense.Expense, app.tutor.models.tutor_settings.TutorSettings, app.tutor.models.tutor_settings.default_values, app.tutor.services.clock.utcnow
+def _login(client, tutor_factory, email="npd@example.com", name="Самозанятый")  # Репетитор с зоной UTC и вход под ним.
+def _money(value: int) -> str  # «20 000 ₽» — как форматирует finance.presentation.money.
+def _balance(value: int) -> str  # Сумма со знаком: типографский минус у отрицательной.
+def _operation(student_id: str, kind: str, amount: int, when: datetime, **extra)  # Операция счёта напрямую в БД.
+def _expense(tutor_id: str, amount: int, when: datetime)  # Расход репетитора напрямую в БД.
+def _set_npd(tutor_id: str, **values)  # Настройки НПД для репетитора (по умолчанию — включённый флаг).
+def _lead_row(html: str) -> str  # Разметка главного яруса карточек (до компактного яруса).
+def _kpi_value(html: str, title: str) -> str  # Значение карточки сводки по её заголовку.
+def _npd_block(html: str) -> str  # Разметка блока НПД.
+def _compare_block(html: str) -> str  # Разметка блока «Заработано и получено».
+def test_npd_disabled_keeps_page_unchanged(client, tutor_factory, student_factory)  # По умолчанию репетитор не самозанятый: блока налога нет.
+def test_npd_disabled_three_lead_cards(client, tutor_factory)  # При выключенном флаге главный ярус остаётся из трёх карточек.
+def test_npd_block_with_split_income(client, tutor_factory, student_factory)  # Доход 20 000 от физлиц и 10 000 от юрлиц → налог 800 + 600 = 1 400.
+def test_npd_card_net_after_tax(client, tutor_factory, student_factory)  # Карточка «Чистая прибыль (после налогов)»: доход − расходы − налог.
+def test_npd_compare_block_tax_line(client, tutor_factory, student_factory)  # Налоговая строка и новый итог блока сравнения (пример 20 000 − 5 000 − 1 000).
+def test_npd_negative_net_after_tax(client, tutor_factory, student_factory)  # Отрицательная чистая прибыль — типографский минус.
+def test_npd_lead_row_has_four_cards(client, tutor_factory)  # С включённым флагом в главном ярусе четыре карточки.
+def test_npd_custom_rates(client, tutor_factory, student_factory)  # Ставки 5 % / 7 % из настроек меняют расчёт без правок кода.
+def test_npd_custom_limit_warning(client, tutor_factory, student_factory)  # Изменённый лимит 1 000 000 и доход с начала года — предупреждение.
+def test_npd_limit_half_no_warning(client, tutor_factory, student_factory)  # Доход 50 % лимита — шкала без предупреждения.
+def test_npd_limit_yearly_ignores_period(client, tutor_factory, student_factory)  # Лимит считается по календарному году, а не по выбранному периоду.
+def test_npd_legal_insight_when_legal_share_high(
+    client, tutor_factory, student_factory
+)  # Доля юрлиц больше 30 % — подсказка про ставку 6 %.
+def test_npd_legal_insight_hidden_when_share_low(
+    client, tutor_factory, student_factory
+)  # Доля юрлиц 20 % — подсказки нет.
+def test_npd_isolated_between_tutors(client, tutor_factory, student_factory)  # Чужой доход в налог вошедшего не попадает.
+def test_npd_summary_partial_has_block(client, tutor_factory, student_factory)  # Партиал `/tutor/finance/summary` считает налог тем же кодом.
+
 # tests/test_finance_operations.py [python]
 imports: datetime.UTC, datetime.datetime, app.database.SessionLocal, app.finance.services.operations.HISTORY_LIMIT, app.finance.services.operations.payment_refunds, app.finance.services.operations.student_history, app.finance.services.operations.student_payments
 def _at(day: int, hour: int = 10) -> datetime  # Момент операции: октябрь 2026, чтобы порядок был очевиден.
@@ -5662,6 +5930,50 @@ def test_update_rejects_cancel_when_payment_has_refund(student_factory)  # От�
 def test_update_allows_cancel_without_refunds(student_factory)  # Без возвратов отмена разрешена и выводит сумму из баланса.
 def test_update_keeps_cancelled_payment_cancellable(student_factory)  # Уже отменённый платёж с возвратом можно править дальше.
 def test_update_rejects_invalid_data(student_factory)  # Невалидная правка не меняет запись.
+
+# tests/test_finance_preparation.py [python]
+imports: re, datetime.datetime, decimal.Decimal, app.database.SessionLocal, app.finance.services.charges.sync_lesson_charge, app.finance.services.time_metrics.free_minutes, app.finance.services.time_metrics.idle_window, app.finance.services.time_metrics.real_rate_insight, app.lesson.models.lesson.Lesson, app.stats.services.preparation.coefficient_label, app.stats.services.preparation.preparation_minutes, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_settings.TutorSettings, app.tutor.models.tutor_settings.default_values, app.tutor.services.clock.utcnow, app.tutor.services.settings.save_settings
+def _login(client, tutor_factory, email="prep-finance@example.com", name="Готовящийся")  # Репетитор с зоной UTC и вход под ним; возвращает его id.
+def _money(value: int) -> str  # «1 200 ₽» — как форматирует finance.presentation.money.
+def _kpi_value(html: str, title: str) -> str  # Значение карточки сводки по её заголовку.
+def _compare_block(html: str) -> str  # Разметка блока «Заработано и получено».
+def _idle_block(html: str) -> str  # Разметка блока «Упущенная чистая прибыль».
+def _free_minutes(tutor_id: str) -> int  # Свободные минуты окна простоя — тем же сервисом, что страница.
+def _lesson(
+    tutor_id: str,
+    *,
+    student_id: str | None = None,
+    duration_min: int = 60,
+    price: int | None = 1200,
+    status: str = "completed",
+    starts_at: datetime | None = None,
+) -> str  # Урок в БД с синхронизированным списанием; возвращает id урока.
+def _settings(tutor_id: str, **values) -> None  # Настройки репетитора отдельной сессией, как страница профиля.
+def _enable_npd(tutor_id: str) -> None  # Включает флаг НПД: нужен для проверки совместимости блоков.
+def test_preparation_minutes_uses_coefficient()  # 60 мин × 0.7 → 42, × 1.2 → 72; нет уроков или коэффициент 0 → 0.
+def test_coefficient_label_formats_decimal()  # Коэффициент для подписи — «0,7» и «1,25», без хвостовых нулей.
+def test_real_rate_insight_is_none_without_base()  # Нет подготовки, ставки или реальной ставки — совета нет.
+def test_real_rate_insight_names_target_price()  # Совет называет реальную ставку и цену, при которой ставка вернётся.
+def test_default_coefficient_shows_preparation_and_real_rate(
+    client, tutor_factory, student_factory
+)  # Час урока за 1 200 ₽: + 42 мин подготовки и реальная ставка 706 ₽/ч.
+def test_saved_coefficient_changes_preparation_and_rate(
+    client, tutor_factory, student_factory
+)  # Коэффициент 1.2: + 1 ч 12 мин подготовки, реальная ставка 545 ₽/ч.
+def test_zero_coefficient_keeps_page_as_before(client, tutor_factory, student_factory)  # Коэффициент 0: ни строк подготовки, ни реальной ставки, ни совета.
+def test_no_completed_lessons_gives_no_preparation(
+    client, tutor_factory, student_factory
+)  # Только запланированный урок: часов нет, подготовки и ставок тоже.
+def test_preparation_is_isolated_between_tutors(
+    client, tutor_factory, student_factory
+)  # Коэффициент и уроки чужого репетитора не попадают в сводку.
+def test_preparation_shown_with_npd_enabled(
+    client, tutor_factory, student_factory
+)  # НПД включён: подготовка и реальная ставка выводятся, налог на месте.
+def test_idle_profit_uses_real_rate(client, tutor_factory, student_factory)  # Свободные окна × реальная ставка, а не средняя стоимость часа.
+def test_idle_profit_zero_coefficient_uses_nominal_rate(
+    client, tutor_factory, student_factory
+)  # Коэффициент 0: подготовки нет, подпись не обещает её учёт.
 
 # tests/test_finance_presentation.py [python]
 imports: datetime.UTC, datetime.datetime, pytest, app.database.SessionLocal, app.finance.models.account_operation.AccountOperation, app.finance.services.presentation.MINUS, app.finance.services.presentation.balance_label, app.finance.services.presentation.money, app.finance.services.presentation.operation_datetime, app.finance.services.presentation.operation_kind_label, app.finance.services.presentation.payment_method_label, app.finance.services.presentation.payment_status_label, app.finance.services.presentation.signed_money, app.tutor.models.tutor.Tutor
@@ -5783,6 +6095,57 @@ def test_operations_refresh_url_keeps_tab_state(client, tutor_factory)  # Пер
 def test_analytics_pills_load_partial_via_htmx(client, tutor_factory)  # Пилюли 6/12 мес живут внутри секции — тоже грузятся htmx.
 def test_forecast_month_form_loads_partial_via_htmx(client, tutor_factory)  # Смена месяца прогноза подменяет секцию, а не перезагружает страницу.
 def test_tab_isolation_between_tutors(client, tutor_factory, student_factory)  # Чужие операции не попадают в ответ ручки вкладки.
+
+# tests/test_finance_time.py [python]
+imports: re, datetime.UTC, datetime.datetime, datetime.timedelta, pytest, app.database.SessionLocal, app.finance.models.expense.Expense, app.finance.services.charges.sync_lesson_charge, app.finance.services.presentation.duration_label, app.finance.services.presentation.free_hours_phrase, app.finance.services.presentation.rate_label, app.finance.services.presentation.ratio_label, app.finance.services.time_metrics.rev_per_hour, app.finance.services.time_metrics.type_insight, app.lesson.models.lesson.Lesson, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow, app.tutor.services.settings.save_settings
+def _login(client, tutor_factory, email="hours@example.com", name="Часовщик")  # Репетитор с зоной UTC и вход под ним; возвращает его id.
+def _money(value: int) -> str  # «1 200 ₽» — как форматирует finance.presentation.money.
+def _kpi_value(html: str, title: str) -> str  # Значение карточки сводки по её заголовку.
+def _compare_value(html: str, label: str) -> str  # Значение строки блока «Заработано и получено» по её подписи.
+def _month_start(months_ago: int = 0) -> datetime  # Полдень первого числа месяца `months_ago` назад (UTC).
+def _lesson(
+    tutor_id: str,
+    *,
+    student_id: str | None = None,
+    group_id: str | None = None,
+    duration_min: int = 60,
+    price: int | None = 1200,
+    status: str = "completed",
+    starts_at: datetime | None = None,
+) -> str  # Урок в БД с синхронизированным списанием; возвращает id урока.
+def _expense(tutor_id: str, amount: int, when: datetime | None = None) -> None  # Расход репетитора напрямую в БД.
+def _settings(db_tutor_id: str, **values) -> None  # Настройки репетитора: рабочее время задаётся тестом явно.
+def test_duration_label_formats_astronomical_time()  # 45 мин — «45 мин», 90 мин — «1 ч 30 мин», ноль — «0 мин».
+def test_rate_label_and_ratio_label()  # «800 ₽/ч» и «2 раза»; нет базы расчёта — прочерк, а не ноль.
+def test_free_hours_phrase_declines()  # «1 свободный час», «2 свободных часа», «10,5 свободных часа».
+def test_rev_per_hour_is_none_without_hours()  # Делить не на что — `None`; иначе округление до рубля.
+def test_unpaid_completed_lesson_counts_as_income(
+    client, tutor_factory, student_factory
+)  # Начислено 1 200, платежей нет: доход 1 200, прибыль −15 000, долг 1 200.
+def test_rev_per_hour_in_compare_block(client, tutor_factory, student_factory)  # Средняя стоимость часа — начисленный доход ÷ проведённые часы.
+def test_planned_lesson_does_not_add_hours(
+    client, tutor_factory, student_factory
+)  # Запланированный урок не даёт ни часов, ни начисления.
+def test_group_lesson_counts_once_in_hours_and_fully_in_revenue(
+    client, tutor_factory, student_factory, group_factory, group_member_factory
+)  # Группа: часы один раз (время педагога), выручка — сумма участников.
+def test_type_insight_when_group_is_more_profitable(
+    client, tutor_factory, student_factory, group_factory, group_member_factory
+)  # Группа выгоднее за час — появляется совет набрать ещё одну.
+def test_no_insight_when_group_is_not_more_profitable(
+    client, tutor_factory, student_factory, group_factory, group_member_factory
+)  # Группа не выгоднее — совета нет, колонки остаются.
+def test_type_insight_helpers()  # Помощник не делит на ноль и не советует при отсутствии преимущества.
+def test_idle_revenue_block_counts_free_hours(
+    client, tutor_factory, student_factory
+)  # Свободные часы месяца × реальная ставка — сумма потерь, ссылка в календарь.
+def test_idle_block_without_hours(client, tutor_factory)  # Рабочий день нулевой — свободных часов нет, сумма не выдумывается.
+def test_idle_block_without_revenue_base(
+    client, tutor_factory, student_factory
+)  # Часы есть, но проведённых часов нет — сумма не считается, часы видны.
+def test_time_blocks_are_isolated_between_tutors(
+    client, tutor_factory, student_factory
+)  # Часы, простой и типы чужого репетитора не попадают в сводку.
 
 # tests/test_footer_signature.py [python]
 imports: re, tomllib, pathlib.Path, pytest, app.__repository_url__, app.__version__
@@ -6914,6 +7277,13 @@ def test_retry_sender_raises_after_exhausting_attempts()
 def test_logging_sender_passes_success()
 def test_logging_sender_reraises_failure()
 
+# tests/test_migration_heads.py [python]
+imports: pathlib.Path, alembic.config.Config, alembic.script.ScriptDirectory
+def _script_directory() -> ScriptDirectory  # Каталог ревизий из alembic.ini; база данных не нужна.
+def test_migrations_have_single_head()  # Ровно одна голова: иначе `alembic upgrade head` не выполнится.
+def test_migration_revisions_are_unique()  # Идентификаторы ревизий не повторяются между файлами.
+def test_every_revision_has_single_parent()  # Нет merge-ревизий с несколькими родителями: проект ведёт линейную цепь.
+
 # tests/test_migration_utc.py [python]
 imports: importlib, datetime.UTC, datetime.datetime, pathlib.Path, pytest, alembic.migration.MigrationContext, alembic.operations.Operations, app.common.services.tutor_time.to_local, app.database.SessionLocal, app.database.engine, app.homework.models.homework.Homework, app.lesson.models.lesson.Lesson, app.tutor.models.tutor.Tutor, app.tutor.services.clock.as_utc
 def source_zone(monkeypatch)  # Фиксирует зону-источник: тесты не зависят от настройки машины.
@@ -6958,6 +7328,8 @@ def test_student_phone_is_not_unique(student_factory)  # Одинаковый т
 def test_student_kind_check_is_not_masked_by_foreign_key(tutor_factory, student_factory)  # kind` вне значений отклоняется и при валидном репетиторе.
 def test_student_grade_out_of_range_is_rejected(tutor_factory, student_factory)  # Класс 0 и 12 отклоняются CHECK-ограничением.
 def test_student_status_defaults_to_new(student_factory)  # Статус по умолчанию — «новый».
+def test_student_payer_type_defaults_to_individual(student_factory)  # Тип плательщика по умолчанию — физическое лицо.
+def test_student_payer_type_rejects_unknown_value(tutor_factory)  # Тип плательщика вне individual/legal_entity отклоняется CHECK.
 def test_student_status_rejects_unknown_value(tutor_factory, student_factory)  # Статус вне new/active/archived отклоняется CHECK-ограничением.
 def test_contact_can_exist_without_phone(tutor_factory, student_factory, contact_factory)  # Контакт создаётся только с ФИО и привязывается к ученику.
 def test_contact_requires_tutor()  # Контакт без репетитора не сохраняется.
@@ -7167,7 +7539,7 @@ def _tutor_by_email(email)
 def test_redirect_to_login_without_session(client)
 def test_post_without_session_redirects_to_login(client)  # POST-роуты страницы тоже закрыты сессией.
 def test_default_tab_is_profile(client)
-def test_all_four_tabs_present(client)
+def test_all_tabs_present(client)
 def test_tab_selected_by_query_param(client)
 def test_unknown_tab_falls_back_to_profile(client)
 def test_profile_shows_own_data(client)
@@ -7193,6 +7565,7 @@ def test_notifications_negative_threshold_shows_error(client)
 def _calendar_page(client, **params)
 def test_workday_defaults_without_settings_row(client)  # 1.1: без строки в БД `get_settings` отдаёт дефолт рабочего времени.
 def test_calendar_tab_save_keeps_show_price_flag(client)  # Сохранение вкладки «Календарь» не сбрасывает флаг показа цены.
+def _field_value(html, name)  # Значение `value` у поля формы с именем `name` (None — поля нет).
 def _calendar_payload(**overrides)  # Полный набор полей вкладки «Календарь» для POST.
 def test_weekly_load_defaults_without_settings_row(client)  # 2.5: до первого сохранения желаемая нагрузка не задана (None).
 def test_calendar_tab_shows_weekly_load_field(client)  # 2.5: поле нагрузки есть на вкладке с пояснением про астрономические часы.
@@ -7200,6 +7573,13 @@ def test_weekly_load_save_and_show(client)  # 2.5: валидная нагруз
 def test_weekly_load_empty_clears(client)  # 2.5: пустое поле очищает сохранённое значение до None.
 def test_weekly_load_out_of_range_shows_error(client)  # 2.5: нагрузка вне 1..168 — ошибка на вкладке, сохранения нет.
 def test_weekly_load_isolation(client, tutor_factory)  # 2.5: сохранение нагрузки не создаёт настройки другому репетитору.
+def test_preparation_coefficient_defaults_without_settings_row(client)  # До первого сохранения коэффициент подготовки равен 0.7.
+def test_calendar_tab_shows_preparation_coefficient(client)  # Поле коэффициента есть на вкладке, по умолчанию 0.7, с пояснением.
+def test_preparation_coefficient_save_and_show(client)  # Сохранённый коэффициент показывается без хвостовых нулей.
+def test_preparation_coefficient_accepts_comma(client)  # Запятая как десятичный разделитель — та же дробь, что и точка.
+def test_preparation_coefficient_empty_returns_default(client)  # Пустое поле не ошибка — возвращается значение по умолчанию 0.7.
+def test_preparation_coefficient_bad_value_shows_error(client)  # Мусор или значение вне 0..5 — ошибка на вкладке, сохранения нет.
+def test_calendar_form_preparation_coefficient()  # Разбор коэффициента: число, пусто → дефолт, границы 0 и 5 включены.
 def _calendar_values(**overrides)
 def test_calendar_form_accepts_whole_hour_interval()  # 2.1: валидный интервал целых часов разбирается в значения записи.
 def test_calendar_form_rejects_broken_format()  # 2.1: строка не «ЧЧ:ММ» — ошибка, значений записи нет.
@@ -7217,6 +7597,41 @@ def test_calendar_bad_duration_shows_error(client)  # Длительность �
 def test_calendar_bad_timezone_shows_error(client)
 def test_calendar_reversed_workday_shows_error(client)  # 2.3: «18:00–09:00» — сохранения нет, ошибка порядка на вкладке.
 def test_calendar_workday_isolation(client, tutor_factory)  # 2.3: сохранение рабочего времени не задевает настройки другого.
+
+# tests/test_profile_finances.py [python]
+imports: re, decimal.Decimal, app.database.SessionLocal, app.tutor.models.tutor.Tutor, app.tutor.models.tutor_settings.TutorSettings, app.tutor.services.finances_form.parse_finances_form, app.tutor.services.settings.get_settings
+def _login(client, email="finances-user@example.com", name="Финансовый")
+def _tutor_by_email(email)
+def _settings(email="finances-user@example.com")
+def _finances_page(client, **params)
+def _field_value(html, name)  # Значение `value` у поля формы с именем `name` (None — поля нет).
+def _is_checked(html, name)  # Отмечен ли чекбокс/переключатель с именем `name`.
+def _input_tag(html, name)  # Тег `<input>` с именем `name` (None — поля нет).
+def _is_disabled(html, name)  # Отключено ли поле `name` (атрибут `disabled` или Alpine-биндинг).
+def _payload(**overrides)  # Полный набор полей блока «Налоги» для POST.
+def test_finances_tab_requires_session(client)
+def test_post_finances_requires_session(client)
+def test_finances_tab_present_and_active(client)
+def test_finances_tab_shows_tax_block(client)  # Блок «Налоги»: переключатель НПД, две ставки и лимит дохода.
+def test_finances_defaults_without_settings_row(client)  # До первого сохранения: не плательщик, 4 %, 6 %, 2 400 000 ₽.
+def test_finances_fields_disabled_when_switch_off(client)  # Выключенный НПД: поля ставок и лимита отключены (в т.ч. без JS).
+def test_finances_fields_enabled_when_switch_on(client)  # Включённый НПД: поля доступны для ввода.
+def test_finances_switch_toggles_fields_without_reload(client)  # Без перезагрузки состояние полей переключает Alpine (`x-model`).
+def test_finances_save_and_show(client)
+def test_finances_comma_as_decimal_separator(client)
+def test_finances_income_limit_with_spaces(client)  # Сумма с пробелами внутри числа принимается: «2 400 000» = 2400000.
+def test_finances_empty_fields_return_defaults(client)  # Пустые числовые поля возвращают значения по умолчанию, а не ошибку.
+def test_finances_toggle_off_is_saved(client)  # Выключенный переключатель сохраняется как False и не сбрасывает поля.
+def test_finances_rate_out_of_range_shows_error(client)
+def test_finances_rate_garbage_shows_error(client)
+def test_finances_negative_limit_shows_error(client)
+def test_finances_errors_keep_entered_values(client)  # При ошибке на вкладке остаются введённые значения, а не дефолты.
+def test_finances_boundary_rates_are_accepted(client)  # Границы 0 и 100 включены.
+def test_finances_settings_are_isolated(client, tutor_factory)
+def test_parse_finances_form_defaults()  # Без переключателя (НПД выключен) разбор возвращает только признак.
+def test_parse_finances_form_enabled_defaults()  # Включённый НПД с пустыми полями — значения по умолчанию.
+def test_parse_finances_form_rejects_nan_and_infinity()
+def test_parse_finances_form_ignores_fields_when_disabled()  # При выключенном НПД ставки и лимит не разбираются и не валидируются.
 
 # tests/test_public_booking.py [python]
 imports: datetime.UTC, datetime.date, datetime.datetime, pytest, app.database.SessionLocal
@@ -7492,6 +7907,99 @@ def test_isolation_between_tutors(
 )
 def test_unknown_tab_falls_back_to_overview(client, tutor_factory)
 
+# tests/test_stats_hours.py [python]
+imports: re, datetime.timedelta, app.common.services.tutor_time.local_day_bounds, app.common.services.tutor_time.today_local, app.database.SessionLocal, app.stats.services.availability.available_minutes, app.stats.services.heatmap.CELL_BUSY, app.stats.services.heatmap.CELL_FREE, app.stats.services.heatmap.CELL_UNAVAILABLE, app.stats.services.heatmap.heatmap_context, app.stats.services.hours.completed_minutes, app.stats.services.hours.student_completed_minutes, app.stats.services.hours.student_regular_minutes, app.stats.services.utilization.TONE_DANGER, app.stats.services.utilization.TONE_NONE, app.stats.services.utilization.TONE_OK, app.stats.services.utilization.TONE_WARN, app.stats.services.utilization.tone, app.stats.services.utilization.utilization_context, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow, app.tutor.services.settings.save_settings
+def _login(client, tutor_factory, email="hours@example.com", name="Часовик", **extra)  # Репетитор с заводской карточкой (зона UTC) и вход под ним.
+def _save(tutor_id, **values)  # Сохраняет настройки репетитора отдельной сессией (как страница профиля).
+def _day_bounds(tutor, days: int = 1)  # Границы `days` локальных суток начиная с сегодняшнего дня.
+def _kpi_value(html: str, title: str) -> str  # Значение KPI-карточки по её заголовку (как в test_stats.py).
+def test_group_lesson_counts_once_in_hours(
+    tutor_factory,
+    group_factory,
+    student_factory,
+    group_member_factory,
+    lesson_factory,
+)  # Групповой урок 90 минут — 1,5 часа, а не 3 часа по числу участников.
+def test_trial_counts_in_actual_hours_but_not_in_week_hours(
+    tutor_factory, student_factory, lesson_factory
+)  # Пробное — реально потраченное время, но не «часы на ученика в неделю».
+def test_available_minutes_subtract_marks(tutor_factory, unavailability_factory)  # Доступные часы = рабочий день × дни, отпуск и выходной день дают ноль.
+def test_available_minutes_subtract_weekday_dayoff(tutor_factory, unavailability_factory)  # Постоянный выходной вычитается в каждой неделе периода.
+def test_broken_workday_gives_zero_available(client, tutor_factory)  # Битые границы рабочего дня (конец раньше начала) — ноль, а не 500.
+def test_utilization_tones()  # Пороги «факта к цели»: <70 недогруз, 70–100 норма, >100 перегруз.
+def test_utilization_scales_target_to_period(tutor_factory)  # Недельная цель масштабируется на длину периода: 10 ч/нед × 7 дней.
+def test_resource_scale_counts_preparation(tutor_factory)  # Вторая шкала считает общую занятость: уроки плюс подготовка.
+def test_resource_tone_depends_on_hours_not_percent(tutor_factory)  # 90% от большого календаря — красный, 90% от малого — зелёный.
+def test_utilization_without_target(tutor_factory)  # Цель не задана — процента нет, шаблон покажет «Цель не задана».
+def test_overview_shows_utilization_and_heatmap(client, tutor_factory)  # Блок «Загрузка» и «Карта загрузки» есть на «Обзоре».
+def test_heatmap_states_and_insight(
+    client, tutor_factory, student_factory, lesson_factory, unavailability_factory
+)  # Ячейки: занято / свободно / недоступно, инсайт с самым большим окном.
+def test_heatmap_without_workday(client, tutor_factory)  # Без рабочего времени карта не рисуется, а просит задать шаблон.
+def test_revenue_per_hour(
+    client, tutor_factory, student_factory, lesson_factory, operation_factory
+)  # Карточка «Выручка на час»: 2000 ₽ за 2 фактических часа = 1000 ₽.
+def test_students_hours_column_and_sorting(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Колонка «Часов/нед» и сортировка по часам: тяжёлые сверху.
+def test_students_csv_has_hours_column(
+    client, tutor_factory, student_factory, lesson_factory
+)  # В CSV есть колонка «Часов/нед» — та же, что в таблице.
+def test_decline_flag_for_falling_load(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Было 2×60 мин за 2 недели, стало 1×45 — флаг «нагрузка −62%».
+def test_decline_flag_absent_for_small_drop_or_small_base(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Падение меньше 50% и база меньше 2 часов флаг не ставят.
+def test_overview_period_defaults_to_30_days(client, tutor_factory)  # На «Обзоре» чипы периода и умолчание 30 дней; мусор — тоже 30 дней.
+def test_period_chips_order(client, tutor_factory)  # Чипы периода идут от короткого окна к длинному, последнее — «Весь период».
+def test_forecast_block_under_its_button(client, tutor_factory)  # Прогноз раскрывается сразу под кнопкой, до блока «Загрузка».
+
+# tests/test_stats_preparation.py [python]
+imports: datetime.timedelta, decimal.Decimal, app.common.services.tutor_time.local_day_bounds, app.common.services.tutor_time.today_local, app.database.SessionLocal, app.stats.services.preparation.preparation_context, app.stats.services.workload.COMFORT_WEEKLY_HOURS, app.stats.services.workload.HIGH_WEEKLY_HOURS, app.stats.services.workload.LEVEL_BURNOUT, app.stats.services.workload.LEVEL_COMFORT, app.stats.services.workload.LEVEL_HIGH, app.stats.services.workload.level, app.stats.services.workload.verdict, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow, app.tutor.services.settings.save_settings
+def _login(client, tutor_factory, email="prep@example.com", name="Готовящийся", **extra)  # Репетитор с заводской карточкой (зона UTC) и вход под ним.
+def _save(tutor_id, **values)  # Сохраняет настройки репетитора отдельной сессией (как страница профиля).
+def _day_bounds(tutor, days: int = 1)  # Границы `days` локальных суток начиная с сегодняшнего дня.
+def _context(tutor_id, *, actual_minutes: int, days: int = 7) -> dict  # Контекст подготовки для репетитора на `days` дней от сегодня.
+def test_default_coefficient_is_seventy_percent(tutor_factory)  # Без сохранённых настроек действует дефолт 0.7: 10 ч уроков → 7 ч подготовки.
+def test_preparation_uses_saved_coefficient(tutor_factory)  # Сохранённый коэффициент 2.0: подготовка вдвое больше учебных часов.
+def test_weekly_values_scale_to_period(tutor_factory)  # Период 14 дней: недельная занятость — половина периода.
+def test_zero_coefficient_gives_no_preparation(tutor_factory)  # Коэффициент 0: подготовки нет, кольцо целиком занято уроками.
+def test_no_lessons_gives_empty_state(tutor_factory)  # Уроков нет — пустое состояние, а не кольцо нулевой длины.
+def test_burnout_alert_starts_above_forty_five_hours(tutor_factory)  # Порог 45 ч: ровно 45 — высокая нагрузка, 45,1 — предупреждение.
+def test_weekly_load_levels()  # Уровни недельной нагрузки: до 35 — комфорт, 35–45 — высокая, >45 — риск.
+def test_insight_has_load_verdict(tutor_factory)  # Инсайт заканчивается вердиктом по абсолютной недельной занятости.
+def test_donut_geometry_is_proportional(tutor_factory)  # Дуги пончика пропорциональны долям уроков и подготовки.
+def test_legend_has_lessons_preparation_and_total(tutor_factory)  # Легенда: «Уроки», «Подготовка», «Всего» с часами и процентами.
+def test_overview_shows_preparation_insight(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Под блоком «Загрузка» — инсайт об общей занятости с подготовкой.
+def test_overview_shows_balance_widget(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Виджет «Баланс времени»: пончик, легенда и подпись коэффициента.
+def test_overview_balance_empty_state(client, tutor_factory)  # Уроков нет — вместо пустого кольца пояснение.
+def test_overview_burnout_alert_above_threshold(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Много часов за неделю + подготовка выше 45 ч — алерт выгорания.
+def test_overview_no_burnout_alert_below_threshold(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Умеренная нагрузка — алерта нет.
+def test_saved_coefficient_changes_page_numbers(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Смена коэффициента в профиле меняет часы подготовки на странице.
+def test_resource_scale_uses_lessons_plus_preparation(
+    client, tutor_factory, student_factory, lesson_factory
+)  # «Загрузка ресурса» сравнивает с календарём уроки вместе с подготовкой.
+def test_resource_scale_is_green_despite_high_percent(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Цвет шкалы — по часам, а не по проценту: 81% полосы ещё комфорт.
+def test_resource_scale_turns_red_above_forty_five_hours(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Больше 45 ч недельной занятости — красная шкала и вердикт выгорания.
+def test_resource_scale_high_load_is_yellow(
+    client, tutor_factory, student_factory, lesson_factory
+)  # Недельная занятость 35–45 ч — жёлтая шкала и вердикт высокой нагрузки.
+
 # tests/test_student_age.py [python]
 imports: datetime.UTC, datetime.date, datetime.datetime, types.SimpleNamespace, app.student.services.birthdays.full_years, app.student.services.presentation.student_age_label
 def test_full_years_counts_only_completed_years()  # День рождения в текущем году ещё не наступил — год не засчитан.
@@ -7634,6 +8142,12 @@ def test_contact_phone_is_formatted()
 def test_contact_without_full_name_is_invalid()
 def test_contact_with_bad_email_is_invalid()
 def test_payer_must_be_linked()
+def test_payer_type_defaults_to_individual()  # Форма без поля типа плательщика — физлицо.
+def test_known_payer_type_is_parsed()
+def test_unknown_payer_type_is_rejected()
+def test_create_student_saves_payer_type(tutor_factory)  # Тип плательщика из формы сохраняется в модели.
+def test_create_student_without_payer_type_uses_individual(tutor_factory)  # Вызовы сервиса без поля типа (другие модули) дают физлицо.
+def test_update_student_changes_payer_type(tutor_factory, student_factory)
 def test_empty_payer_means_student_pays_himself()
 def test_create_student_rejects_unlinked_payer(tutor_factory)  # Сохранение с непривязанным контактом отклоняется, ученик не создан.
 def test_create_student_accepts_linked_payer(tutor_factory)
@@ -7700,6 +8214,10 @@ def test_students_js_is_served(client)
 def test_x_cloak_rule_exists()
 def test_list_page_has_no_inline_factories(client, owner)  # Фабрики живут в общем файле: карточка тоже открывает модалку.
 def test_form_has_all_card_fields(client, owner)
+def test_payer_type_toggle_sits_next_to_payer_select(client, owner)  # Переключатель «Физлицо/Юрлицо» — в секции плательщика.
+def test_payer_type_defaults_to_individual(client, owner)  # Новый ученик: по умолчанию отмечено «Физлицо».
+def test_edit_form_preselects_saved_payer_type(client, owner, student_factory)
+def test_payer_type_toggle_highlights_selected_segment_without_js(client, owner)  # Выбранный сегмент подсвечивает CSS, а не Alpine: у группы нет модели.
 def test_status_select_follows_kind_and_precedes_name(client, owner)  # Статус — справа от «Кто ученик», имя и фамилия — следующей строкой.
 def test_status_select_has_all_statuses_and_defaults_to_new(client, owner)
 def test_edit_form_preselects_saved_status(client, owner, student_factory)
@@ -7819,6 +8337,11 @@ def test_create_without_name_shows_error(client, owner)
 def test_create_with_grade_12_shows_error(client, owner)
 def test_create_ignores_tutor_id_from_form(client, owner, tutor_factory)  # tutor_id` берётся из сессии, а не из формы.
 def test_create_with_contacts_and_payer(client, owner)
+def test_create_student_with_legal_entity_payer_type(client, owner)  # Тип плательщика из формы сохраняется при создании.
+def test_create_student_without_payer_type_defaults_to_individual(client, owner)  # Без поля в форме тип плательщика — физлицо.
+def test_update_changes_payer_type(client, owner, student_factory)
+def test_update_with_unknown_payer_type_shows_error(client, owner, student_factory)
+def test_card_shows_payer_type(client, owner, student_factory)
 def test_edit_form_shows_existing_values(client, owner, student_factory)
 def test_update_changes_last_name_and_level(client, owner, student_factory)
 def test_update_saves_birth_date(client, owner, student_factory)  # Дата рождения сохраняется и возвращается в форму редактирования.

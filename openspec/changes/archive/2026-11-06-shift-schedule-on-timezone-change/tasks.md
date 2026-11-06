@@ -47,7 +47,7 @@
   `slot-management`, `homework-management`, `student-finance`.
 - [x] 4.2 `CHANGELOG.md`, `[Unreleased]` → «Изменено»: смена часового
   пояса сохраняет настенное время занятий, окон, сроков ДЗ и списаний.
-- [ ] 4.3 Синхронизировать main-спеки при архивации change'а
+- [x] 4.3 Синхронизировать main-спеки при архивации change'а
   (`openspec archive shift-schedule-on-timezone-change`).
 
 ## 5. Регресс
