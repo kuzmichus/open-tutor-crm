@@ -26,8 +26,9 @@
 неоплаченных уроках верхняя карточка обнулялась — это и был баг.
 
 К деньгам добавлено время (`time_metrics`): проведённые часы периода,
-средняя стоимость часа, свободные часы месяца с ценой простоя и доходы
-по типам занятий.
+средняя стоимость часа, часы подготовки по коэффициенту профиля и реальная
+стоимость часа с учётом этой подготовки, свободные часы месяца с ценой
+простоя и доходы по типам занятий.
 
 Сервис не знает про FastAPI: на вход — сессия, репетитор и период,
 на выход — словарь для `finance/_summary.html`.
@@ -42,7 +43,6 @@ from app.finance.services.expenses import period_expenses
 from app.finance.services.npd import npd_context
 from app.finance.services.time_metrics import (
     idle_context,
-    rev_per_hour,
     time_context,
     type_insight,
     type_split,
@@ -145,9 +145,15 @@ def summary_context(db: Session, tutor, *, start, end) -> dict:
 
     time = time_context(db, tutor, earned=flow["earned"], start=start, end=end)
     types = type_split(db, tutor, earned=flow["earned"], start=start, end=end)
-    # RevPTH для цены простоя — тот же, что в карточке времени: простой
-    # оценивается по фактической стоимости часа, а не по плановой цене.
-    idle = idle_context(db, tutor, rev=rev_per_hour(flow["earned"], time["minutes"]))
+    # Цена простоя — реальная ставка из карточки времени, а не средняя:
+    # новое окно потребует подготовки, поэтому обещать полную выручку
+    # по средней стоимости часа было бы неправдой (замечание ревью).
+    idle = idle_context(
+        db,
+        tutor,
+        real_rev=time["real_rev_per_hour"],
+        coefficient=time["coefficient"],
+    )
 
     # НПД: при выключенном флаге сервис не делает запросов и возвращает
     # `{"enabled": False}`, налог — ноль. Тогда «Чистая прибыль (после

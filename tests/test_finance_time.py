@@ -1,7 +1,7 @@
 """Тесты блока времени на странице финансов (change finance-hours-idle-revenue).
 
 Проверяются три новые вещи страницы: астрономические часы и средняя
-стоимость часа (RevPTH), цена простоя («упущенная выручка») и разбивка
+стоимость часа (RevPTH), цена простоя («упущенная чистая прибыль») и разбивка
 дохода по типам занятий. Плюс сценарий бага из задачи: начисленный, но
 неоплаченный урок больше не теряется в верхней карточке «Доход».
 
@@ -286,13 +286,13 @@ def test_type_insight_helpers():
     assert type_insight(columns) is None
 
 # --------------------------------------------------------------------------
-# Упущенная выручка
+# Упущенная чистая прибыль
 # --------------------------------------------------------------------------
 
 def test_idle_revenue_block_counts_free_hours(
     client, tutor_factory, student_factory
 ):
-    """Свободные часы месяца × RevPTH — сумма потерь, ссылка в календарь."""
+    """Свободные часы месяца × реальная ставка — сумма потерь, ссылка в календарь."""
     tutor_id = _login(client, tutor_factory)
     # Рабочий день 1 час: доступные часы месяца = число дней до конца месяца.
     _settings(tutor_id, workday_start="09:00", workday_end="10:00")
@@ -300,9 +300,12 @@ def test_idle_revenue_block_counts_free_hours(
     _lesson(tutor_id, student_id=student_id, duration_min=60, price=1200)
 
     html = client.get("/tutor/finance").text
-    assert "Упущенная выручка" in html
+    assert "Упущенная чистая прибыль" in html
     assert "Вы теряете ~" in html
     assert "из-за" in html and "в этом месяце" in html
+    # Подпись называет реальную ставку и говорит про подготовку.
+    assert "реальная стоимость часа" in html
+    assert "с учётом времени на подготовку" in html
     assert f'href="/tutor/calendar"' in html
     assert "Посмотреть свободные окна" in html
 
