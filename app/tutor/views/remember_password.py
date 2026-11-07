@@ -3,12 +3,14 @@
 Два режима, и выбирает их конфигурация сервера:
 
 - **почта настроена** (`SMTP_HOST`) — на email репетитора уходит письмо со
-  ссылкой сброса, а страница показывает нейтральное подтверждение без
-  ссылки. Одинаковый текст для существующего и неизвестного email не
-  раскрывает, есть ли аккаунт;
-- **почта не настроена** — демо-режим: ссылка показывается прямо на
-  странице. Так установка «из коробки» не теряет восстановление пароля,
-  пока владелец сервера не завёл SMTP.
+  ссылкой сброса, а страница показывает нейтральное подтверждение. Одинаковый
+  текст для существующего и неизвестного email не раскрывает, есть ли аккаунт;
+- **почта не настроена** — восстановление недоступно: страница сообщает, что
+  отправка почты на сервере не настроена, а ссылка пишется в лог приложения,
+  откуда её может взять владелец сервера.
+
+Ссылка не показывается на странице ни в одном режиме: иначе любой, кто знает
+чужой email, мог бы сбросить пароль, просто открыв форму.
 """
 
 import logging
@@ -39,17 +41,19 @@ _NEUTRAL_SENT = (
     "Если аккаунт с таким email существует, "
     "письмо со ссылкой для сброса пароля отправлено."
 )
-_NEUTRAL_DEMO = (
-    "Если аккаунт с таким email существует, "
-    "ссылка для сброса пароля показана ниже."
+# Сообщение зависит от конфигурации сервера, а не от наличия аккаунта:
+# одинаковый текст для любого email существование аккаунта не раскрывает.
+_MAIL_OFF = (
+    "Отправка почты на сервере не настроена, поэтому восстановление пароля "
+    "недоступно. Обратитесь к администратору сервиса."
 )
 
 
-def _render(request: Request, error: str | None, message: str | None, link: str | None):
+def _render(request: Request, error: str | None, message: str | None):
     return templates.TemplateResponse(
         request,
         "tutor/remember_password.html",
-        {"error": error, "message": message, "link": link},
+        {"error": error, "message": message},
     )
 
 
@@ -70,7 +74,7 @@ def _reset_url(request: Request, token: str) -> str:
 @router.get("/tutor/remember-password", response_class=HTMLResponse)
 def remember_password_form(request: Request) -> HTMLResponse:
     """Страница с полем ввода email."""
-    return _render(request, error=None, message=None, link=None)
+    return _render(request, error=None, message=None)
 
 
 @router.post("/tutor/remember-password", response_class=HTMLResponse)
@@ -82,7 +86,7 @@ def remember_password_submit(
     """Создаёт ключ и отправляет ссылку; для неизвестного email — заглушка."""
     email_clean = email.strip()
     if not email_clean or not is_valid_email(email_clean):
-        return _render(request, error="Укажите корректный email.", message=None, link=None)
+        return _render(request, error="Укажите корректный email.", message=None)
 
     with_mail = email_enabled()
     tutor = db.scalars(select(Tutor).where(Tutor.email == email_clean)).one_or_none()
@@ -91,20 +95,21 @@ def remember_password_submit(
         return _render(
             request,
             error=None,
-            message=_NEUTRAL_SENT if with_mail else _NEUTRAL_DEMO,
-            link=None,
+            message=_NEUTRAL_SENT if with_mail else _MAIL_OFF,
         )
 
     token = _reset.create(db, tutor.id)
     link = _reset_url(request, token)
 
     if not with_mail:
-        return _render(
-            request,
-            error=None,
-            message="Ссылка для сброса пароля (почта не настроена, демо-режим):",
-            link=link,
+        # Ссылка не показывается в браузере: её забирает владелец сервера из
+        # логов. Без почты восстановление остаётся возможным только так.
+        logger.warning(
+            "Почта не настроена: ссылка восстановления пароля для %s — %s",
+            email_clean,
+            link,
         )
+        return _render(request, error=None, message=_MAIL_OFF)
 
     errors = send_password_reset_email(
         to_email=tutor.email,
@@ -119,4 +124,4 @@ def remember_password_submit(
             email_clean,
             "; ".join(errors),
         )
-    return _render(request, error=None, message=_NEUTRAL_SENT, link=None)
+    return _render(request, error=None, message=_NEUTRAL_SENT)
