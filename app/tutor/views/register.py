@@ -1,6 +1,6 @@
 """Регистрация репетитора: форма и создание аккаунта."""
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +10,7 @@ from app.database import get_db
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.password_hasher import PasswordHasher
+from app.tutor.services.registration_mode import registration_open
 from app.tutor.services.validation import is_valid_email
 
 router = APIRouter()
@@ -27,9 +28,24 @@ def _render(request: Request, error: str | None, form: dict) -> HTMLResponse:
     )
 
 
+def _ensure_registration_open(db: Session) -> None:
+    """404, если регистрация закрыта (сингл-режим, репетитор уже есть).
+
+    Проверка стоит в обоих обработчиках: в сингл-режиме страница после
+    первого запуска не должна существовать ни для GET, ни для POST —
+    иначе форму можно было бы отправить напрямую, минуя страницу входа.
+    """
+    if not registration_open(db):
+        raise HTTPException(status_code=404)
+
+
 @router.get("/tutor/register", response_class=HTMLResponse)
-def register_form(request: Request) -> HTMLResponse:
+def register_form(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
     """Страница с формой регистрации."""
+    _ensure_registration_open(db)
     return _render(request, None, dict(_EMPTY_FORM))
 
 
@@ -47,6 +63,8 @@ def register_submit(
     Принимаются только имя, email, пароль и подтверждение пароля.
     Необязательные поля карточки при регистрации не заполняются.
     """
+    _ensure_registration_open(db)
+
     form = {"name": name, "email": email}
 
     error = None
