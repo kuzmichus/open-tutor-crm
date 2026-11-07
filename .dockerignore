@@ -20,6 +20,8 @@ __pycache__
 
 # Локальные загрузки dev-сервера (FILES_LOCAL_ROOT=./files) — данные, а не код.
 files/
+# Лендинг dev-сервера (LANDING_ROOT=./landing) — данные, а не код.
+landing/
 
 # В рантайме не нужны.
 tests/
