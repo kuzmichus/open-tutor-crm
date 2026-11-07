@@ -19,7 +19,9 @@
 
 {% block auth_footer %}
     <div class="auth__links">
+        {% if show_register %}
         <a href="/tutor/register">Нет аккаунта? Зарегистрироваться</a>
+        {% endif %}
         <a href="/tutor/remember-password">Забыли пароль?</a>
     </div>
 {% endblock %}

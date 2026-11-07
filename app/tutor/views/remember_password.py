@@ -27,6 +27,7 @@ from app.templating import templates
 from app.tutor.models.tutor import Tutor
 from app.tutor.services.password_reset import PasswordResetService
 from app.tutor.services.password_reset_email import send_password_reset_email
+from app.tutor.services.registration_mode import registration_open
 from app.tutor.services.validation import is_valid_email
 
 logger = logging.getLogger("mail")
@@ -49,11 +50,17 @@ _MAIL_OFF = (
 )
 
 
-def _render(request: Request, error: str | None, message: str | None):
+def _render(request: Request, db: Session, error: str | None, message: str | None):
     return templates.TemplateResponse(
         request,
         "tutor/remember_password.html",
-        {"error": error, "message": message},
+        {
+            "error": error,
+            "message": message,
+            # Закрытая регистрация (сингл-режим после первого запуска) —
+            # ссылка на неё вела бы в 404, поэтому её не показываем (D5).
+            "show_register": registration_open(db),
+        },
     )
 
 
@@ -72,9 +79,12 @@ def _reset_url(request: Request, token: str) -> str:
 
 
 @router.get("/tutor/remember-password", response_class=HTMLResponse)
-def remember_password_form(request: Request) -> HTMLResponse:
+def remember_password_form(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
     """Страница с полем ввода email."""
-    return _render(request, error=None, message=None)
+    return _render(request, db, error=None, message=None)
 
 
 @router.post("/tutor/remember-password", response_class=HTMLResponse)
@@ -86,7 +96,9 @@ def remember_password_submit(
     """Создаёт ключ и отправляет ссылку; для неизвестного email — заглушка."""
     email_clean = email.strip()
     if not email_clean or not is_valid_email(email_clean):
-        return _render(request, error="Укажите корректный email.", message=None)
+        return _render(
+            request, db, error="Укажите корректный email.", message=None
+        )
 
     with_mail = email_enabled()
     tutor = db.scalars(select(Tutor).where(Tutor.email == email_clean)).one_or_none()
@@ -94,6 +106,7 @@ def remember_password_submit(
         # Нейтральное подтверждение: не раскрываем, существует ли аккаунт.
         return _render(
             request,
+            db,
             error=None,
             message=_NEUTRAL_SENT if with_mail else _MAIL_OFF,
         )
@@ -109,7 +122,7 @@ def remember_password_submit(
             email_clean,
             link,
         )
-        return _render(request, error=None, message=_MAIL_OFF)
+        return _render(request, db, error=None, message=_MAIL_OFF)
 
     errors = send_password_reset_email(
         to_email=tutor.email,
@@ -124,4 +137,4 @@ def remember_password_submit(
             email_clean,
             "; ".join(errors),
         )
-    return _render(request, error=None, message=_NEUTRAL_SENT)
+    return _render(request, db, error=None, message=_NEUTRAL_SENT)
