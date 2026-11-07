@@ -44,9 +44,10 @@ COPY --chown=app:app app ./app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     DATABASE_URL=sqlite:////data/tutor.db \
-    FILES_LOCAL_ROOT=/data/files
+    FILES_LOCAL_ROOT=/data/files \
+    LANDING_ROOT=/data/landing
 
-RUN mkdir /data /data/files && chown app:app /data /data/files
+RUN mkdir /data /data/files /data/landing && chown app:app /data /data/files /data/landing
 USER app
 
 VOLUME /data

@@ -68,6 +68,8 @@ tutor.db
 tutor.db.bak-*
 # Локальное хранилище загруженных файлов (FILES_BACKEND=local, дефолт ./files).
 /files/
+# Лендинг: черновик, публикация и картинки редактора (LANDING_ROOT=./landing).
+/landing/
 
 # Flask stuff:
 instance/

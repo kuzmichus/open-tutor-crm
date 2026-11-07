@@ -23,6 +23,7 @@ from app.finance.views import router as finance_router
 from app.files.views import router as files_router
 from app.group.views import router as group_router
 from app.homework.views import router as homework_router
+from app.landing.views import router as landing_router
 from app.lesson.views import router as lesson_router
 from app.mailing.views import router as mailing_router
 from app.slot.views import router as slot_router
@@ -51,6 +52,9 @@ def create_app() -> FastAPI:
     app.include_router(booking_router)
     app.include_router(stats_router)
     app.include_router(task_router)
+    # Лендинг: публичные картинки редактора (`/landing-assets/...`).
+    # Саму страницу с `/` отдаёт общий роутер (см. app/common/views/index.py).
+    app.include_router(landing_router)
     # Файлы: `GET /files/{file_id}` — общий адрес скачивания для репетитора,
     # ученика и родителя (доступ проверяется по их сессиям).
     app.include_router(files_router)
