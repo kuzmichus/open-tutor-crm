@@ -43,8 +43,12 @@
   отправка письма и нейтральное подтверждение без ссылки.
 - [x] 4.3 `app/tutor/views/remember_password.py`: сбой доставки пишется в
   лог и не раскрывает существование аккаунта.
-- [x] 4.4 `app/tutor/views/remember_password.py`: без SMTP — демо-режим со
-  ссылкой на странице (поведение по умолчанию сохранено).
+- [x] 4.4 `app/tutor/views/remember_password.py`: без SMTP ссылка на
+  странице не показывается — страница сообщает о ненастроенной почте, а
+  ссылка пишется в лог приложения.
+- [x] 4.5 `app/tutor/views/reset_password.py` и шаблон `reset_password.html`:
+  пароль вводится дважды, при несовпадении — ошибка без смены пароля и без
+  гашения ключа.
 
 ## 5. Тесты
 
@@ -58,9 +62,12 @@
 - [x] 5.4 `tests/test_password_reset_email.py`: получатель, тема, ссылка в
   обеих частях, срок из `TTL`, возврат ошибок транспорта.
 - [x] 5.5 `tests/test_remember_password.py`: режим с почтой — письмо уходит,
-  ссылки на странице нет; неизвестный email — письма нет; сбой не
+  ссылки на странице нет; без SMTP — ссылки нет, она пишется в лог, страница
+  сообщает о ненастроенной почте; неизвестный email — письма нет; сбой не
   раскрывает аккаунт; ссылка от `APP_BASE_URL` и от адреса запроса.
-- [x] 5.6 Прогон `tests/test_mail.py`, `tests/test_password_reset_email.py`,
+- [x] 5.6 `tests/test_reset_password.py`: два поля пароля, несовпадение
+  повтора не меняет пароль и не гасит ключ.
+- [x] 5.7 Прогон `tests/test_mail.py`, `tests/test_password_reset_email.py`,
   `tests/test_remember_password.py`, `tests/test_reset_password.py`,
   `tests/test_password_reset_service.py` и полного набора.
 
@@ -71,6 +78,7 @@
 - [x] 6.2 `CHANGELOG.md`: запись в `[Unreleased]` / «Добавлено».
 - [x] 6.3 `openspec/specs/email/spec.md`: новая спека отправки почты.
 - [x] 6.4 `openspec/specs/tutor-password-reset/spec.md`: требование запроса
-  восстановления переписано под письмо и демо-режим.
+  восстановления переписано под письмо (ссылка не показывается на странице),
+  добавлено требование к подтверждению пароля при сбросе.
 - [x] 6.5 `openspec/changes/add-smtp-email/`: `proposal.md`, `design.md`,
   `tasks.md`, дельта `specs/`.
