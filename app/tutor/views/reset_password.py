@@ -47,15 +47,24 @@ def reset_password_submit(
     request: Request,
     key: str = Form(""),
     password: str = Form(""),
+    password_confirm: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    """Меняет пароль и погашает ключ; пустой пароль — ошибка без смены."""
+    """Меняет пароль и погашает ключ.
+
+    Новый пароль применяется только парой с совпадающим повтором — так же,
+    как при регистрации и в настройках безопасности. Пустой пароль или
+    несовпадение — ошибка без смены и без гашения ключа.
+    """
     tutor_id = _reset.get_tutor_id(db, key)
     if tutor_id is None:
         return _show_invalid(request, key)
 
     if not password:
         return _render(request, key, error="Укажите новый пароль.", show_form=True)
+
+    if password != password_confirm:
+        return _render(request, key, error="Пароли не совпадают.", show_form=True)
 
     tutor = db.get(Tutor, tutor_id)
     if tutor is None:

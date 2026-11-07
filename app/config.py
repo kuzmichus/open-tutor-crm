@@ -70,6 +70,27 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = ""
     s3_prefix: str = "uploads/"
 
+    # --- Почта (SMTP) ------------------------------------------------------
+    # Пустой `smtp_host` — почта выключена: приложение работает как раньше,
+    # а письма не отправляются. Адрес сервера задаёт владелец установки,
+    # репетитор ничего не настраивает.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    # Адрес отправителя. Пусто — берётся `smtp_username`: у большинства
+    # провайдеров отправитель обязан совпадать с логином.
+    smtp_from: str = ""
+    # 587 — STARTTLS (по умолчанию), 465 — сразу TLS (`smtp_use_ssl`).
+    smtp_starttls: bool = True
+    smtp_use_ssl: bool = False
+    # Синхронный вызов не должен подвешивать запрос пользователя.
+    smtp_timeout: int = 15
+    # Внешний адрес приложения для ссылок в письмах. Пусто — строится из
+    # запроса; за прокси `request.base_url` может дать http:// и внутренний
+    # хост, тогда в письме окажется нерабочая ссылка.
+    app_base_url: str = ""
+
     @model_validator(mode="after")
     def _check_files_settings(self) -> "Settings":
         """Неполная конфигурация S3 — ошибка старта, а не падение на загрузке.
@@ -99,6 +120,41 @@ class Settings(BaseSettings):
                     "FILES_BACKEND=s3 требует параметров: " + ", ".join(missing)
                 )
         return self
+
+    @model_validator(mode="after")
+    def _check_smtp_settings(self) -> "Settings":
+        """Включённая почта без отправителя — ошибка старта, а не сбой письма.
+
+        Проверка здесь, а не в транспорте: установка с неполной
+        конфигурацией SMTP не должна подниматься, иначе первое же письмо
+        (восстановление пароля) упадёт на запросе пользователя.
+        """
+        if self.smtp_host.strip():
+            if self.smtp_port <= 0:
+                raise ValueError("SMTP_PORT должен быть больше нуля")
+            if self.smtp_timeout <= 0:
+                raise ValueError("SMTP_TIMEOUT должен быть больше нуля")
+            if self.smtp_use_ssl and self.smtp_starttls:
+                raise ValueError(
+                    "SMTP_USE_SSL и SMTP_STARTTLS взаимоисключающи: выберите "
+                    "один способ шифрования"
+                )
+            if not self.smtp_from.strip() and not self.smtp_username.strip():
+                raise ValueError(
+                    "SMTP_HOST требует отправителя: задайте SMTP_FROM или "
+                    "SMTP_USERNAME"
+                )
+        return self
+
+    @property
+    def email_enabled(self) -> bool:
+        """Почта включена: задан адрес SMTP-сервера."""
+        return bool(self.smtp_host.strip())
+
+    @property
+    def mail_from(self) -> str:
+        """Адрес отправителя: `SMTP_FROM`, иначе логин `SMTP_USERNAME`."""
+        return (self.smtp_from or self.smtp_username).strip()
 
     @property
     def allowed_extensions(self) -> tuple[str, ...]:
