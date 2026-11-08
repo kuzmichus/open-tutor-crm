@@ -14,8 +14,10 @@
 - Полноэкранный редактор лендинга `/tutor/landing/editor`: GrapesJS 0.23.9
   (BSD-3-Clause) вендорен локально в `app/static/dist/grapesjs/` вместе с
   русской локалью `i18n-ru.js` — CDN не используется. Из черновика в
-  редактор попадают тело без `<script>` и первый `<style>`; «Сохранить»
-  отправляет `editor.getHtml()` / `editor.getCss()` на
+  редактор попадают тело без `<script>` и первый `<style>`; сокращения с
+  `var()` разворачиваются в длинные свойства, чтобы CSSOM GrapesJS не терял
+  `background: var(--accent)` и рамки. «Сохранить» отправляет
+  `editor.getHtml()` / `editor.getCss()` на
   `POST /tutor/landing/draft`, сервер собирает полный документ заново,
   сохраняет `<title>` и идемпотентно гарантирует тег
   `/static/landing-auth.js` перед `</body>`. Черновика нет — он создаётся

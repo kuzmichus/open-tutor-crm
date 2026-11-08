@@ -39,6 +39,34 @@ _SCRIPT_RE = re.compile(
 )
 _BODY_END_RE = re.compile(r"</body\s*>", re.IGNORECASE)
 
+# Блок объявлений без вложенных блоков: так обрабатываются и обычные правила,
+# и содержимое `@media` (внешние фигурные скобки содержат вложенные и в шаблон
+# не попадают).
+_DECL_BLOCK_RE = re.compile(r"\{([^{}]*)\}")
+_DECLARATION_RE = re.compile(r"^\s*([-\w]+)\s*:\s*(.*?)\s*$", re.DOTALL)
+
+_BOX_SIDES = ("top", "right", "bottom", "left")
+_BORDER_SIDES = ("top", "right", "bottom", "left")
+_BORDER_STYLES = {
+    "none",
+    "hidden",
+    "dotted",
+    "dashed",
+    "solid",
+    "double",
+    "groove",
+    "ridge",
+    "inset",
+    "outset",
+}
+_BORDER_INITIAL = {"width": "medium", "style": "none", "color": "currentcolor"}
+_RADIUS_CORNERS = (
+    "top-left",
+    "top-right",
+    "bottom-right",
+    "bottom-left",
+)
+
 
 def extract_body(document: str) -> str:
     """Содержимое первого `<body>` без самого тега; тела нет — пустая строка."""
@@ -69,6 +97,181 @@ def strip_scripts(fragment: str) -> str:
     применяется только к телу, не к собранному документу.
     """
     return _SCRIPT_RE.sub("", fragment)
+
+
+def _split_css_values(value: str) -> list[str]:
+    """Делит значение по пробелам, не трогая пробелы внутри `var(...)`."""
+    tokens: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in value:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+        if char.isspace() and depth == 0:
+            if current:
+                tokens.append("".join(current))
+                current = []
+        else:
+            current.append(char)
+    if current:
+        tokens.append("".join(current))
+    return tokens
+
+
+def _box_values(values: list[str]) -> list[str]:
+    """Приводит 1–4 значения `margin`/`padding` к порядку top/right/bottom/left."""
+    if len(values) == 1:
+        return values * 4
+    if len(values) == 2:
+        return [values[0], values[1], values[0], values[1]]
+    if len(values) == 3:
+        return [values[0], values[1], values[2], values[1]]
+    if len(values) == 4:
+        return values
+    return []
+
+
+def _expand_box_shorthand(prop: str, value: str) -> list[tuple[str, str]] | None:
+    """`margin`/`padding` с `var()` → четыре длинных свойства."""
+    sides = _box_values(_split_css_values(value))
+    if not sides:
+        return None
+    return [
+        (f"{prop}-{side}", side_value) for side, side_value in zip(_BOX_SIDES, sides, strict=True)
+    ]
+
+
+def _is_length(token: str) -> bool:
+    """Толщина рамки: число с единицей или ключевое слово."""
+    return bool(re.fullmatch(r"[+-]?(?:\d*\.)?\d+[a-z%]*", token)) or token in {
+        "thin",
+        "medium",
+        "thick",
+    }
+
+
+def _expand_border_shorthand(prop: str, value: str) -> list[tuple[str, str]] | None:
+    """`border`/`border-*` с `var()` → ширина, стиль и цвет каждой стороны.
+
+    CSSOM (а значит и парсер GrapesJS) не умеет разобрать сокращение, если
+    хотя бы одна его часть задана через `var()`, и молча выбрасывает всё
+    объявление. Длинные свойства с `var()` он сохраняет.
+    """
+    sides = _BORDER_SIDES if prop == "border" else (prop.split("-", 1)[1],)
+    kinds: dict[str, str] = {}
+    variables: list[str] = []
+    for token in _split_css_values(value):
+        lowered = token.lower()
+        if lowered.startswith("var("):
+            variables.append(token)
+        elif lowered in _BORDER_STYLES:
+            kinds.setdefault("style", token)
+        elif _is_length(lowered):
+            kinds.setdefault("width", token)
+        else:
+            kinds.setdefault("color", token)
+    # Недостающие части сокращения заполняем `var()` в порядке CSS
+    # (ширина, стиль, цвет): в шаблоне это `border: 1px solid var(--border)`.
+    missing = [key for key in ("width", "style", "color") if key not in kinds]
+    for key, token in zip(missing, variables, strict=False):
+        kinds[key] = token
+    if not kinds:
+        return None
+    return [
+        (f"border-{side}-{part}", kinds.get(part, initial))
+        for side in sides
+        for part, initial in _BORDER_INITIAL.items()
+    ]
+
+
+def _expand_radius_shorthand(value: str) -> list[tuple[str, str]] | None:
+    """`border-radius` с `var()` → четыре угла (эллипсы не поддерживаем)."""
+    if "/" in value:
+        return None
+    values = _split_css_values(value)
+    if not 1 <= len(values) <= 4:
+        return None
+    if len(values) == 1:
+        values = values * 4
+    elif len(values) == 2:
+        values = [values[0], values[1], values[0], values[1]]
+    elif len(values) == 3:
+        values = [values[0], values[1], values[2], values[1]]
+    return [
+        (f"border-{corner}-radius", corner_value)
+        for corner, corner_value in zip(_RADIUS_CORNERS, values, strict=True)
+    ]
+
+
+def _expand_gap_shorthand(value: str) -> list[tuple[str, str]] | None:
+    values = _split_css_values(value)
+    if len(values) == 1:
+        return [("row-gap", values[0]), ("column-gap", values[0])]
+    if len(values) == 2:
+        return [("row-gap", values[0]), ("column-gap", values[1])]
+    return None
+
+
+def _expand_background_shorthand(value: str) -> list[tuple[str, str]] | None:
+    """`background: var(--x)` → `background-color` (в шаблоне это цвет)."""
+    values = _split_css_values(value)
+    if len(values) == 1 and values[0].lower().startswith("var("):
+        return [("background-color", values[0])]
+    return None
+
+
+def _expand_declaration(prop: str, value: str) -> list[tuple[str, str]] | None:
+    """Длинные свойства для сокращения с `var()`; `None` — оставить как есть."""
+    if "var(" not in value:
+        return None
+    if prop in ("margin", "padding"):
+        return _expand_box_shorthand(prop, value)
+    if prop == "border" or prop in {
+        "border-top",
+        "border-right",
+        "border-bottom",
+        "border-left",
+    }:
+        return _expand_border_shorthand(prop, value)
+    if prop == "border-radius":
+        return _expand_radius_shorthand(value)
+    if prop == "gap":
+        return _expand_gap_shorthand(value)
+    if prop == "background":
+        return _expand_background_shorthand(value)
+    return None
+
+
+def _expand_block(block: str) -> str:
+    """Переписывает объявления одного блока, остальные оставляет дословно."""
+    declarations: list[str] = []
+    for part in block.split(";"):
+        match = _DECLARATION_RE.match(part)
+        if match is None:
+            declarations.append(part)
+            continue
+        prop, value = match.group(1).lower(), match.group(2)
+        expanded = _expand_declaration(prop, value)
+        if expanded is None:
+            declarations.append(part)
+            continue
+        declarations.extend(f"{name}: {expanded_value}" for name, expanded_value in expanded)
+    return "{" + ";".join(declarations) + "}"
+
+
+def css_for_editor(css: str) -> str:
+    """Готовит CSS черновика к загрузке в GrapesJS без потери оформления.
+
+    GrapesJS разбирает стили браузерным CSSOM, а тот выбрасывает сокращённые
+    свойства, если их часть задана через `var()`: `background: var(--bg)`,
+    `border: 1px solid var(--border)`, `border-radius: var(--radius)`.
+    После сохранения такие объявления исчезали, и страница теряла цвет CTA и
+    рамки. Здесь сокращения с `var()` заранее разворачиваются в эквивалентные
+    длинные свойства — их CSSOM сохраняет, а оформление не меняется.
+    """
+    return _DECL_BLOCK_RE.sub(lambda match: _expand_block(match.group(1)), css)
 
 
 def default_title(tutor) -> str:

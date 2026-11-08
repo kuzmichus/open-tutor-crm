@@ -25,6 +25,7 @@ from app.common.access import LoginRequired, require_tutor_id
 from app.database import get_db
 from app.landing.services.access import landing_enabled
 from app.landing.services.draft_render import (
+    css_for_editor,
     extract_body,
     extract_first_style,
     render_draft_document,
@@ -84,7 +85,9 @@ def landing_editor(
             "tutor": tutor,
             "draft": {
                 "body": strip_scripts(extract_body(draft_html)),
-                "css": extract_first_style(draft_html),
+                # CSSOM GrapesJS теряет сокращения с var(): редактор
+                # получает их развёрнутыми в длинные свойства.
+                "css": css_for_editor(extract_first_style(draft_html)),
             },
         },
     )

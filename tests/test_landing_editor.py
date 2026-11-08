@@ -16,11 +16,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from app.config import settings
 from app.landing.services.draft_render import (
     AUTH_SCRIPT,
     build_document,
+    css_for_editor,
     default_title,
     ensure_auth_script,
     extract_body,
@@ -165,6 +165,11 @@ def test_editor_payload_extracts_body_and_first_style(client, owner):
     assert 'data-auth="student"' in payload["body"]
     assert "--accent" in payload["css"]
     assert "@media (max-width: 640px)" in payload["css"]
+    # Сокращения с var() развёрнуты: CSSOM GrapesJS иначе терял бы их.
+    assert "background-color: var(--bg)" in payload["css"]
+    assert "border-bottom-color: var(--border)" in payload["css"]
+    assert "border-top-left-radius: var(--radius)" in payload["css"]
+    assert not re.search(r"background\s*:\s*var\(", payload["css"])
     assert "<script" not in payload["body"]
     assert "landing-auth.js" not in payload["body"]
 
@@ -270,6 +275,11 @@ def test_round_trip_keeps_page_intact(client, owner, landing_root):
     assert "section" in after
     assert "--accent" in after
     assert "@media (max-width: 640px)" in after
+    # После сохранения CSS пришёл из GrapesJS: сокращения раскрыты, но
+    # значения с var() не потеряны.
+    assert "background-color: var(--bg)" in after
+    assert "border-bottom-color: var(--border)" in after
+    assert "background: var(" not in after
     assert after.count("landing-auth.js") == 1
     assert before is not None
 
@@ -310,6 +320,32 @@ def test_grapesjs_is_vendored_locally():
     assert re.search(r"[А-Яа-яЁё]", locale)
 
 
+def test_locale_translates_style_manager_properties():
+    """Подписи свойств Style Manager переведены, а не остаются английскими.
+
+    GrapesJS берёт их из `styleManager.properties.<id>`; без ключей он
+    показывает подпись, собранную из имени свойства (`Display`, `Flex
+    direction`, `Background color`).
+    """
+    locale = (VENDOR_DIR / "i18n-ru.js").read_text(encoding="utf-8")
+    expected = {
+        "display": "Отображение",
+        "flex-direction": "Направление",
+        "width": "Ширина",
+        "padding": "Отступы внутри",
+        "font-family": "Шрифт",
+        "text-align": "Выравнивание текста",
+        "background-color": "Цвет фона",
+        "border-radius": "Скругление",
+        "opacity": "Прозрачность",
+    }
+    for prop, label in expected.items():
+        assert re.search(
+            rf"['\"]?{re.escape(prop)}['\"]?\s*:\s*['\"]{re.escape(label)}['\"]",
+            locale,
+        ), prop
+
+
 # --------------------------------------------------------------------------
 # Unit-тесты сборки и разбора документа
 # --------------------------------------------------------------------------
@@ -334,7 +370,7 @@ def test_extract_title_strips_and_ignores_empty():
 
 def test_strip_scripts_removes_inline_and_external_tags():
     fragment = (
-        '<p>До</p><script>alert(1)</script>'
+        "<p>До</p><script>alert(1)</script>"
         '<script src="/static/landing-auth.js" defer></script>'
         '<script src="x.js" />'
         "<p>После</p>"
@@ -389,9 +425,7 @@ def test_default_title_escapes_name():
 def test_render_draft_document_uses_existing_title():
     tutor = SimpleNamespace(name="Анна")
     existing = "<html><head><title>Свой</title></head><body></body></html>"
-    document = render_draft_document(
-        tutor, html="<p>Тело</p>", css="", existing_html=existing
-    )
+    document = render_draft_document(tutor, html="<p>Тело</p>", css="", existing_html=existing)
 
     assert "<title>Свой</title>" in document
     assert document.count("landing-auth.js") == 1
@@ -407,15 +441,85 @@ def test_render_draft_document_unwraps_editor_body():
         existing_html=None,
     )
 
-    assert "<body><div class=\"hero\">Тело</div>" in document
+    assert '<body><div class="hero">Тело</div>' in document
     assert document.count("<body>") == 1
     assert document.count("</body>") == 1
 
 
 def test_render_draft_document_falls_back_to_default_title():
     tutor = SimpleNamespace(name="Анна")
-    document = render_draft_document(
-        tutor, html="<p>Тело</p>", css="", existing_html=None
-    )
+    document = render_draft_document(tutor, html="<p>Тело</p>", css="", existing_html=None)
 
     assert "<title>Анна — репетитор</title>" in document
+
+
+# --------------------------------------------------------------------------
+# CSS для редактора
+# --------------------------------------------------------------------------
+
+
+def test_css_for_editor_expands_background_with_var():
+    """`background: var()` → `background-color` (CSSOM иначе теряет цвет)."""
+    result = css_for_editor("body { background: var(--bg); color: var(--text); }")
+
+    assert "background-color: var(--bg)" in result
+    assert "background: var(" not in result
+    assert "color: var(--text)" in result
+
+
+def test_css_for_editor_expands_border_sides_with_var():
+    """`border` с var() разворачивается во все стороны и части рамки."""
+    result = css_for_editor(".card { border: 1px solid var(--border); }")
+
+    assert "border: 1px" not in result
+    for side in ("top", "right", "bottom", "left"):
+        assert f"border-{side}-width: 1px" in result
+        assert f"border-{side}-style: solid" in result
+        assert f"border-{side}-color: var(--border)" in result
+
+
+def test_css_for_editor_expands_single_border_side():
+    result = css_for_editor(".header { border-bottom: 1px solid var(--border); }")
+
+    assert "border-bottom-width: 1px" in result
+    assert "border-bottom-color: var(--border)" in result
+    assert "border-top-width" not in result
+
+
+def test_css_for_editor_expands_radius_and_box_shorthands():
+    result = css_for_editor(".x { border-radius: var(--radius); padding: 0 var(--gap); }")
+
+    for corner in ("top-left", "top-right", "bottom-right", "bottom-left"):
+        assert f"border-{corner}-radius: var(--radius)" in result
+    assert "padding-top: 0" in result
+    assert "padding-right: var(--gap)" in result
+    assert "padding-left: var(--gap)" in result
+
+
+def test_css_for_editor_keeps_plain_shorthands_and_comments():
+    css = (
+        "/* комментарий */\n"
+        ".x { border: 1px solid #000; border-radius: 8px; "
+        "background: #fff url(x.png); }"
+    )
+    assert css_for_editor(css) == css
+
+
+def test_css_for_editor_processes_media_queries():
+    result = css_for_editor(
+        "@media (max-width: 640px) { .cta { background: var(--accent-dark); } }"
+    )
+
+    assert "background-color: var(--accent-dark)" in result
+    assert "@media (max-width: 640px)" in result
+
+
+def test_css_for_editor_is_idempotent():
+    css = (
+        "body { background: var(--bg); }"
+        ".x { border: 1px solid var(--border); border-radius: var(--r); }"
+    )
+    once = css_for_editor(css)
+
+    assert css_for_editor(once) == once
+    assert once.count("var(--bg)") == 1
