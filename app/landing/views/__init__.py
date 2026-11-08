@@ -8,8 +8,9 @@
 
 from fastapi import APIRouter
 
-from app.landing.views import assets
+from app.landing.views import assets, page
 
 router = APIRouter()
 
 router.include_router(assets.router)
+router.include_router(page.router)

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Лендинг — Open Tutor CRM{% endblock %}
+
+{#
+  Страница управления лендингом (`GET /tutor/landing`).
+
+  Показывает состояние страницы (опубликован / черновик / пусто) и действия:
+  предпросмотр, публикация, снятие с публикации и возврат шаблона из
+  профиля. Кнопка «Редактировать» появится вместе с редактором (задача 4) —
+  до тех пор `editor_available` равно False и кнопка не рендерится.
+#}
+{% block body %}
+    {% include "sidebar.html" %}
+
+    <!-- Мобильная шапка -->
+    <header class="mobile-header">
+        <button class="btn btn--ghost btn--icon" type="button" data-sidebar-open aria-label="Открыть меню">
+            <i data-lucide="menu"></i>
+        </button>
+        <span class="sidebar__brand">OpenTutorCRM</span>
+    </header>
+
+    <main class="main">
+        <div class="main__container">
+            {% include "_notice_banner.html" %}
+
+            <a class="back-link" href="/tutor/">
+                <i data-lucide="arrow-left"></i>
+                Назад
+            </a>
+
+            <div class="page-header">
+                <h1>Лендинг</h1>
+                <p>Публичная страница репетитора на главной сайта</p>
+            </div>
+
+            {% if message %}
+            <p class="{% if message_is_error %}error{% else %}notice{% endif %}"
+               role="{% if message_is_error %}alert{% else %}status{% endif %}">
+                {{ message }}
+            </p>
+            {% endif %}
+
+            <section class="card settings-card">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="card__title">Состояние страницы</h2>
+                    {% if page.status == 'published' %}
+                    <span class="chip chip--active">Опубликован</span>
+                    {% elif page.status == 'draft' %}
+                    <span class="chip chip--planned">Черновик</span>
+                    {% else %}
+                    <span class="chip chip--archived">Пусто</span>
+                    {% endif %}
+                </div>
+
+                <p class="card__desc mt-4">
+                    {% if page.status == 'published' %}
+                        Страница открывается на главной сайта. Черновик можно
+                        править дальше и опубликовать заново.
+                    {% elif page.status == 'draft' %}
+                        Черновик готов к публикации, но на главной пока ничего
+                        нет. Откройте предпросмотр, чтобы проверить страницу.
+                    {% else %}
+                        Страница ещё не создана. Создайте черновик из профиля —
+                        имя, предмет, «О себе», ставка и телефон подставятся
+                        автоматически.
+                    {% endif %}
+                </p>
+
+                <div class="flex items-center gap-2 flex-wrap mt-4">
+                    {% if page.has_draft %}
+                    <a class="btn btn--outline" href="/tutor/landing/preview"
+                       target="_blank" rel="noopener">
+                        <i data-lucide="external-link"></i>
+                        Предпросмотр
+                    </a>
+                    {% endif %}
+
+                    {% if page.has_draft %}
+                    <form method="post" action="/tutor/landing/publish">
+                        <button class="btn btn--primary" type="submit">
+                            <i data-lucide="upload"></i>
+                            Опубликовать
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    {% if page.published %}
+                    <form method="post" action="/tutor/landing/unpublish">
+                        <button class="btn btn--outline" type="submit">
+                            <i data-lucide="x"></i>
+                            Снять с публикации
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    {% if editor_available %}
+                    <a class="btn btn--outline" href="/tutor/landing/editor">
+                        <i data-lucide="pencil"></i>
+                        Редактировать
+                    </a>
+                    {% endif %}
+
+                    {% if page.has_draft %}
+                    {# «Вернуть шаблон» перезаписывает правки — двухшаговое
+                       подтверждение без системного диалога, как в карточке
+                       группы (design D7): первый клик меняет подпись, второй
+                       отправляет POST. #}
+                    <div class="flex items-center gap-2" x-data="{ confirming: false }">
+                        <button class="btn btn--destructive" type="button"
+                                x-show="!confirming" @click="confirming = true">
+                            <i data-lucide="refresh-cw"></i>
+                            Вернуть шаблон
+                        </button>
+                        <form method="post" action="/tutor/landing/reset"
+                              x-show="confirming" x-cloak>
+                            <button class="btn btn--destructive" type="submit">
+                                <i data-lucide="refresh-cw"></i>
+                                Точно вернуть шаблон?
+                            </button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <form method="post" action="/tutor/landing/reset">
+                        <button class="btn btn--primary" type="submit">
+                            <i data-lucide="plus"></i>
+                            Создать черновик
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Нижний таб-бар (мобилка) -->
+    <nav class="bottom-bar" aria-label="Быстрая навигация">
+        <a href="/tutor/calendar" class="bottom-bar__item">
+            <i data-lucide="calendar"></i><span>Календарь</span>
+        </a>
+        <a href="/tutor/" class="bottom-bar__item">
+            <i data-lucide="layout-dashboard"></i><span>Главная</span>
+        </a>
+        <a href="/tutor/bookings" class="bottom-bar__item">
+            <i data-lucide="calendar-check"></i><span>Брони</span>
+        </a>
+        <a href="/tutor/tasks" class="bottom-bar__item">
+            <i data-lucide="square-check-big"></i><span>Задачи</span>
+        </a>
+        <a href="#" class="bottom-bar__item" data-sidebar-open>
+            <i data-lucide="menu"></i><span>Ещё</span>
+        </a>
+    </nav>
+{% endblock %}
