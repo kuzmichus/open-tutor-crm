@@ -8,7 +8,7 @@
   Переменные:
       active_page — ключ активного пункта (calendar, home, bookings, tasks,
                     students, mailings, groups, lessons, finance, stats,
-                    settings). По умолчанию ''.
+                    landing, settings). По умолчанию ''.
       user_name   — имя пользователя (по умолчанию 'Сергей').
       user_role   — роль пользователя (по умолчанию 'Владелец').
 
@@ -109,6 +109,12 @@
        тест `tests/test_sidebar.py` следит, чтобы внутренние ссылки меню
        открывались, а не отдавали 404. #}
     <div class="sidebar__section">
+        {# Лендинг — сервисная страница персональной установки: пункт есть
+           только в сингл-режиме, иначе маршрут отвечает 404 и ссылка вела бы
+           в никуда (тест обхода ссылок сайдбара это поймал бы). #}
+        {% if landing_enabled() %}
+        {{ nav_link('landing', '/tutor/landing', 'globe', 'Лендинг') }}
+        {% endif %}
         {{ nav_link('settings', '/tutor/settings', 'settings', 'Настройки') }}
         {{ nav_link('feedback', 'https://t.me/opentutorcrm', 'message-circle',
                     'Обратная связь', external=True) }}
