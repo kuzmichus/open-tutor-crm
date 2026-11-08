@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="index, follow">
+    <title>{{ title | e }}</title>
+    {#
+      Шаблон самодостаточен: стили внутри файла, без CDN и без общего
+      app.css. Опубликованная страница отдаётся с `/` как обычный файл,
+      поэтому внешние стили приложения ей недоступны — и не нужны.
+
+      Все поля профиля экранируются (`| e`): расширение `.j2` не входит в
+      `select_autoescape`, а владелец правит HTML в редакторе и мог бы
+      оставить в «О себе» исполняемый тег.
+    #}
+    <style>
+        :root {
+            --bg: #ffffff;
+            --surface: #f7f7f5;
+            --text: #1d1d1b;
+            --muted: #6b6b66;
+            --border: #e5e5e0;
+            --accent: #f66838;
+            --accent-dark: #d94f22;
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; }
+
+        html { -webkit-text-size-adjust: 100%; }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            font-size: 17px;
+        }
+
+        a { color: inherit; }
+
+        .page {
+            width: 100%;
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Шапка: имя слева, входы справа — заметные, но вторичные. */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .header__name {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .header__logins {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .login-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 36px;
+            padding: 0 14px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: var(--muted);
+            font-size: 14px;
+            text-decoration: none;
+            transition: background-color .15s ease, color .15s ease;
+        }
+
+        .login-link:hover {
+            background: var(--surface);
+            color: var(--text);
+        }
+
+        /* Hero: имя, предмет и главный CTA. */
+        .hero {
+            padding: 64px 0 56px;
+            text-align: center;
+        }
+
+        .hero__name {
+            margin: 0 0 8px;
+            font-size: clamp(32px, 6vw, 48px);
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+        }
+
+        .hero__subject {
+            margin: 0 0 32px;
+            color: var(--muted);
+            font-size: clamp(17px, 2.6vw, 21px);
+        }
+
+        .cta {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 52px;
+            padding: 0 32px;
+            border-radius: 999px;
+            background: var(--accent);
+            color: #ffffff;
+            font-size: 17px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background-color .15s ease;
+        }
+
+        .cta:hover { background: var(--accent-dark); }
+
+        .cta__hint {
+            margin: 14px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        /* Секции контента. */
+        .section {
+            padding: 40px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .section__title {
+            margin: 0 0 16px;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .section__text {
+            margin: 0;
+            color: var(--text);
+            white-space: pre-line;
+        }
+
+        .section__meta {
+            margin: 16px 0 0;
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        .price {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 8px;
+            padding: 16px 22px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+        }
+
+        .price__value {
+            font-size: 26px;
+            font-weight: 700;
+        }
+
+        .price__unit {
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        .contact-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 44px;
+            padding: 0 20px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .contact-link:hover { background: var(--surface); }
+
+        /* Подвал: имя и ненавязчивый «вход» для репетитора. */
+        .footer {
+            padding: 32px 0 40px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .footer__login {
+            color: var(--muted);
+            font-size: 12px;
+            text-decoration: none;
+            opacity: .75;
+        }
+
+        .footer__login:hover {
+            text-decoration: underline;
+            opacity: 1;
+        }
+
+        @media (max-width: 640px) {
+            body { font-size: 16px; }
+
+            .page { padding: 0 16px; }
+
+            .header {
+                align-items: flex-start;
+                padding: 16px 0;
+            }
+
+            .header__logins { width: 100%; }
+
+            .login-link {
+                flex: 1 1 auto;
+                justify-content: center;
+                padding: 0 10px;
+            }
+
+            .hero { padding: 40px 0 36px; }
+
+            .cta {
+                width: 100%;
+                padding: 0 20px;
+            }
+
+            .section { padding: 28px 0; }
+
+            .footer {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header class="header">
+            <span class="header__name">{{ name | e }}</span>
+            <nav class="header__logins" aria-label="Вход в личный кабинет">
+                <a class="login-link" href="/student/login" data-auth="student">Вход для ученика</a>
+                <a class="login-link" href="/parent/login" data-auth="parent">Вход для родителя</a>
+            </nav>
+        </header>
+
+        <main>
+            <section class="hero">
+                <h1 class="hero__name">{{ name | e }}</h1>
+                {% if subject %}
+                <p class="hero__subject">Репетитор по {{ subject | e }}</p>
+                {% endif %}
+                <a class="cta" href="{{ cta_url | e }}">Записаться на занятие</a>
+                <p class="cta__hint">Выберите удобное время на странице записи</p>
+            </section>
+
+            {% if about or experience %}
+            <section class="section">
+                <h2 class="section__title">О себе</h2>
+                {% if about %}
+                <p class="section__text">{{ about | e }}</p>
+                {% endif %}
+                {% if experience %}
+                <p class="section__meta">Опыт работы: {{ experience | e }}</p>
+                {% endif %}
+            </section>
+            {% endif %}
+
+            {% if rate %}
+            <section class="section">
+                <h2 class="section__title">Стоимость</h2>
+                <div class="price">
+                    <span class="price__value">{{ rate | e }}</span>
+                    <span class="price__unit">за занятие</span>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if phone %}
+            <section class="section">
+                <h2 class="section__title">Контакты</h2>
+                {% if phone_href %}
+                <a class="contact-link" href="tel:{{ phone_href | e }}">{{ phone | e }}</a>
+                {% else %}
+                <p class="section__text">{{ phone | e }}</p>
+                {% endif %}
+            </section>
+            {% endif %}
+        </main>
+
+        <footer class="footer">
+            <span>{{ name | e }}</span>
+            <a class="footer__login" href="/tutor/login" data-auth="tutor">вход</a>
+        </footer>
+    </div>
+
+    {# Клиентская подстановка «Вход…» вместо ссылок, если человек уже вошёл:
+       файл появится отдельной задачей. Тег стоит сразу — отсутствие скрипта
+       не ломает страницу. #}
+    <script src="/static/landing-auth.js" defer></script>
+</body>
+</html>
