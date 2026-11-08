@@ -245,3 +245,39 @@ def test_theme_is_applied_before_paint(client):
     head = page[: page.index("</head>")]
     assert "opentutorcrm:theme" in head
     assert 'classList.add("dark")' in head
+
+
+def test_sidebar_has_landing_link_in_single_mode(client, monkeypatch):
+    """В сингл-режиме «Лендинг» стоит в нижнем блоке выше «Настроек»."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "single_mode", True)
+    _login(client, email="landing-nav-user@example.com")
+
+    page = client.get("/tutor/").text
+    start = page.index('<aside class="sidebar"')
+    sidebar_html = page[start : page.index("</aside>", start)]
+
+    assert 'href="/tutor/landing"' in sidebar_html
+    assert "Лендинг" in sidebar_html
+    # Пункт сервисный: ниже основного меню и выше «Настроек».
+    assert sidebar_html.index("Лендинг") > sidebar_html.index("</nav>")
+    assert sidebar_html.index("Лендинг") < sidebar_html.index("Настройки")
+
+    response = client.get("/tutor/landing")
+    assert response.status_code == 200
+    assert "<h1>Лендинг</h1>" in response.text
+    assert "nav-item nav-item--active" in response.text
+
+
+def test_sidebar_hides_landing_link_in_multi_mode(client):
+    """В мульти-режиме пункта «Лендинг» нет, а роут отвечает 404."""
+    _login(client, email="landing-hidden-user@example.com")
+
+    page = client.get("/tutor/").text
+    start = page.index('<aside class="sidebar"')
+    sidebar_html = page[start : page.index("</aside>", start)]
+
+    assert 'href="/tutor/landing"' not in sidebar_html
+    assert "Лендинг" not in sidebar_html
+    assert client.get("/tutor/landing").status_code == 404

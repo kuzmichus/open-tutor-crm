@@ -31,6 +31,7 @@ TEMPLATE_DIRS = [
     _APP_DIR / "task" / "templates",  # модуль task
     _APP_DIR / "mailing" / "templates",  # модуль mailing
     _APP_DIR / "cabinet" / "templates",  # модуль cabinet (личный кабинет ученика)
+    _APP_DIR / "landing" / "templates",  # модуль лендинга
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
@@ -139,3 +140,11 @@ from app.files.services.presentation import (  # noqa: E402
 )
 
 register_files_template_helpers()
+
+# Флаг лендинга (`landing_enabled`) — сайдбар показывает пункт «Лендинг»
+# только в сингл-режиме, а флаг читается в момент отрисовки.
+from app.landing.services.template import (  # noqa: E402
+    register_template_helpers as register_landing_template_helpers,
+)
+
+register_landing_template_helpers()
