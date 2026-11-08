@@ -39,6 +39,12 @@ _SQ_RE = re.compile(r"'([a-z0-9][a-z0-9-]{0,40})'")
 
 _SCAN_SUFFIXES = {".html", ".py", ".js"}
 
+# Вендорная статика (`app/static/dist/…`): чужие минифицированные бандлы
+# (GrapesJS и т.п.) содержат тысячи строковых литералов, случайно совпадающих
+# с именами иконок Lucide, и раздувают набор. Это не наша разметка — иконки
+# проекта ищутся только в собственном коде.
+_SKIP_DIRS = (APP_DIR / "static" / "dist",)
+
 
 def pascal_name(kebab: str) -> str:
     """`arrow-down-left` → `ArrowDownLeft` — алгоритм Lucide как есть.
@@ -90,7 +96,7 @@ def used_icon_names(exports: dict[str, str]) -> list[str]:
     for path in sorted(APP_DIR.rglob("*")):
         if not path.is_file() or path.suffix not in _SCAN_SUFFIXES:
             continue
-        if path == OUTPUT:
+        if path == OUTPUT or path.is_relative_to(*_SKIP_DIRS):
             continue
         text = path.read_text(encoding="utf-8")
         for literal in _DQ_RE.findall(text) + _SQ_RE.findall(text):
