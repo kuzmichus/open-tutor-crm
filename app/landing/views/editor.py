@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.common.access import LoginRequired, require_tutor_id
 from app.database import get_db
 from app.landing.services.access import landing_enabled
+from app.landing.services.blocks import landing_blocks
 from app.landing.services.draft_render import (
     css_for_editor,
     extract_body,
@@ -32,7 +33,7 @@ from app.landing.services.draft_render import (
     strip_scripts,
 )
 from app.landing.services.storage import get_storage, is_asset_name
-from app.landing.services.template import save_default_draft
+from app.landing.services.template import public_page_url, save_default_draft
 from app.landing.views.assets import ASSET_URL_PREFIX
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
@@ -94,6 +95,9 @@ def landing_editor(
         {
             "tutor": tutor,
             "assets": assets,
+            # Набор блоков для панели GrapesJS. CTA внутри блоков ведёт на
+            # публичную страницу записи этого репетитора.
+            "blocks": landing_blocks(public_page_url(tutor.id)),
             "draft": {
                 "body": strip_scripts(extract_body(draft_html)),
                 # CSSOM GrapesJS теряет сокращения с var(): редактор
