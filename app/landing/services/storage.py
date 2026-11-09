@@ -46,10 +46,46 @@ ASSET_NAME_PATTERN = (
 )
 _ASSET_NAME_RE = re.compile(ASSET_NAME_PATTERN)
 
+# Начало файла растрового формата. Расширению из allowlist должен
+# соответствовать реальный формат: `photo.png` с текстом внутри — не
+# картинка, и браузер показал бы её битой. SVG сюда не входит: это текст,
+# сигнатуры у него нет, а модель доверия та же, что у правки HTML.
+_RASTER_SIGNATURES = {
+    "png": (b"\x89PNG\r\n\x1a\n",),
+    "jpg": (b"\xff\xd8\xff",),
+    "jpeg": (b"\xff\xd8\xff",),
+    "gif": (b"GIF87a", b"GIF89a"),
+}
+
 
 def is_asset_name(name: str) -> bool:
     """True, если имя похоже на сгенерированное `save_asset`."""
     return _ASSET_NAME_RE.fullmatch(name) is not None
+
+
+def is_valid_asset_content(filename: str, content: bytes) -> bool:
+    """True, если содержимое соответствует расширению картинки.
+
+    Проверяются магические байты растров; SVG принимается по расширению и
+    непустому телу. Пустой файл невалиден для любого формата: открыть его
+    как картинку нельзя.
+    """
+    if not content:
+        return False
+
+    extension = Path(filename).suffix.lstrip(".").lower()
+    if extension == "svg":
+        return True
+    if extension == "webp":
+        return (
+            len(content) >= 12
+            and content.startswith(b"RIFF")
+            and content[8:12] == b"WEBP"
+        )
+    signatures = _RASTER_SIGNATURES.get(extension)
+    if signatures is None:
+        return False
+    return content.startswith(signatures)
 
 
 class LandingStorage:
