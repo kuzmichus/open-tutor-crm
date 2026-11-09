@@ -31,8 +31,9 @@ from app.landing.services.draft_render import (
     render_draft_document,
     strip_scripts,
 )
-from app.landing.services.storage import get_storage
+from app.landing.services.storage import get_storage, is_asset_name
 from app.landing.services.template import save_default_draft
+from app.landing.views.assets import ASSET_URL_PREFIX
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
 
@@ -78,11 +79,21 @@ def landing_editor(
     if draft_html is None:
         draft_html = save_default_draft(tutor)
 
+    # Текущие картинки лендинга: Asset Manager GrapesJS показывает их в
+    # модальном окне, а ссылки в HTML абсолютные — `/` и предпросмотр
+    # показывают одну и ту же страницу.
+    assets = [
+        {"src": f"{ASSET_URL_PREFIX}{name}", "type": "image"}
+        for name in storage.list_assets()
+        if is_asset_name(name)
+    ]
+
     response = templates.TemplateResponse(
         request,
         "landing/editor.html",
         {
             "tutor": tutor,
+            "assets": assets,
             "draft": {
                 "body": strip_scripts(extract_body(draft_html)),
                 # CSSOM GrapesJS теряет сокращения с var(): редактор
