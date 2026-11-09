@@ -6,7 +6,6 @@
 """
 
 import pytest
-
 from app.config import Settings
 from app.landing.services.storage import (
     ALLOWED_ASSET_EXTENSIONS,

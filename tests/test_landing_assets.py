@@ -11,7 +11,6 @@ import re
 from decimal import Decimal
 
 import pytest
-
 from app.config import settings
 from app.landing.services.storage import LandingStorage, is_asset_name
 
