@@ -184,6 +184,33 @@ def test_editor_opens_asset_manager_for_inserted_image(client, owner):
     assert "types: ['image']" in page
 
 
+def test_image_marker_is_checked_by_presence_not_truthiness(client, owner):
+    """Маркер ищется по наличию ключа, а не по истинности значения.
+
+    Атрибут объявлен без значения (`data-landing-image`), поэтому в
+    `getAttributes()` он приходит пустой строкой — ложью. Проверка
+    `!attributes['data-landing-image']` молча пропускала вставку: блок
+    добавлялся, но Asset Manager не открывался.
+    """
+    page = client.get("/tutor/landing/editor").text
+
+    assert "hasOwnProperty.call(" in page
+    assert "'data-landing-image'" in page
+    assert "!attributes['data-landing-image']" not in page
+
+
+def test_cancelled_image_pick_removes_empty_component(client, owner):
+    """Закрытие Asset Manager без выбора убирает пустую картинку.
+
+    Компонент `<img>` без `src` GrapesJS рисует data-URI-заглушкой; если
+    её не убрать, заглушка попадёт в сохранённый `draft.html`.
+    """
+    page = client.get("/tutor/landing/editor").text
+
+    assert "asset:close" in page
+    assert "component.remove()" in page
+
+
 # --------------------------------------------------------------------------
 # Подписи в русской локали
 # --------------------------------------------------------------------------

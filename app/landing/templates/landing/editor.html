@@ -213,6 +213,19 @@
             // картинок, уже разобранных из черновика.
             function pickImage(component) {
                 var manager = editor.Assets;
+                var chosen = false;
+
+                // Компонент `<img>` без `src` GrapesJS рисует заглушкой —
+                // data-URI с серой иконкой. Если репетитор закроет Asset
+                // Manager, ничего не выбрав, заглушка попала бы в сохранённый
+                // HTML как настоящая картинка. Поэтому пустой компонент
+                // убираем: блок можно вставить заново.
+                editor.once('asset:close', function () {
+                    if (!chosen && component) {
+                        component.remove();
+                    }
+                });
+
                 manager.open({
                     types: ['image'],
                     accept: 'image/*',
@@ -223,6 +236,7 @@
                             : asset.get('src');
                         if (src) {
                             component.set({ src: src });
+                            chosen = true;
                         }
                         if (complete) {
                             manager.close();
@@ -231,12 +245,20 @@
                 });
             }
 
+            // Маркер `data-landing-image` объявлен без значения, поэтому в
+            // атрибутах он приходит пустой строкой — ложью. Проверяем именно
+            // наличие ключа: по истинности значения обработчик молча не
+            // срабатывал, и блок вставлялся с заглушкой вместо выбора файла.
             editor.on('component:add', function (component) {
                 if (!component.getAttributes) {
                     return;
                 }
                 var attributes = component.getAttributes();
-                if (!attributes || !attributes['data-landing-image']) {
+                if (!attributes ||
+                    !Object.prototype.hasOwnProperty.call(
+                        attributes,
+                        'data-landing-image'
+                    )) {
                     return;
                 }
                 component.removeAttributes('data-landing-image');
