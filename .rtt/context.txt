@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-06 23:51 | 671 files | 203673 tokens
+# rtt index | generated 2026-11-09 15:36 | 697 files | 215219 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -940,7 +940,13 @@ class RevalidatingStaticFiles(StaticFiles)
   def file_response(self, full_path, stat_result, scope, status_code=200)
 
 # app/common/views/__init__.py [python]
-imports: fastapi.APIRouter, app.common.views.clock, app.common.views.favicon, app.common.views.health, app.common.views.index
+imports: fastapi.APIRouter, app.common.views.auth_status, app.common.views.clock, app.common.views.favicon, app.common.views.health, app.common.views.index
+
+# app/common/views/auth_status.py [python]
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.JSONResponse, sqlalchemy.orm.Session, app.cabinet.services.contact_sessions.get_contact_id_from_request, app.cabinet.services.sessions.get_student_id_from_request, app.database.get_db, app.tutor.services.sessions.SessionService
+def auth_status(
+    request: Request, db: Session = Depends(get_db)
+) -> JSONResponse  # Булевы статусы входа ученика, родителя и репетитора.
 
 # app/common/views/clock.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.services.tutor_time.now_utc, app.common.services.tutor_time.to_local, app.database.get_db, app.tutor.models.tutor.Tutor, app.tutor.services.sessions.SessionService
@@ -958,8 +964,8 @@ imports: fastapi.APIRouter
 def health() -> dict[str, str]  # Простой health-check для мониторинга.
 
 # app/common/views/index.py [python]
-imports: fastapi.APIRouter, fastapi.responses.RedirectResponse
-def index() -> RedirectResponse  # Главная страница: 303 на `/tutor/`.
+imports: fastapi.APIRouter, fastapi.responses.FileResponse, fastapi.responses.RedirectResponse, fastapi.responses.Response, app.landing.services.access.published_landing
+def index() -> Response  # Главная страница: лендинг, если опубликован, иначе 303 на `/tutor/`.
 
 # app/common/views/not_found.py [python]
 imports: fastapi.Request, fastapi.responses.HTMLResponse, app.templating.templates
@@ -969,6 +975,9 @@ def not_found(request: Request, exc: Exception) -> HTMLResponse  # Обрабо�
 imports: typing.Literal, pydantic.model_validator, pydantic_settings.BaseSettings, pydantic_settings.SettingsConfigDict
 class Settings(BaseSettings)
   def _check_files_settings(self) -> "Settings"  # Неполная конфигурация S3 — ошибка старта, а не падение на загрузке.
+  def _check_smtp_settings(self) -> "Settings"  # Включённая почта без отправителя — ошибка старта, а не сбой письма.
+  def email_enabled(self) -> bool  # Почта включена: задан адрес SMTP-сервера.
+  def mail_from(self) -> str  # Адрес отправителя: `SMTP_FROM`, иначе логин `SMTP_USERNAME`.
   def allowed_extensions(self) -> tuple[str, ...]  # Разрешённые расширения без точки, в нижнем регистре.
   def max_file_bytes(self) -> int  # Лимит размера файла в байтах (из мегабайт в env).
 
@@ -2206,6 +2215,134 @@ def save_homework_view(
     tutor_id: str = Depends(require_tutor_id),
 )  # Сохраняет ДЗ урока и его файлы; чужой урок — 404.
 
+# app/landing/__init__.py [python]
+
+# app/landing/services/__init__.py [python]
+
+# app/landing/services/access.py [python]
+imports: pathlib.Path, app.config.settings, app.landing.services.storage.get_storage
+def landing_enabled() -> bool  # True, если фича лендинга включена (сингл-режим).
+def published_landing() -> Path | None  # Путь к опубликованной странице либо `None` — отдавать нечего.
+
+# app/landing/services/draft_render.py [python]
+imports: html, re
+def extract_body(document: str) -> str  # Содержимое первого `<body>` без самого тега; тела нет — пустая строка.
+def extract_first_style(document: str) -> str  # Содержимое первого `<style>`; остальные блоки игнорируются.
+def extract_title(document: str) -> str | None  # Заголовок из первого `<title>`; пустой заголовок — как отсутствующий.
+def strip_scripts(fragment: str) -> str  # Удаляет `<script>` из фрагмента, загружаемого в редактор.
+def _split_css_values(value: str) -> list[str]  # Делит значение по пробелам, не трогая пробелы внутри `var(...)`.
+def _box_values(values: list[str]) -> list[str]  # Приводит 1–4 значения `margin`/`padding` к порядку top/right/bottom/left.
+def _expand_box_shorthand(prop: str, value: str) -> list[tuple[str, str]] | None  # margin`/`padding` с `var()` → четыре длинных свойства.
+def _is_length(token: str) -> bool  # Толщина рамки: число с единицей или ключевое слово.
+def _expand_border_shorthand(prop: str, value: str) -> list[tuple[str, str]] | None  # border`/`border-*` с `var()` → ширина, стиль и цвет каждой стороны.
+def _expand_radius_shorthand(value: str) -> list[tuple[str, str]] | None  # border-radius` с `var()` → четыре угла (эллипсы не поддерживаем).
+def _expand_gap_shorthand(value: str) -> list[tuple[str, str]] | None
+def _expand_background_shorthand(value: str) -> list[tuple[str, str]] | None  # background: var(--x)` → `background-color` (в шаблоне это цвет).
+def _expand_declaration(prop: str, value: str) -> list[tuple[str, str]] | None  # Длинные свойства для сокращения с `var()`; `None` — оставить как есть.
+def _expand_block(block: str) -> str  # Переписывает объявления одного блока, остальные оставляет дословно.
+def css_for_editor(css: str) -> str  # Готовит CSS черновика к загрузке в GrapesJS без потери оформления.
+def default_title(tutor) -> str  # <title>` по умолчанию: «{имя} — репетитор», безопасный для HTML.
+def build_document(*, body: str, css: str, title: str) -> str  # Собирает полный документ из тела, CSS и готового `<title>`.
+def ensure_auth_script(document: str) -> str  # Гарантирует ровно один тег `landing-auth.js` перед `</body>`.
+def render_draft_document(
+    tutor,
+    *,
+    html: str,
+    css: str,
+    existing_html: str | None = None,
+) -> str  # Собирает итоговый `draft.html` для сохранения из редактора.
+
+# app/landing/services/storage.py [python]
+imports: os, re, pathlib.Path, uuid.uuid4, app.config.settings
+def is_asset_name(name: str) -> bool  # True, если имя похоже на сгенерированное `save_asset`.
+def is_valid_asset_content(filename: str, content: bytes) -> bool  # True, если содержимое соответствует расширению картинки.
+class LandingStorage
+  def __init__(self, root: str | Path) -> None
+  def draft_path(self) -> Path  # Черновик страницы.
+  def index_path(self) -> Path  # Опубликованная страница — её отдаёт `GET /`.
+  def prev_path(self) -> Path  # Бэкап прошлой публикации; при `unpublish` не трогается.
+  def assets_dir(self) -> Path  # Каталог картинок редактора.
+  def asset_path(self, name: str) -> Path  # Путь ассета по имени; имя с разделителями — `ValueError`.
+  def has_draft(self) -> bool  # Есть ли черновик страницы.
+  def read_draft_html(self) -> str | None  # HTML черновика; файла нет — `None`, а не исключение.
+  def save_draft(self, html: str) -> None  # Сохраняет черновик; каталог создаётся при первой записи.
+  def has_published(self) -> bool  # Есть ли опубликованная страница.
+  def publish(self) -> bool  # Публикует черновик: `index.html` → `index.prev.html`, затем копия.
+  def unpublish(self) -> None  # Убирает страницу с публикации; бэкап и черновик не трогаются.
+  def list_assets(self) -> list[str]  # Имена файлов в `assets/`; каталога нет — пустой список.
+  def save_asset(self, filename: str, content: bytes) -> str  # Сохраняет картинку под сгенерированным именем и возвращает его.
+  def remove_asset(self, name: str) -> None  # Удаляет ассет; отсутствующий файл — не ошибка.
+  def _write_atomic(self, path: Path, data: bytes) -> None  # Пишет файл через временный файл и атомарную замену.
+def get_storage() -> LandingStorage  # Хранилище по текущей настройке `LANDING_ROOT`.
+
+# app/landing/services/template.py [python]
+imports: decimal.Decimal, app.landing.services.storage.LandingStorage, app.landing.services.storage.get_storage, app.slot.services.public_link.PUBLIC_PREFIX, app.tutor.models.tutor.Tutor
+def public_page_url(tutor_id: str) -> str  # Адрес публичной страницы записи этого репетитора: `/s/<tutor_id>`.
+def hourly_rate_label(value: Decimal | int | float | None) -> str  # Ставка для лендинга: «1 200 ₽»; нет значения — пустая строка.
+def phone_href(value: str | None) -> str  # Значение `tel:` для телефона: только цифры и ведущий плюс.
+def page_title(tutor: Tutor) -> str  # <title>` лендинга: «{имя} — репетитор по {предмету}».
+def build_default_context(tutor: Tutor) -> dict  # Контекст шаблона по умолчанию из профиля репетитора.
+def render_default_page(tutor: Tutor) -> str  # HTML страницы по умолчанию для этого репетитора.
+def save_default_draft(tutor: Tutor) -> str  # Перезаписывает черновик шаблоном из профиля и возвращает HTML.
+def page_state(storage: LandingStorage) -> dict  # Состояние лендинга для страницы управления.
+def register_template_helpers() -> None  # Регистрирует `landing_enabled` в общем Jinja-окружении.
+
+# app/landing/views/__init__.py [python]
+imports: fastapi.APIRouter, app.landing.views.assets, app.landing.views.editor, app.landing.views.page
+
+# app/landing/views/assets.py [python]
+imports: pathlib.Path, fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.status, fastapi.responses.FileResponse, fastapi.responses.JSONResponse, fastapi.responses.Response, app.common.access.require_tutor_id, app.config.settings, app.files.services.upload.original_name, app.files.services.upload.read_limited, app.files.services.upload.validate_upload, app.landing.services.access.landing_enabled, app.landing.services.storage.ALLOWED_ASSET_EXTENSIONS, app.landing.services.storage.get_storage, app.landing.services.storage.is_asset_name, app.landing.services.storage.is_valid_asset_content
+def _ensure_landing_enabled() -> None  # 404 в мульти-режиме: фича существует только в сингл-установке.
+def _error(status_code: int, message: str) -> JSONResponse  # Понятное человеку сообщение об отказе в формате JSON.
+def landing_asset(filename: str) -> FileResponse  # Отдаёт картинку лендинга; неизвестное имя — 404.
+def landing_assets_upload(
+    request: Request,
+    tutor_id: str = Depends(require_tutor_id),
+) -> JSONResponse  # Загружает картинки из Asset Manager GrapesJS.
+def landing_asset_delete(
+    filename: str,
+    tutor_id: str = Depends(require_tutor_id),
+) -> Response  # Удаляет картинку с диска; невалидное имя — 404.
+def _extension(path: Path) -> str  # Расширение файла без точки — ключ `_MEDIA_TYPES`.
+
+# app/landing/views/editor.py [python]
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.JSONResponse, pydantic.BaseModel, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.landing.services.access.landing_enabled, app.landing.services.draft_render.css_for_editor, app.landing.services.draft_render.extract_body, app.landing.services.draft_render.extract_first_style, app.landing.services.draft_render.render_draft_document, app.landing.services.draft_render.strip_scripts, app.landing.services.storage.get_storage, app.landing.services.storage.is_asset_name, app.landing.services.template.save_default_draft, app.landing.views.assets.ASSET_URL_PREFIX, app.templating.templates, app.tutor.models.tutor.Tutor
+class DraftPayload(BaseModel)
+def _ensure_landing_enabled() -> None  # 404 в мульти-режиме: фича существует только в сингл-установке.
+def _tutor_or_login(db: Session, tutor_id: str) -> Tutor  # Репетитор из сессии; удалённый аккаунт — как отсутствие входа.
+def landing_editor(
+    request: Request,
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+) -> HTMLResponse  # Полноэкранный редактор с текущим черновиком (или новым из профиля).
+def landing_save_draft(
+    payload: DraftPayload,
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+) -> JSONResponse  # Собирает полный документ из HTML/CSS редактора и пишет черновик.
+
+# app/landing/views/page.py [python]
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.responses.FileResponse, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.landing.services.access.landing_enabled, app.landing.services.storage.get_storage, app.landing.services.template.STATUS_PUBLISHED, app.landing.services.template.page_state, app.landing.services.template.save_default_draft, app.templating.templates, app.tutor.models.tutor.Tutor
+def _ensure_landing_enabled() -> None  # 404 в мульти-режиме: фича существует только в сингл-установке.
+def _tutor_or_login(db: Session, tutor_id: str) -> Tutor  # Репетитор из сессии; удалённый аккаунт — как отсутствие входа.
+def landing_page(
+    request: Request,
+    status: str = "",
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+) -> HTMLResponse  # Страница управления лендингом: состояние и действия.
+def landing_preview() -> FileResponse  # Черновик как есть; нет черновика — 404.
+def landing_publish(
+    tutor_id: str = Depends(require_tutor_id),
+) -> RedirectResponse  # Публикует черновик; публиковать нечего — подсказка, а не ошибка.
+def landing_unpublish(
+    tutor_id: str = Depends(require_tutor_id),
+) -> RedirectResponse  # Снимает страницу с публикации, не трогая черновик и бэкап.
+def landing_reset(
+    db: Session = Depends(get_db),
+    tutor_id: str = Depends(require_tutor_id),
+) -> RedirectResponse  # Перезаписывает черновик шаблоном из профиля (или создаёт первый).
+
 # app/lesson/__init__.py [python]
 
 # app/lesson/models/__init__.py [python]
@@ -2588,6 +2725,30 @@ def update_lesson_view(
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 )  # Сохраняет урок; чужой урок отвечает как несуществующий (404).
+
+# app/mail/__init__.py [python]
+
+# app/mail/services/__init__.py [python]
+
+# app/mail/services/sender.py [python]
+imports: logging, smtplib, ssl, email.message.EmailMessage, email.utils.formataddr, email.utils.make_msgid, app.config.settings
+def email_enabled() -> bool  # Почта включена: в окружении задан адрес SMTP-сервера.
+def build_message(
+    *,
+    to_email: str,
+    subject: str,
+    html: str,
+    text: str | None = None,
+) -> EmailMessage  # Собирает письмо `multipart/alternative` в UTF-8.
+def send_email(
+    *,
+    to_email: str,
+    subject: str,
+    html: str,
+    text: str | None = None,
+) -> list[str]  # Отправляет письмо; возвращает список ошибок (пусто — доставлено).
+def _deliver(message: EmailMessage) -> None  # Открывает соединение с SMTP и отправляет письмо.
+def _domain(address: str) -> str | None  # Домен адреса отправителя для Message-ID; None — пусть выберет email.
 
 # app/mailing/__init__.py [python]
 
@@ -3287,6 +3448,9 @@ function unique(values)
 function hasAccessibleName(attrs)
 function render(el, name, extraAttrs)
 function createIcons(options)
+
+# app/static/landing-auth.js [javascript]
+function applyStatus(status)
 
 # app/static/lessons.js [javascript]
 function pad2(value)
@@ -4280,6 +4444,15 @@ class PasswordResetService
   def get_tutor_id(self, db: Session, token: str | None) -> str | None  # id репетитора по действующему ключу; иначе None.
   def consume(self, db: Session, token: str) -> None  # Помечает ключ использованным (в одной транзакции со сменой пароля).
 
+# app/tutor/services/password_reset_email.py [python]
+imports: app.config.settings, app.mail.services.sender.send_email, app.templating.templates, app.tutor.services.password_reset.TTL
+def send_password_reset_email(
+    *,
+    to_email: str,
+    tutor_name: str,
+    reset_url: str,
+) -> list[str]  # Отправляет письмо со ссылкой сброса; возвращает ошибки (пусто — ок).
+
 # app/tutor/services/presentation.py [python]
 imports: datetime.date, datetime.datetime, app.common.services.tutor_time.today_local, app.common.services.tutor_time.to_local
 def time_range(starts_at: datetime, ends_at: datetime, tutor) -> str  # «23:30 - 00:30» — границы урока в настенном времени педагога.
@@ -4308,6 +4481,12 @@ def profile_page_context(
     google_calendar: dict | None = None,
     google_error: str = "",
 ) -> dict  # Контекст шаблона настроек: вкладки, карточка, настройки и форма.
+
+# app/tutor/services/registration_mode.py [python]
+imports: sqlalchemy.select, sqlalchemy.orm.Session, app.config.settings, app.tutor.models.tutor.Tutor
+def has_tutors(db: Session) -> bool  # True, если в базе уже есть хотя бы один репетитор.
+def is_first_run(db: Session) -> bool  # True, если включён сингл-режим и репетиторов ещё нет.
+def registration_open(db: Session) -> bool  # True, если страница регистрации должна работать.
 
 # app/tutor/services/security_form.py [python]
 imports: sqlalchemy.select, sqlalchemy.orm.Session, app.tutor.models.tutor.Tutor, app.tutor.services.validation.is_valid_email
@@ -4378,9 +4557,17 @@ def home(
 )  # Дашборд главной; без сессии — редирект на вход (LoginRequired).
 
 # app/tutor/views/login.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.select, sqlalchemy.orm.Session, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.password_hasher.PasswordHasher, app.tutor.services.sessions.SessionService, app.tutor.services.sessions.set_session_cookie
-def _render(request: Request, error: str | None = None, notice: str | None = None)
-def login_form(request: Request) -> HTMLResponse  # Страница со формой входа.
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, fastapi.responses.Response, sqlalchemy.select, sqlalchemy.orm.Session, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.password_hasher.PasswordHasher, app.tutor.services.registration_mode.is_first_run, app.tutor.services.registration_mode.registration_open, app.tutor.services.sessions.SessionService, app.tutor.services.sessions.set_session_cookie
+def _render(
+    request: Request,
+    db: Session,
+    error: str | None = None,
+    notice: str | None = None,
+)
+def login_form(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Response  # Страница со формой входа.
 def login_submit(
     request: Request,
     email: str = Form(""),
@@ -4538,9 +4725,13 @@ def profile_security(
 )  # Обновляет email; непустая пара «пароль + повтор» меняет пароль.
 
 # app/tutor/views/register.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.system_zone_name, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.password_hasher.PasswordHasher, app.tutor.services.validation.is_valid_email
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.HTTPException, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.select, sqlalchemy.orm.Session, app.common.services.tutor_time.system_zone_name, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.password_hasher.PasswordHasher, app.tutor.services.registration_mode.registration_open, app.tutor.services.validation.is_valid_email
 def _render(request: Request, error: str | None, form: dict) -> HTMLResponse
-def register_form(request: Request) -> HTMLResponse  # Страница с формой регистрации.
+def _ensure_registration_open(db: Session) -> None  # 404, если регистрация закрыта (сингл-режим, репетитор уже есть).
+def register_form(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse  # Страница с формой регистрации.
 def register_submit(
     request: Request,
     name: str = Form(""),
@@ -4551,14 +4742,18 @@ def register_submit(
 ) -> HTMLResponse  # Создаёт аккаунт; при ошибках возвращает ту же форму с сообщением.
 
 # app/tutor/views/remember_password.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.select, sqlalchemy.orm.Session, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.password_reset.PasswordResetService, app.tutor.services.validation.is_valid_email
-def _render(request: Request, error: str | None, message: str | None, link: str | None)
-def remember_password_form(request: Request) -> HTMLResponse  # Страница с полем ввода email.
+imports: logging, fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.select, sqlalchemy.orm.Session, app.config.settings, app.database.get_db, app.mail.services.sender.email_enabled, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.password_reset.PasswordResetService, app.tutor.services.password_reset_email.send_password_reset_email, app.tutor.services.registration_mode.registration_open, app.tutor.services.validation.is_valid_email
+def _render(request: Request, db: Session, error: str | None, message: str | None)
+def _reset_url(request: Request, token: str) -> str  # Абсолютная ссылка на страницу нового пароля.
+def remember_password_form(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse  # Страница с полем ввода email.
 def remember_password_submit(
     request: Request,
     email: str = Form(""),
     db: Session = Depends(get_db),
-) -> HTMLResponse  # Создаёт ключ и показывает ссылку; для неизвестного email — заглушка.
+) -> HTMLResponse  # Создаёт ключ и отправляет ссылку; для неизвестного email — заглушка.
 
 # app/tutor/views/reset_password.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Form, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.RedirectResponse, sqlalchemy.orm.Session, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.password_hasher.PasswordHasher, app.tutor.services.password_reset.PasswordResetService
@@ -4572,8 +4767,9 @@ def reset_password_submit(
     request: Request,
     key: str = Form(""),
     password: str = Form(""),
+    password_confirm: str = Form(""),
     db: Session = Depends(get_db),
-)  # Меняет пароль и погашает ключ; пустой пароль — ошибка без смены.
+)  # Меняет пароль и погашает ключ.
 
 # app/tutor/views/settings.py [python]
 imports: fastapi.APIRouter, fastapi.Depends, fastapi.Request, fastapi.responses.HTMLResponse, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.templating.templates, app.tutor.models.tutor.Tutor, app.tutor.services.settings_page.settings_page_context
@@ -6761,6 +6957,177 @@ def test_clock_fragment_returns_time(client)  # Без сессии фрагме
 def test_clock_fragment_shows_time_in_tutor_zone(client, tutor_factory, monkeypatch)  # Спека (задача 8.3): `/time` форматирует время в зоне педагога.
 def test_htmx_is_served_locally(client)  # htmx подключается локально (без CDN/SRI) и отдаётся статикой.
 
+# tests/test_landing_assets.py [python]
+imports: json, re, decimal.Decimal, pytest, app.config.settings, app.landing.services.storage.LandingStorage, app.landing.services.storage.is_asset_name
+def landing_root(tmp_path, monkeypatch)  # Изолированный каталог лендинга на время теста.
+def single_mode(monkeypatch)  # Включает сингл-режим: фича лендинга доступна.
+def _login(client, email=EMAIL)
+def owner(client, tutor_factory, landing_root, single_mode)  # Репетитор с заполненным профилем, вошедший в клиент.
+def _upload(client, files, field="files")  # POST загрузки ассета: список `(имя, тело, тип)` в одном поле.
+def _assets_dir(landing_root)
+def _saved_names(landing_root)
+def _editor_assets(response)  # Достаёт JSON ассетов из `<script id="landing-assets">`.
+def test_upload_saves_image(
+    client, owner, landing_root, filename, content, media_type
+)  # Картинка сохраняется под uuid-именем и отдаётся публично.
+def test_upload_accepts_files_field(client, owner, landing_root)  # Поле `files` (multiUpload=false) принимается наравне с `files[]`.
+def test_upload_accepts_files_array_field(client, owner, landing_root)  # Поле `files[]` — имя, которое GrapesJS шлёт при multiUpload.
+def test_upload_accepts_multiple_files(client, owner, landing_root)  # Несколько файлов в одном запросе — несколько ассетов в ответе.
+def test_upload_does_not_overwrite_same_name(client, owner, landing_root)  # Две загрузки `photo.png` дают два разных файла на диске.
+def test_upload_without_files_is_400(client, owner)  # Пустая форма — понятное сообщение, а не 500.
+def test_upload_rejects_non_image_extension(client, owner, landing_root, filename)  # Не-картинка отклоняется с понятным сообщением, диск не меняется.
+def test_upload_rejects_text_masquerading_as_png(client, owner, landing_root)  # photo.png` с текстом внутри — не картинка (магические байты).
+def test_upload_rejects_mismatched_signature(
+    client, owner, landing_root, filename, content
+)  # Содержимое должно совпадать с расширением, а не только быть картинкой.
+def test_upload_rejects_empty_file(client, owner, landing_root)  # Пустой файл отклоняется: открыть его как картинку нельзя.
+def test_upload_rejects_oversized_file(client, owner, landing_root, monkeypatch)  # Файл больше `FILES_MAX_SIZE_MB` отклоняется с 413.
+def test_upload_rejects_whole_batch_if_one_file_invalid(client, owner, landing_root)  # Валидный файл рядом с невалидным не сохраняется: набор атомарен.
+def test_delete_removes_file_and_link_is_404(client, owner, landing_root)  # Удаление убирает файл с диска; ссылка на него — 404.
+def test_delete_is_idempotent(client, owner, landing_root)  # Повторное удаление того же имени — не ошибка.
+def test_delete_rejects_foreign_name(client, owner, landing_root, name)  # Невалидное имя — 404, посторонние файлы на диске целы.
+def test_upload_requires_session(client, landing_root, single_mode)  # Без сессии загрузка ведёт на вход и ничего не пишет.
+def test_delete_requires_session(client, owner, landing_root)  # Без сессии удаление ведёт на вход и файл остаётся.
+def test_upload_is_404_in_multi_mode(client, tutor_factory, landing_root, monkeypatch)  # В мульти-режиме загрузка отвечает 404 и не пишет на диск.
+def test_delete_is_404_in_multi_mode(client, tutor_factory, landing_root, monkeypatch)  # В мульти-режиме удаление отвечает 404 и не трогает диск.
+def test_asset_serving_stays_public(client, landing_root, monkeypatch)  # Публичная отдача картинок не зависит от режима и сессии.
+def test_editor_lists_existing_assets(client, owner, landing_root)  # Список ассетов вшивается в шаблон редактора абсолютными ссылками.
+def test_editor_ignores_foreign_files_in_assets_dir(client, owner, landing_root)  # Файл с посторонним именем в `assets/` в редактор не попадает.
+def test_editor_configures_asset_manager(client, owner)  # В конфиге GrapesJS есть загрузка, список ассетов и удаление.
+
+# tests/test_landing_auth_status.py [python]
+imports: datetime.UTC, datetime.datetime, datetime.timedelta, pytest, app.cabinet.models.contact_session.ContactSession, app.cabinet.models.session.StudentSession, app, app.database.SessionLocal, app.tutor.models.tutor_session.TutorSession, app.tutor.services.sessions.SessionService
+def accounts(tutor_factory, student_factory, contact_factory)  # Репетитор, его ученик и контакт родителя — по одному на каждую роль.
+def _token(role, account_id)  # Заводит живую сессию нужной роли и возвращает токен cookie.
+def _login(client, role, account_id)  # Кладёт в клиент cookie живой сессии указанной роли.
+def _status(client)
+def test_anonymous_status_is_false_for_all_roles(client)  # Без cookie — три `false`, публичный ответ и запрет кэширования.
+def test_status_does_not_redirect_without_session(client)  # Публичность: отсутствие сессии не превращается в редирект на вход.
+def test_single_session_marks_only_its_role(client, accounts, role)  # Одна сессия включает только свой ключ, остальные остаются `false`.
+def test_student_and_parent_sessions_are_independent(client, accounts)  # Ученик и родитель в одном браузере дают два `true`, репетитор — `false`.
+def test_all_three_sessions_are_independent(client, accounts)  # Все три сессии живут параллельно и дают три `true`.
+def test_forged_student_cookie_and_unknown_cookie_are_false(client)  # Поддельный токен и незнакомое имя cookie не ломают ответ.
+def test_expired_session_is_false(client, accounts, role)  # Протухшая сессия любой роли даёт `false`, остальные не затронуты.
+def test_landing_auth_script_is_served(client)  # Скрипт отдаётся локальной статикой по пути из шаблона лендинга.
+
+# tests/test_landing_editor.py [python]
+imports: json, re, decimal.Decimal, pathlib.Path, types.SimpleNamespace, pytest, app.config.settings, app.landing.services.draft_render.AUTH_SCRIPT, app.landing.services.draft_render.build_document, app.landing.services.draft_render.css_for_editor, app.landing.services.draft_render.default_title, app.landing.services.draft_render.ensure_auth_script, app.landing.services.draft_render.extract_body, app.landing.services.draft_render.extract_first_style, app.landing.services.draft_render.extract_title, app.landing.services.draft_render.render_draft_document, app.landing.services.draft_render.strip_scripts, app.landing.services.storage.LandingStorage
+def landing_root(tmp_path, monkeypatch)  # Изолированный каталог лендинга на время теста.
+def single_mode(monkeypatch)  # Включает сингл-режим: фича лендинга доступна.
+def _login(client, email=EMAIL)
+def owner(client, tutor_factory, landing_root, single_mode)  # Репетитор с заполненным профилем, вошедший в клиент.
+def _draft_payload(response)  # Достаёт JSON черновика из `<script id="landing-draft">`.
+def test_editor_requires_login(client, landing_root, single_mode)  # Без сессии редактор ведёт на вход.
+def test_editor_is_not_found_in_multi_mode(client, tutor_factory, landing_root)  # В мульти-режиме редактор и сохранение отвечают 404.
+def test_editor_creates_missing_draft(client, owner, landing_root)  # Черновика нет — редактор создаёт его из шаблона профиля.
+def test_editor_page_is_standalone(client, owner)  # Редактор — автономный документ с локальным GrapesJS и русским UI.
+def test_editor_payload_extracts_body_and_first_style(client, owner)  # В редактор попадают тело без скриптов и только первый `<style>`.
+def test_save_writes_full_document(client, owner, landing_root)  # Сохранение меняет `draft.html`, добавляя шапку и тег скрипта.
+def test_save_keeps_existing_title(client, owner, landing_root)  # <title>` текущего черновика переживает сохранение тела.
+def test_save_without_draft_uses_default_title(client, owner, landing_root)  # Без черновика заголовок строится из имени репетитора.
+def test_save_is_idempotent_for_auth_script(client, owner, landing_root)  # Два сохранения и тег в HTML не создают второй `landing-auth.js`.
+def test_invalid_payload_is_validation_error(client, owner)  # Неверный JSON — 422 от FastAPI, а не 500.
+def test_round_trip_keeps_page_intact(client, owner, landing_root)  # Открыл → ничего не менял → сохранил: страница не теряет содержимое.
+def test_manage_page_links_to_editor(client, owner)  # Кнопка «Редактировать» на странице управления ведёт в редактор.
+def test_grapesjs_is_vendored_locally()  # GrapesJS и русская локаль лежат локально и не пустые.
+def test_locale_translates_style_manager_properties()  # Подписи свойств Style Manager переведены, а не остаются английскими.
+def test_extract_body_handles_attributes_and_missing_body()
+def test_extract_first_style_returns_only_first_block()
+def test_extract_title_strips_and_ignores_empty()
+def test_strip_scripts_removes_inline_and_external_tags()
+def test_ensure_auth_script_inserts_before_body_end()
+def test_ensure_auth_script_appends_without_body_end()
+def test_ensure_auth_script_does_not_duplicate()
+def test_build_document_has_required_head_and_body()
+def test_default_title_escapes_name()
+def test_render_draft_document_uses_existing_title()
+def test_render_draft_document_unwraps_editor_body()  # editor.getHtml()` отдаёт `<body>…</body>`: вторая обёртка не нужна.
+def test_render_draft_document_falls_back_to_default_title()
+def test_css_for_editor_expands_background_with_var()  # background: var()` → `background-color` (CSSOM иначе теряет цвет).
+def test_css_for_editor_expands_border_sides_with_var()  # border` с var() разворачивается во все стороны и части рамки.
+def test_css_for_editor_expands_single_border_side()
+def test_css_for_editor_expands_radius_and_box_shorthands()
+def test_css_for_editor_keeps_plain_shorthands_and_comments()
+def test_css_for_editor_processes_media_queries()
+def test_css_for_editor_is_idempotent()
+
+# tests/test_landing_page.py [python]
+imports: decimal.Decimal, pytest, app.config.settings, app.landing.services.storage.LandingStorage
+def landing_root(tmp_path, monkeypatch)  # Изолированный каталог лендинга на время теста.
+def single_mode(monkeypatch)  # Включает сингл-режим: фича лендинга доступна.
+def _login(client, email=EMAIL)
+def owner(client, tutor_factory, landing_root, single_mode)  # Репетитор с заполненным профилем, вошедший в клиент.
+def _page_html(client)
+def test_page_requires_login(client, landing_root, single_mode)  # Без сессии страница управления ведёт на вход.
+def test_routes_are_not_found_in_multi_mode(client, tutor_factory, landing_root)  # В мульти-режиме все роуты лендинга отвечают 404.
+def test_two_tutors_do_not_unlock_landing_in_multi_mode(
+    client, tutor_factory, landing_root
+)  # Даже при нескольких репетиторах в мульти-режиме лендинга нет.
+def test_empty_state_shows_create_button(client, owner, landing_root)  # Без черновика страница показывает «Пусто» и создание черновика.
+def test_publish_without_draft_does_nothing(client, owner, landing_root)  # Публиковать нечего — редирект с подсказкой, `index.html` не создан.
+def test_reset_creates_draft_from_profile(client, owner, landing_root)  # «Создать черновик» рендерит шаблон данными профиля.
+def test_template_has_login_entries_and_no_external_assets(client, owner, landing_root)  # В шаблоне есть точки входа, локальный скрипт и нет CDN/app.css.
+def test_profile_fields_are_escaped(client, tutor_factory, landing_root, single_mode)  # <script>` из профиля не становится исполняемым тегом.
+def test_get_does_not_overwrite_draft(client, owner, landing_root)  # Обычный просмотр страницы не трогает правки черновика.
+def test_preview_without_draft_is_not_found(client, owner)
+def test_preview_serves_draft(client, owner, landing_root)  # Предпросмотр отдаёт черновик как есть, без кэша.
+def test_publish_makes_page_public(client, owner, landing_root)  # Публикация копирует черновик в `index.html`, и `/` отдаёт страницу.
+def test_second_publish_writes_backup(client, owner, landing_root)  # Повторная публикация кладёт прошлую версию в `index.prev.html`.
+def test_unpublish_removes_page_but_keeps_draft_and_backup(
+    client, owner, landing_root
+)  # Снятие с публикации: `/` снова 303, черновик и бэкап целы.
+def test_page_shows_published_status(client, owner, landing_root)  # После публикации страница управления показывает статус «Опубликован».
+def test_page_shows_draft_status(client, owner)  # После создания черновика без публикации — статус «Черновик».
+
+# tests/test_landing_public.py [python]
+imports: pytest, app.config.settings, app.landing.services.storage.LandingStorage
+def landing_root(tmp_path, monkeypatch)  # Изолированный каталог лендинга на время теста.
+def single_mode(monkeypatch)  # Включает сингл-режим: фича лендинга доступна.
+def _publish(root)  # Публикует страницу и возвращает хранилище.
+def test_root_redirects_in_multi_mode(client, landing_root, monkeypatch)  # В мульти-режиме даже опубликованная страница не перехватывает `/`.
+def test_root_redirects_without_publication(client, landing_root, single_mode)  # Сингл-режим без публикации — прежний 303 на `/tutor/`.
+def test_root_redirects_after_unpublish(client, landing_root, single_mode)  # После `unpublish()` корень снова отвечает 303.
+def test_root_serves_published_page(client, landing_root, single_mode)  # С `index.html` корень отдаёт файл как есть, без рендера.
+def test_root_page_is_not_cached(client, landing_root, single_mode)  # Cache-Control: no-cache` — свежая публикация видна сразу.
+def test_root_serves_latest_publication(client, landing_root, single_mode)  # После повторной публикации корень отдаёт новую версию.
+def test_root_does_not_serve_draft(client, landing_root, single_mode)  # Черновик без публикации наружу не отдаётся.
+def test_root_serves_script_tags(client, landing_root, single_mode)  # <script>` на опубликованной странице разрешён и не вырезается.
+def test_asset_is_served_with_long_cache(client, landing_root)  # Картинка отдаётся публично, с типом по расширению и долгим кэшем.
+def test_asset_media_type_by_extension(client, landing_root, filename, media_type)  # Тип содержимого соответствует расширению картинки.
+def test_asset_is_public_in_multi_mode(client, landing_root, monkeypatch)  # Картинки публичны независимо от режима: они часть страницы.
+def test_foreign_asset_name_is_404(client, landing_root, name)  # Произвольное имя ассета — 404, файл на диске не ищется.
+def test_missing_asset_is_404(client, landing_root)  # Сгенерированное, но отсутствующее имя — 404.
+def test_removed_asset_is_404(client, landing_root)  # Удалённый ассет больше не отдаётся.
+
+# tests/test_landing_storage.py [python]
+imports: pytest, app.config.Settings, app.landing.services.storage.ALLOWED_ASSET_EXTENSIONS, app.landing.services.storage.LandingStorage, app.landing.services.storage.is_asset_name, app.landing.services.storage.is_valid_asset_content
+def test_empty_root_has_no_draft_and_no_publication(tmp_path)  # На пустом корне чтения отвечают «нет» без исключений.
+def test_reads_do_not_create_root(tmp_path)  # Чтения не создают каталог: установка без лендинга ничего не пишет.
+def test_paths_live_under_root(tmp_path)  # Раскладка каталога: draft/index/index.prev и assets/.
+def test_save_and_read_draft_creates_root(tmp_path)  # Сохранение черновика создаёт корень и читается обратно как UTF-8.
+def test_save_draft_overwrites_previous_version(tmp_path)  # Повторное сохранение заменяет черновик целиком.
+def test_save_draft_leaves_no_temporary_files(tmp_path)  # Атомарная запись не оставляет временных файлов в корне.
+def test_publish_copies_draft_to_index(tmp_path)  # Публикация кладёт черновик в `index.html`, черновик остаётся.
+def test_publish_without_draft_is_noop(tmp_path)  # Публиковать нечего — `False`, страница не появляется.
+def test_publish_moves_previous_publication_to_prev(tmp_path)  # Перед публикацией текущий `index.html` уходит в `index.prev.html`.
+def test_publish_overwrites_prev_with_previous_publication(tmp_path)  # Бэкап один: третья публикация перезаписывает `index.prev.html`.
+def test_first_publish_has_no_prev(tmp_path)  # Первая публикация бэкап не создаёт: прошлой версии не было.
+def test_unpublish_removes_index_but_keeps_prev_and_draft(tmp_path)  # Отмена публикации убирает `index.html`, бэкап и черновик остаются.
+def test_unpublish_without_publication_is_noop(tmp_path)  # Повторная отмена публикации — не ошибка.
+def test_save_asset_generates_uuid_name_and_returns_it(tmp_path)  # Имя ассета — uuid и расширение; исходное имя в путь не попадает.
+def test_save_asset_does_not_overwrite_same_filename(tmp_path)  # Две картинки с одинаковым именем получают разные имена на диске.
+def test_save_asset_accepts_allowed_extensions(tmp_path, extension)  # Все расширения из allowlist сохраняются.
+def test_save_asset_rejects_non_image(tmp_path, filename)  # Загрузка принимает только картинки: остальное — `ValueError`.
+def test_list_assets_returns_saved_names(tmp_path)  # Список ассетов — только файлы каталога, отсортированные по имени.
+def test_list_assets_ignores_directories(tmp_path)  # Подкаталог в `assets/` не считается ассетом.
+def test_remove_asset_deletes_file_and_tolerates_missing(tmp_path)  # Удаление ассета; повторное удаление — не ошибка.
+def test_asset_path_rejects_traversal(tmp_path, name)  # Имя с разделителями или точками не превращается в путь на диске.
+def test_is_asset_name_rejects_foreign_names(name)  # Публичный маршрут принимает только сгенерированные имена.
+def test_is_valid_asset_content_accepts_matching_files(filename, content)  # Содержимое совпадает с расширением — файл принимается.
+def test_is_valid_asset_content_rejects_foreign_files(filename, content)  # Несовпадение сигнатуры, пустое тело и чужое расширение — отказ.
+def test_settings_default_landing_root()  # По умолчанию лендинг лежит в `./landing`.
+def test_env_overrides_landing_root(monkeypatch)  # LANDING_ROOT` из окружения переопределяет каталог.
+
 # tests/test_lesson_attendance.py [python]
 imports: json, re, datetime.date, datetime.datetime, pytest, sqlalchemy.select, app.database.SessionLocal, app.finance.models.account_operation.AccountOperation, app.finance.services.balance.balance, app.finance.services.charges.lesson_targets, app.finance.services.charges.sync_lesson_charge, app.finance.services.invoice.priced_lessons, app.finance.services.recalculate.has_missing_charges, app.finance.services.recalculate.recalculate, app.lesson.models.lesson.Lesson, app.lesson.models.lesson_attendance.LessonAttendance, app.lesson.models.lesson_series.LessonSeries, app.lesson.services.lesson_form.parse_attendance, app.lesson.services.mass_update.apply_to_series, app.tutor.models.tutor.Tutor
 def owner(client, tutor_factory)  # Репетитор с зоной UTC, вошедший в клиент; возвращает его id.
@@ -7188,6 +7555,35 @@ def test_old_cookie_rejected_after_logout(client)  # Прежняя cookie не 
 def test_logout_without_session_is_noop(client)
 def test_full_login_logout_login_cycle(client)  # Вход → выход → повторный вход работает.
 
+# tests/test_mail.py [python]
+imports: smtplib, pytest, app.config.Settings, app.mail.services.sender, app.mail.services.sender.build_message, app.mail.services.sender.email_enabled, app.mail.services.sender.send_email
+class _FakeSMTP
+  def __init__(self, host=None, port=None, timeout=None, context=None)
+  def __enter__(self)
+  def __exit__(self, *exc)
+  def ehlo(self)
+  def starttls(self, context=None)
+  def login(self, username, password)
+  def send_message(self, message)
+def smtp(monkeypatch)  # Подменяет оба класса SMTP и настраивает «включённую» почту.
+def test_email_disabled_by_default()  # Пустой SMTP_HOST — почта выключена, приложение работает как раньше.
+def test_mail_from_falls_back_to_username()  # SMTP_FROM пуст — отправитель совпадает с логином.
+def test_mail_from_prefers_explicit_value()
+def test_smtp_host_requires_sender()  # SMTP_HOST без отправителя — ошибка старта с именами параметров.
+def test_smtp_ssl_and_starttls_are_exclusive()
+def test_smtp_rejects_non_positive_numbers(field, value)
+def test_build_message_has_recipient_subject_and_both_parts(monkeypatch)
+def test_build_message_without_text_uses_fallback(monkeypatch)
+def test_send_email_returns_error_when_disabled(monkeypatch)
+def test_send_email_delivers_over_starttls(smtp)
+def test_send_email_uses_ssl_without_starttls(smtp, monkeypatch)
+def test_send_email_without_credentials_skips_login(smtp, monkeypatch)  # Локальный SMTP без авторизации: логин не вызывается.
+def test_send_email_returns_smtp_error(smtp)
+def test_send_email_returns_network_error(smtp)
+def test_send_email_requires_recipient(smtp)
+def test_send_email_requires_subject(smtp)
+def test_email_enabled_reads_settings(monkeypatch)
+
 # tests/test_mailings.py [python]
 imports: io, json, urllib, datetime.UTC, datetime.datetime, datetime.timedelta, pytest, sqlalchemy.select, app.database.SessionLocal, app.finance.services.presentation.balance_label, app.mailing.models.message_template.MessageTemplate, app.messenger.models.sent_message.SentMessage, app.messenger.services.messengers.token_key, app.tutor.services.params.set_param
 class _FakeResponse
@@ -7504,6 +7900,13 @@ def test_two_hashes_of_same_password_differ(monkeypatch)
 def test_verify_rejects_malformed_or_empty_stored()
 def test_default_iterations_are_sensible()
 
+# tests/test_password_reset_email.py [python]
+imports: pytest, app.tutor.services.password_reset_email, app.tutor.services.password_reset.TTL, app.tutor.services.password_reset_email.SUBJECT, app.tutor.services.password_reset_email.send_password_reset_email
+def sent(monkeypatch)  # Перехватывает `send_email` и возвращает список вызовов.
+def test_sends_to_tutor_with_reset_link_in_both_parts(sent)
+def test_ttl_in_message_matches_token_lifetime(sent)  # Срок в письме — из `TTL` ключа, а не литерал в шаблоне.
+def test_delivery_errors_are_returned(monkeypatch)  # Ошибка транспорта возвращается списком, а не исключением.
+
 # tests/test_password_reset_service.py [python]
 imports: datetime.UTC, datetime.datetime, datetime.timedelta, app.database.SessionLocal, app.tutor.models.password_reset_token.PasswordResetToken, app.tutor.services.clock.as_utc, app.tutor.services.password_reset.PasswordResetService
 def test_fresh_key_is_valid(tutor_factory)
@@ -7690,22 +8093,34 @@ def test_uuid_ids_are_unique(client)
 def test_duplicate_email_rejected(client)
 
 # tests/test_remember_password.py [python]
-imports: re, app.database.SessionLocal, app.tutor.models.password_reset_token.PasswordResetToken
+imports: re, pytest, app.database.SessionLocal, app.tutor.models.password_reset_token.PasswordResetToken
 def _make_tutor(client, email="reset-user@example.com")
 def test_get_renders_form(client)
-def test_existing_email_shows_link(client)
+def test_existing_email_creates_key_but_hides_link(client)  # Ключ создаётся, но ссылка на странице не показывается.
 def test_unknown_email_neutral_message(client)
-def test_message_identical_shape_for_unknown(client)  # Подтверждение для неизвестного email не раскрывает существование аккаунта.
+def test_message_identical_shape_for_known_and_unknown(client)  # Ответ не раскрывает, существует ли аккаунт: тексты совпадают.
 def test_invalid_email_rejected(client)
 def test_two_requests_create_distinct_keys(client)
 def test_key_is_cryptographically_random(client)  # Ключи достаточно длинные и не угадываются.
 def test_link_does_not_leak_password(client)  # Ни открытый, ни захешированный пароль не попадают на страницу.
+def test_mail_off_explains_recovery_unavailable(client, caplog)  # Без SMTP ссылки нет: страница говорит о ненастроенной почте.
+def test_mail_off_writes_link_to_log(client, caplog)  # Ссылка уходит в лог: владелец сервера может помочь вручную.
+def mail_enabled(monkeypatch)  # Включает почту и перехватывает отправку: сеть в тестах не дёргается.
+def test_email_mode_sends_link_and_hides_it(client, mail_enabled)  # Существующий email: письмо со ссылкой уходит, на странице ссылки нет.
+def test_email_mode_unknown_email_sends_nothing(client, mail_enabled)  # Неизвестный email: письма нет, подтверждение нейтральное.
+def test_email_mode_failure_does_not_reveal_account(client, mail_enabled, monkeypatch)  # Сбой отправки: страница та же, что для неизвестного email.
+def test_email_mode_link_uses_request_base_when_no_app_base_url(
+    client, mail_enabled, monkeypatch
+)  # Без APP_BASE_URL ссылка строится из адреса запроса.
+def test_email_mode_invalid_email_sends_nothing(client, mail_enabled)
 
 # tests/test_reset_password.py [python]
-imports: re, datetime.timedelta, app.database.SessionLocal, app.tutor.models.password_reset_token.PasswordResetToken, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow, app.tutor.services.password_hasher.PasswordHasher, app.tutor.views.reset_password.INVALID_LINK
+imports: datetime.timedelta, app.database.SessionLocal, app.tutor.models.password_reset_token.PasswordResetToken, app.tutor.models.tutor.Tutor, app.tutor.services.clock.utcnow, app.tutor.services.password_hasher.PasswordHasher, app.tutor.views.reset_password.INVALID_LINK
 def _setup(client, email="reset-user@example.com")  # Создаёт аккаунт и запрашивает ключ; возвращает ключ.
 def _password_hash(email: str) -> str | None
+def _submit(client, key: str, password: str, password_confirm: str | None = None, **kwargs)  # Отправляет форму нового пароля; повтор по умолчанию совпадает.
 def test_get_renders_form_for_valid_key(client)
+def test_form_has_password_confirmation_field(client)  # На странице два поля: новый пароль и его повтор.
 def test_successful_reset_changes_password(client)
 def test_old_password_rejected_after_reset(client)
 def test_new_password_works_for_login(client)
@@ -7713,6 +8128,8 @@ def test_key_single_use(client)  # Повторное использование
 def test_unknown_key_rejected(client)
 def test_unknown_key_post_does_not_change_password(client)
 def test_empty_new_password_rejected(client)
+def test_mismatched_passwords_rejected(client)  # Пароли не совпали: пароль не меняется, ключ остаётся действующим.
+def test_empty_confirmation_rejected(client)
 def test_key_marked_used_after_reset(client)
 def test_expired_key_get_rejected(client, tutor_factory)  # (Задача 4.3) Истёкший ключ: GET — сообщение без формы.
 def test_expired_key_post_does_not_change_password(client, tutor_factory)  # (Задача 4.3) Истёкший ключ: POST не меняет пароль.
@@ -7766,6 +8183,35 @@ def test_sidebar_groups_link_opens_working_page(client)  # Пункт «Груп
 def test_sidebar_has_theme_switch_above_profile(client)  # В футере сайдбара, выше строки пользователя, есть переключатель темы.
 def test_theme_switch_has_css_and_js(client)  # Подсветка сегментов описана в CSS, переключение — в app.js.
 def test_theme_is_applied_before_paint(client)  # Класс .dark ставится бутстрап-скриптом в <head>, до отрисовки страницы.
+def test_sidebar_has_landing_link_in_single_mode(client, monkeypatch)  # В сингл-режиме «Лендинг» стоит в нижнем блоке выше «Настроек».
+def test_sidebar_hides_landing_link_in_multi_mode(client)  # В мульти-режиме пункта «Лендинг» нет, а роут отвечает 404.
+
+# tests/test_single_mode.py [python]
+imports: pytest, app.config.Settings, app.config.settings, app.database.SessionLocal, app.tutor.models.tutor.Tutor
+def single_mode(monkeypatch)  # Включает сингл-режим на время теста.
+def _tutor_count() -> int
+def _register(client, email: str = "single@example.com", name: str = "Репетитор")
+def test_default_mode_is_multi()  # Без SINGLE_MODE установка работает в мульти-режиме.
+def test_env_overrides_single_mode(monkeypatch)  # SINGLE_MODE=true из окружения включает сингл-режим.
+def test_multi_mode_registration_is_always_open(client, tutor_factory)  # В мульти-режиме регистрация доступна и при существующих репетиторах.
+def test_multi_mode_login_does_not_redirect(client)  # В мульти-режиме пустая база не отправляет вход на регистрацию.
+def test_multi_mode_shows_registration_link(client)  # В мульти-режиме ссылка «Зарегистрироваться» остаётся на месте.
+def test_single_mode_first_run_opens_registration(client, single_mode)  # Пока репетиторов нет, форма регистрации доступна.
+def test_single_mode_first_run_login_redirects_to_registration(client, single_mode)  # На первом запуске вход ведёт на регистрацию единственного аккаунта.
+def test_single_mode_first_run_root_leads_to_registration(client, single_mode)  # Цепочка `/` → `/tutor/` → вход → регистрация доходит до формы.
+def test_single_mode_first_registration_creates_tutor(client, single_mode)  # Первый запуск позволяет создать единственный аккаунт.
+def test_single_mode_registration_get_is_404_when_tutor_exists(
+    client, single_mode, tutor_factory
+)  # После первого аккаунта GET страницы регистрации — 404.
+def test_single_mode_registration_post_is_404_when_tutor_exists(
+    client, single_mode, tutor_factory
+)  # POST в обход формы тоже не создаёт второго репетитора.
+def test_single_mode_registration_closed_right_after_registration(client, single_mode)  # После успешной регистрации страница недоступна и по GET, и по POST.
+def test_single_mode_login_works_after_first_registration(client, single_mode)  # Когда аккаунт уже есть, вход показывает обычную форму без редиректа.
+def test_single_mode_hides_registration_link_when_closed(
+    client, single_mode, tutor_factory
+)  # Ссылка на закрытую регистрацию не показывается — она вела бы в 404.
+def test_single_mode_shows_registration_link_on_first_run(client, single_mode)  # На первом запуске ссылка на регистрацию остаётся доступной.
 
 # tests/test_slot_batch.py [python]
 imports: datetime.UTC, datetime.date, datetime.datetime, datetime.time, datetime.timedelta, types.SimpleNamespace, pytest, app.database.SessionLocal, app.lesson.models.lesson.Lesson, app.slot.models.slot.Slot, app.slot.services.batch.SKIP_BUSY_LESSON, app.slot.services.batch.SKIP_BUSY_SLOT, app.slot.services.batch.SKIP_PAST, app.slot.services.batch.SKIP_UNAVAILABLE_DAY, app.slot.services.batch.apply, app.slot.services.batch.batch_coverage, app.slot.services.batch.plan, app.slot.services.batch.plan_for_tutor, app.slot.services.slot_form.MAX_SLOT_BATCH, app.slot.services.slot_form.BatchParams, app.slot.services.slot_form.parse_batch_form, app.slot.services.slot_form.parse_slot_form
