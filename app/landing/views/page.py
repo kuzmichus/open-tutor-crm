@@ -11,9 +11,9 @@
 опубликовать прямым запросом в обход интерфейса.
 
 `tutor_id` берётся только из сессии (`require_tutor_id`), поэтому чужие
-данные в шаблон и на диск не попадают. Роут редактора (`/tutor/landing/
-editor`) появится отдельной задачей — до него кнопка «Редактировать» в
-шаблоне скрыта (`editor_available=False`).
+данные в шаблон и на диск не попадают. Полноэкранный редактор живёт в
+отдельном роутере (`app/landing/views/editor.py`), кнопка «Редактировать»
+ведёт на `/tutor/landing/editor`.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -88,8 +88,6 @@ def landing_page(
             "page": state,
             "message": message,
             "message_is_error": status in _ERROR_STATUSES,
-            # Роут редактора появится в задаче 4; до тех пор кнопки нет.
-            "editor_available": False,
         },
     )
 

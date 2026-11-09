@@ -232,6 +232,11 @@ __marimo__/
 # Локальная конфигурация OpenCode: агенты, команды и навыки разработчика.
 /.opencode/
 
+# Вендорная статика приложения (GrapesJS): глобальный шаблон `dist/` выше
+# иначе молча исключил бы её из коммита.
+!app/static/dist/
+!app/static/dist/**
+
 # Node / дизайн-система (Tailwind v4)
 node_modules/
 /test-result/

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Редактор лендинга — Open Tutor CRM</title>
+    {#
+      Автономная страница: не наследует base.html, не включает сайдбар и
+      общий app.css — по образцу публичных страниц бронирования. GrapesJS
+      и русская локаль подключены локально из /static/dist/grapesjs/,
+      внешних CDN нет.
+    #}
+    <link rel="stylesheet" href="/static/dist/grapesjs/grapes.min.css">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+            color: #1d1d1b;
+            background: #f7f7f5;
+        }
+
+        .editor-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            height: 56px;
+            padding: 0 20px;
+            box-sizing: border-box;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e5e0;
+        }
+
+        .editor-bar__back,
+        .editor-bar__preview {
+            color: #6b6b66;
+            font-size: 14px;
+            text-decoration: none;
+        }
+
+        .editor-bar__back:hover,
+        .editor-bar__preview:hover {
+            color: #1d1d1b;
+        }
+
+        .editor-bar__title {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .editor-bar__spacer {
+            flex: 1;
+        }
+
+        .editor-bar__save {
+            min-height: 38px;
+            padding: 0 20px;
+            border: 0;
+            border-radius: 999px;
+            background: #f66838;
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .editor-bar__save:hover {
+            background: #d94f22;
+        }
+
+        .editor-bar__save:disabled {
+            opacity: .6;
+            cursor: default;
+        }
+
+        .editor-bar__status {
+            min-width: 110px;
+            color: #2e7d32;
+            font-size: 14px;
+        }
+
+        .editor-bar__status--error {
+            color: #c62828;
+        }
+
+        #gjs {
+            height: calc(100vh - 56px);
+        }
+    </style>
+</head>
+<body>
+    <header class="editor-bar">
+        <a class="editor-bar__back" href="/tutor/landing">← Назад к управлению</a>
+        <h1 class="editor-bar__title">Редактор лендинга</h1>
+        <span class="editor-bar__spacer"></span>
+        <span id="landing-status" class="editor-bar__status"
+              role="status" aria-live="polite"></span>
+        <a class="editor-bar__preview" href="/tutor/landing/preview"
+           target="_blank" rel="noopener">Предпросмотр</a>
+        <button id="landing-save" class="editor-bar__save" type="button">
+            Сохранить
+        </button>
+    </header>
+
+    <div id="gjs"></div>
+
+    {# Данные черновика передаются JSON-ом: tojson экранирует <, >, & и ',
+       поэтому </script> из HTML черновика не вырвется из тега. #}
+    <script type="application/json" id="landing-draft">{{ draft | tojson }}</script>
+    <script src="/static/dist/grapesjs/grapes.min.js"></script>
+    <script src="/static/dist/grapesjs/i18n-ru.js"></script>
+    <script>
+        (function () {
+            'use strict';
+
+            var draft = JSON.parse(
+                document.getElementById('landing-draft').textContent
+            );
+            var saveButton = document.getElementById('landing-save');
+            var status = document.getElementById('landing-status');
+
+            var editor = grapesjs.init({
+                container: '#gjs',
+                height: '100%',
+                components: draft.body,
+                style: draft.css,
+                // Черновик хранит сервер: встроенное хранилище GrapesJS
+                // (localStorage) не используется.
+                storageManager: { type: 'none' },
+                i18n: {
+                    locale: 'ru',
+                    localeFallback: 'en',
+                    // Иначе GrapesJS подменит локаль языком браузера.
+                    detectLocale: false,
+                    messages: { ru: window.grapesjsI18nRu }
+                }
+            });
+
+            function setStatus(text, isError) {
+                status.textContent = text;
+                status.classList.toggle('editor-bar__status--error', !!isError);
+            }
+
+            function editorCss() {
+                // avoidProtected убирает служебный CSS GrapesJS (* {box-sizing}
+                // для канваса): он не должен накапливаться в сохранённой
+                // странице при повторных сохранениях.
+                // GrapesJS оборачивает тело в #wrapper: при сохранении
+                // возвращаем селектору имя body, иначе стили body из
+                // исходного шаблона перестали бы применяться.
+                return editor
+                    .getCss({ avoidProtected: true })
+                    .replace(/#wrapper\b/g, 'body');
+            }
+
+            saveButton.addEventListener('click', function () {
+                saveButton.disabled = true;
+                setStatus('Сохранение…', false);
+
+                fetch('/tutor/landing/draft', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        html: editor.getHtml(),
+                        css: editorCss()
+                    })
+                }).then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.json();
+                }).then(function (data) {
+                    setStatus(data.message || 'Сохранено', false);
+                }).catch(function () {
+                    setStatus('Не удалось сохранить', true);
+                }).finally(function () {
+                    saveButton.disabled = false;
+                });
+            });
+        })();
+    </script>
+</body>
+</html>
