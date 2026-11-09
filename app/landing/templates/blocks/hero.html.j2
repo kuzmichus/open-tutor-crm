@@ -1,0 +1,9 @@
+{# Обложка. Адрес /s/<tutor_id> знает только сервер, поэтому подставляется
+   при рендере редактора. `.j2` не входит в select_autoescape — экранируем
+   явно, как в default_page.html.j2. #}
+<section class="hero">
+  <h1 class="hero__name">Имя репетитора</h1>
+  <p class="hero__subject">Репетитор по предмету</p>
+  <a class="cta" href="{{ cta_url | e }}">Записаться на занятие</a>
+  <p class="cta__hint">Выберите удобное время на странице записи</p>
+</section>

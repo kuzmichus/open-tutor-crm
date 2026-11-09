@@ -4,6 +4,11 @@
 приложение не зарегистрирует их через `blockManager`. Здесь описан набор,
 из которого репетитор собирает страницу мышью.
 
+Разметка блоков живёт отдельными файлами в
+`app/landing/templates/blocks/` — рядом с `default_page.html.j2`, чтобы
+править дизайн страницы и блоков в одном месте. Сервис только собирает
+набор: id, категория, отрендеренное содержимое файла.
+
 Секции используют классы и CSS-переменные шаблона по умолчанию
 (`default_page.html.j2`), поэтому вставленный блок сразу выглядит как
 остальная страница и переживает сохранение: правила этих классов уже
@@ -21,8 +26,6 @@ CTA блока «Обложка» ведёт на публичную стран�
 как и остальные строки интерфейса.
 """
 
-from textwrap import dedent
-
 # Категории в порядке показа в панели: сначала готовые секции лендинга,
 # затем простые элементы и раскладка.
 CATEGORY_LANDING = "landing"
@@ -31,165 +34,44 @@ CATEGORY_LAYOUT = "layout"
 
 BLOCK_CATEGORIES = (CATEGORY_LANDING, CATEGORY_BASIC, CATEGORY_LAYOUT)
 
-
-def _html(markup: str) -> str:
-    """HTML блока без отступов исходника: GrapesJS парсит строку как есть."""
-    return dedent(markup).strip()
-
-
-def _block(
-    block_id: str,
-    category: str,
-    markup: str,
-    **options: object,
-) -> dict:
-    """Описание одного блока GrapesJS: id, категория, содержимое, опции."""
-    block: dict = {
-        "id": block_id,
-        "category": category,
-        "content": _html(markup),
-    }
-    block.update(options)
-    return block
+# (id блока, категория, имя файла разметки в `templates/blocks/`). Порядок
+# кортежа — порядок показа в панели блоков.
+BLOCK_TEMPLATES: tuple[tuple[str, str, str], ...] = (
+    ("header", CATEGORY_LANDING, "header.html.j2"),
+    ("hero", CATEGORY_LANDING, "hero.html.j2"),
+    ("about", CATEGORY_LANDING, "about.html.j2"),
+    ("price", CATEGORY_LANDING, "price.html.j2"),
+    ("contacts", CATEGORY_LANDING, "contacts.html.j2"),
+    ("footer", CATEGORY_LANDING, "footer.html.j2"),
+    ("heading", CATEGORY_BASIC, "heading.html.j2"),
+    ("text", CATEGORY_BASIC, "text.html.j2"),
+    ("image", CATEGORY_BASIC, "image.html.j2"),
+    ("button", CATEGORY_BASIC, "button.html.j2"),
+    ("divider", CATEGORY_BASIC, "divider.html.j2"),
+    ("column2", CATEGORY_LAYOUT, "column2.html.j2"),
+    ("column3", CATEGORY_LAYOUT, "column3.html.j2"),
+)
 
 
 def landing_blocks(cta_url: str) -> list[dict]:
     """Блоки редактора для этого репетитора.
 
     `cta_url` — адрес публичной страницы записи (`/s/<tutor_id>`): он
-    попадает в ссылку блока «Обложка» и кнопки.
+    попадает в ссылку блока «Обложка» и кнопки. Содержимое берётся из
+    файлов разметки и `.strip()`-ится: у блока не должно быть ни ведущего
+    перевода строки от комментария файла, ни хвостового — GrapesJS парсит
+    строку как есть.
     """
-    return [
-        _block(
-            "header",
-            CATEGORY_LANDING,
-            """
-            <header class="header">
-              <span class="header__name">Имя репетитора</span>
-              <nav class="header__logins" aria-label="Вход в личный кабинет">
-                <a class="login-link" href="/student/login" data-auth="student">Вход для ученика</a>
-                <a class="login-link" href="/parent/login" data-auth="parent">Вход для родителя</a>
-              </nav>
-            </header>
-            """,
-        ),
-        _block(
-            "hero",
-            CATEGORY_LANDING,
-            f"""
-            <section class="hero">
-              <h1 class="hero__name">Имя репетитора</h1>
-              <p class="hero__subject">Репетитор по предмету</p>
-              <a class="cta" href="{cta_url}">Записаться на занятие</a>
-              <p class="cta__hint">Выберите удобное время на странице записи</p>
-            </section>
-            """,
-        ),
-        _block(
-            "about",
-            CATEGORY_LANDING,
-            """
-            <section class="section">
-              <h2 class="section__title">О себе</h2>
-              <p class="section__text">Расскажите об опыте и подходе к занятиям.</p>
-              <p class="section__meta">Опыт работы: 5 лет</p>
-            </section>
-            """,
-        ),
-        _block(
-            "price",
-            CATEGORY_LANDING,
-            """
-            <section class="section">
-              <h2 class="section__title">Стоимость</h2>
-              <div class="price">
-                <span class="price__value">1 200 ₽</span>
-                <span class="price__unit">за занятие</span>
-              </div>
-            </section>
-            """,
-        ),
-        _block(
-            "contacts",
-            CATEGORY_LANDING,
-            """
-            <section class="section">
-              <h2 class="section__title">Контакты</h2>
-              <a class="contact-link" href="tel:+79991234567">+7 (999) 123-45-67</a>
-            </section>
-            """,
-        ),
-        _block(
-            "footer",
-            CATEGORY_LANDING,
-            """
-            <footer class="footer">
-              <span>Имя репетитора</span>
-              <a class="footer__login" href="/tutor/login" data-auth="tutor">вход</a>
-            </footer>
-            """,
-        ),
-        _block(
-            "heading",
-            CATEGORY_BASIC,
-            '<h2 class="section__title">Заголовок</h2>',
-        ),
-        _block(
-            "text",
-            CATEGORY_BASIC,
-            '<p class="section__text">Текст</p>',
-        ),
-        # Пустой `src` — осознанно: без него GrapesJS записал бы в HTML
-        # служебную data-URI-заглушку, если картинку не выбрали. Маркер
-        # `data-landing-image` ловит редактор и сразу открывает Asset
-        # Manager; на сохранённой странице атрибута уже нет.
-        _block(
-            "image",
-            CATEGORY_BASIC,
-            '<img alt="Изображение" data-landing-image '
-            'style="max-width: 100%; height: auto">',
-        ),
-        _block(
-            "button",
-            CATEGORY_BASIC,
-            f'<a class="cta" href="{cta_url}">Кнопка</a>',
-        ),
-        _block(
-            "divider",
-            CATEGORY_BASIC,
-            """
-            <hr style="border: 0; border-top: 1px solid var(--border); margin: 32px 0">
-            """,
-        ),
-        _block(
-            "column2",
-            CATEGORY_LAYOUT,
-            """
-            <div style="display: flex; gap: 24px; flex-wrap: wrap">
-              <div style="flex: 1 1 240px">
-                <p class="section__text">Колонка 1</p>
-              </div>
-              <div style="flex: 1 1 240px">
-                <p class="section__text">Колонка 2</p>
-              </div>
-            </div>
-            """,
-        ),
-        _block(
-            "column3",
-            CATEGORY_LAYOUT,
-            """
-            <div style="display: flex; gap: 24px; flex-wrap: wrap">
-              <div style="flex: 1 1 180px">
-                <p class="section__text">Колонка 1</p>
-              </div>
-              <div style="flex: 1 1 180px">
-                <p class="section__text">Колонка 2</p>
-              </div>
-              <div style="flex: 1 1 180px">
-                <p class="section__text">Колонка 3</p>
-              </div>
-            </div>
-            """,
-        ),
-    ]
+    from app.templating import templates
+
+    blocks: list[dict] = []
+    for block_id, category, template_name in BLOCK_TEMPLATES:
+        content = templates.env.get_template(f"blocks/{template_name}")
+        blocks.append(
+            {
+                "id": block_id,
+                "category": category,
+                "content": content.render(cta_url=cta_url).strip(),
+            }
+        )
+    return blocks

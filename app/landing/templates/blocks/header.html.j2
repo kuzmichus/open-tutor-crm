@@ -1,0 +1,10 @@
+{# Шапка: классы из default_page.html.j2. Маркеры data-auth обрабатывает
+   /static/landing-auth.js: сервер возвращает тег при сохранении, потому что
+   в редактируемом теле скрипты не сохраняются. #}
+<header class="header">
+  <span class="header__name">Имя репетитора</span>
+  <nav class="header__logins" aria-label="Вход в личный кабинет">
+    <a class="login-link" href="/student/login" data-auth="student">Вход для ученика</a>
+    <a class="login-link" href="/parent/login" data-auth="parent">Вход для родителя</a>
+  </nav>
+</header>

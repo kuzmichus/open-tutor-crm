@@ -37,7 +37,10 @@ _EXPORT_RE = re.compile(r"a\.([A-Za-z][A-Za-z0-9]*)=([A-Za-z_$][\w$]*)(?=[,;])")
 _DQ_RE = re.compile(r'"([a-z0-9][a-z0-9-]{0,40})"')
 _SQ_RE = re.compile(r"'([a-z0-9][a-z0-9-]{0,40})'")
 
-_SCAN_SUFFIXES = {".html", ".py", ".js"}
+# `.j2` — шаблоны-данные лендинга (`default_page.html.j2`, `blocks/*.j2`):
+# это настоящая разметка, и иконка в блоке редактора не должна потеряться
+# только потому, что файл не попадает в select_autoescape.
+_SCAN_SUFFIXES = {".html", ".j2", ".py", ".js"}
 
 # Вендорная статика (`app/static/dist/…`): чужие минифицированные бандлы
 # (GrapesJS и т.п.) содержат тысячи строковых литералов, случайно совпадающих
@@ -82,7 +85,7 @@ def vendor_exports(source: str) -> dict[str, str]:
 def used_icon_names(exports: dict[str, str]) -> list[str]:
     """Имена иконок (`data-lucide`), встречающиеся в коде проекта.
 
-    Сканируются все строковые литералы `app/**/*.html|py|js`: иконка
+    Сканируются все строковые литералы `app/**/*.html|j2|py|js`: иконка
     приходит в разметку не только литералом `data-lucide="x"`, но и из
     Python-словарей (`"icon": ...`), констант (`MESSENGER_ICONS`) и
     Jinja-выражений (`data-lucide="{{ row.icon }}"`). Проверять только

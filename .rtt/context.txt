@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-09 15:36 | 697 files | 215219 tokens
+# rtt index | generated 2026-11-09 22:04 | 699 files | 216010 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -2224,6 +2224,9 @@ imports: pathlib.Path, app.config.settings, app.landing.services.storage.get_sto
 def landing_enabled() -> bool  # True, если фича лендинга включена (сингл-режим).
 def published_landing() -> Path | None  # Путь к опубликованной странице либо `None` — отдавать нечего.
 
+# app/landing/services/blocks.py [python]
+def landing_blocks(cta_url: str) -> list[dict]  # Блоки редактора для этого репетитора.
+
 # app/landing/services/draft_render.py [python]
 imports: html, re
 def extract_body(document: str) -> str  # Содержимое первого `<body>` без самого тега; тела нет — пустая строка.
@@ -2306,7 +2309,7 @@ def landing_asset_delete(
 def _extension(path: Path) -> str  # Расширение файла без точки — ключ `_MEDIA_TYPES`.
 
 # app/landing/views/editor.py [python]
-imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.JSONResponse, pydantic.BaseModel, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.landing.services.access.landing_enabled, app.landing.services.draft_render.css_for_editor, app.landing.services.draft_render.extract_body, app.landing.services.draft_render.extract_first_style, app.landing.services.draft_render.render_draft_document, app.landing.services.draft_render.strip_scripts, app.landing.services.storage.get_storage, app.landing.services.storage.is_asset_name, app.landing.services.template.save_default_draft, app.landing.views.assets.ASSET_URL_PREFIX, app.templating.templates, app.tutor.models.tutor.Tutor
+imports: fastapi.APIRouter, fastapi.Depends, fastapi.HTTPException, fastapi.Request, fastapi.responses.HTMLResponse, fastapi.responses.JSONResponse, pydantic.BaseModel, sqlalchemy.orm.Session, app.common.access.LoginRequired, app.common.access.require_tutor_id, app.database.get_db, app.landing.services.access.landing_enabled, app.landing.services.blocks.landing_blocks, app.landing.services.draft_render.css_for_editor, app.landing.services.draft_render.extract_body, app.landing.services.draft_render.extract_first_style, app.landing.services.draft_render.render_draft_document, app.landing.services.draft_render.strip_scripts, app.landing.services.storage.get_storage, app.landing.services.storage.is_asset_name, app.landing.services.template.public_page_url, app.landing.services.template.save_default_draft, app.landing.views.assets.ASSET_URL_PREFIX, app.templating.templates, app.tutor.models.tutor.Tutor
 class DraftPayload(BaseModel)
 def _ensure_landing_enabled() -> None  # 404 в мульти-режиме: фича существует только в сингл-установке.
 def _tutor_or_login(db: Session, tutor_id: str) -> Tutor  # Репетитор из сессии; удалённый аккаунт — как отсутствие входа.
@@ -7009,6 +7012,27 @@ def test_all_three_sessions_are_independent(client, accounts)  # Все три �
 def test_forged_student_cookie_and_unknown_cookie_are_false(client)  # Поддельный токен и незнакомое имя cookie не ломают ответ.
 def test_expired_session_is_false(client, accounts, role)  # Протухшая сессия любой роли даёт `false`, остальные не затронуты.
 def test_landing_auth_script_is_served(client)  # Скрипт отдаётся локальной статикой по пути из шаблона лендинга.
+
+# tests/test_landing_blocks.py [python]
+imports: json, re, decimal.Decimal, pathlib.Path, pytest, app.config.settings, app.landing.services.blocks.BLOCK_CATEGORIES, app.landing.services.blocks.CATEGORY_BASIC, app.landing.services.blocks.CATEGORY_LANDING, app.landing.services.blocks.CATEGORY_LAYOUT, app.landing.services.blocks.landing_blocks
+def landing_root(tmp_path, monkeypatch)  # Изолированный каталог лендинга на время теста.
+def single_mode(monkeypatch)  # Включает сингл-режим: фича лендинга доступна.
+def _login(client, email=EMAIL)
+def owner(client, tutor_factory, landing_root, single_mode)  # Репетитор с заполненным профилем, вошедший в клиент.
+def _blocks_payload(response)  # Достаёт JSON блоков из `<script id="landing-blocks">`.
+def test_landing_blocks_cover_main_sections()  # В наборе есть все основные секции лендинга и служебные блоки.
+def test_blocks_use_only_known_categories()  # Каждый блок отнесён к одной из объявленных категорий.
+def test_blocks_are_grouped_into_categories()  # Секции лендинга, простые элементы и раскладка лежат в своих группах.
+def test_cta_links_to_tutor_public_page()  # CTA «Обложка» и кнопка ведут на публичную страницу этого репетитора.
+def test_image_block_has_no_empty_src_and_opens_asset_manager()  # Блок изображения не тащит `src=""` и помечен для выбора картинки.
+def test_blocks_markup_has_no_source_indentation()  # HTML блоков не начинается с отступов: GrapesJS парсит строку как есть.
+def test_editor_embeds_blocks_and_enables_click_insert(client, owner)  # Редактор получает JSON блоков и включает вставку блока по клику.
+def test_editor_blocks_use_tutor_cta_url(client, owner)  # CTA в блоках ведёт на публичную страницу владельца, а не на заглушку.
+def test_editor_opens_asset_manager_for_inserted_image(client, owner)  # В JS редактора есть обработчик вставки блока изображения.
+def test_image_marker_is_checked_by_presence_not_truthiness(client, owner)  # Маркер ищется по наличию ключа, а не по истинности значения.
+def test_cancelled_image_pick_removes_empty_component(client, owner)  # Закрытие Asset Manager без выбора убирает пустую картинку.
+def test_locale_has_labels_for_every_block()  # У каждого блока и категории есть русская подпись в локали.
+def _locale_section(locale: str, name: str) -> dict[str, str]  # Плоская секция `blockManager.<name>` из файла локали.
 
 # tests/test_landing_editor.py [python]
 imports: json, re, decimal.Decimal, pathlib.Path, types.SimpleNamespace, pytest, app.config.settings, app.landing.services.draft_render.AUTH_SCRIPT, app.landing.services.draft_render.build_document, app.landing.services.draft_render.css_for_editor, app.landing.services.draft_render.default_title, app.landing.services.draft_render.ensure_auth_script, app.landing.services.draft_render.extract_body, app.landing.services.draft_render.extract_first_style, app.landing.services.draft_render.extract_title, app.landing.services.draft_render.render_draft_document, app.landing.services.draft_render.strip_scripts, app.landing.services.storage.LandingStorage

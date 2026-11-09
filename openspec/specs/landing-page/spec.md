@@ -297,10 +297,11 @@ MUST NOT перезаписывать черновик.
 ### Requirement: Набор блоков лендинга в редакторе
 
 `GET /tutor/landing/editor` SHALL передавать в шаблон набор блоков
-GrapesJS: готовые секции лендинга, базовые элементы и раскладку. Набор
-SHALL описываться сервисом `app/landing/services/blocks.py` и вшиваться в
-страницу JSON-ом в `<script type="application/json"
-id="landing-blocks">`. Редактор SHALL инициализировать GrapesJS с
+GrapesJS: готовые секции лендинга, базовые элементы и раскладку. Разметка
+блоков SHALL храниться отдельными шаблонами в
+`app/landing/templates/blocks/`, набор SHALL собираться сервисом
+`app/landing/services/blocks.py` и вшиваться в страницу JSON-ом в
+`<script type="application/json" id="landing-blocks">`. Редактор SHALL инициализировать GrapesJS с
 `blockManager: { appendOnClick: true, blocks: <набор> }`, чтобы блок
 добавлялся кликом, а не только перетаскиванием.
 
