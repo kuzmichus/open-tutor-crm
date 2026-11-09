@@ -150,8 +150,51 @@ def test_reset_creates_draft_from_profile(client, owner, landing_root):
     assert f'href="/s/{owner}"' in draft
 
 
+def test_template_has_all_sections_and_demo_content(client, owner, landing_root):
+    """Структура по ТЗ: все 8 секций в порядке, демо-набор заполнен."""
+    client.post("/tutor/landing/reset")
+    draft = (landing_root / "draft.html").read_text(encoding="utf-8")
+
+    # Порядок секций: hero, услуги и цены, обо мне, образование, отзывы,
+    # шаги, FAQ, запись.
+    for fragment in (
+        '<h1 class="hero__title"',
+        'id="pricing"',
+        'id="about"',
+        'id="education"',
+        'id="reviews"',
+        'id="how"',
+        'id="faq"',
+        'id="signup"',
+        '<footer class="footer"',
+    ):
+        assert fragment in draft, fragment
+
+    positions = [draft.index(fragment) for fragment in (
+        'id="pricing"', 'id="about"', 'id="education"', 'id="reviews"', 'id="how"', 'id="faq"', 'id="signup"',
+    )]
+    assert positions == sorted(positions), "секции идут в порядке ТЗ"
+
+    # Демо-контент: оффер, пакеты, образование, отзывы, шаги, FAQ.
+    assert "Подготовлю к ЕГЭ по математике на 80+" in draft
+    assert "Выбирают чаще всего" in draft
+    assert "Интенсив к экзамену" in draft
+    assert "Образование, курсы, сертификаты" in draft
+    assert "ЕГЭ профиль — 85" in draft
+    assert "Как проходит обучение" in draft
+    assert "Что если не понравится?" in draft
+    # CTA на страницу записи; у всех трёх пакетов явная цена в рублях.
+    assert "Записаться на бесплатное пробное" in draft
+    assert draft.count('class="plan__value"') == 3
+    assert "₽" in draft
+    # Комментарии Jinja не попадают в страницу: маркер внутри комментария
+    # закрывает его раньше времени, и хвост уходит в текст как обычный HTML.
+    assert "{#" not in draft
+    assert "#}" not in draft
+
+
 def test_template_has_login_entries_and_no_external_assets(client, owner, landing_root):
-    """В шаблоне есть точки входа, локальный скрипт и нет CDN/app.css."""
+    """В шаблоне есть точки входа, локальные скрипты и нет CDN/app.css."""
     client.post("/tutor/landing/reset")
     draft = (landing_root / "draft.html").read_text(encoding="utf-8")
 
@@ -159,12 +202,36 @@ def test_template_has_login_entries_and_no_external_assets(client, owner, landin
     assert 'href="/parent/login" data-auth="parent"' in draft
     assert 'href="/tutor/login" data-auth="tutor"' in draft
     assert '<script src="/static/landing-auth.js" defer></script>' in draft
+    assert '<script src="/static/landing-effects.js"></script>' in draft
     assert "styles.css" not in draft
     assert "app.css" not in draft
     assert "https://" not in draft
     assert "http://" not in draft
-    # Мобильный брейкпоинт.
-    assert "@media (max-width: 640px)" in draft
+    # Адаптив mobile-first: планшет и десктоп.
+    assert "@media (min-width: 768px)" in draft
+    assert "@media (min-width: 1024px)" in draft
+    # Тёмная тема: переключатель и системная авто-ветка.
+    assert 'data-theme-toggle' in draft
+    assert ":root[data-theme=\"dark\"]" in draft
+    assert "@media (prefers-color-scheme: dark)" in draft
+
+
+def test_empty_profile_fields_do_not_render_sections(client, tutor_factory, landing_root, single_mode):
+    """Пустые поля профиля не рендерят пустые секции и «None»."""
+    tutor_factory(name="Пётр", email=EMAIL, password=PASSWORD)
+    _login(client)
+
+    client.post("/tutor/landing/reset")
+    draft = (landing_root / "draft.html").read_text(encoding="utf-8")
+
+    assert 'id="about"' not in draft  # нет ни «О себе», ни опыта
+    assert "Опыт работы" not in draft
+    assert "Репетитор по" not in draft  # нет предмета
+    assert "None" not in draft
+    # Телефона нет — пилюля не рисуется, секция «Услуги и цены» остаётся
+    # с демо-ценой вместо ставки.
+    assert "tel:" not in draft
+    assert "1\u00a0200 ₽" in draft
 
 
 def test_profile_fields_are_escaped(client, tutor_factory, landing_root, single_mode):

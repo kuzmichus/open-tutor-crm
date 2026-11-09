@@ -12,14 +12,17 @@
 Секции используют классы и CSS-переменные шаблона по умолчанию
 (`default_page.html.j2`), поэтому вставленный блок сразу выглядит как
 остальная страница и переживает сохранение: правила этих классов уже
-лежат в первом `<style>` черновика. Служебные блоки без собственного
+лежат в первом `<style>` черновика. Набор секций повторяет структуру
+шаблона по умолчанию: тот же порядок и та же разметка, но с
+демо-текстами вместо данных профиля. Служебные блоки без собственного
 класса (разделитель, колонки) несут оформление в атрибуте `style` — так
 они выглядят одинаково и в старом черновике, где новых правил в CSS ещё
 нет.
 
-CTA блока «Обложка» ведёт на публичную страницу записи текущего
-репетитора: адрес `/s/<tutor_id>` знает только сервер, поэтому он
-подставляется при рендере редактора, а не хранится в статическом JSON.
+CTA блоков «Обложка», «Услуги и цены» и «Запись» ведут на публичную
+страницу записи текущего репетитора: адрес `/s/<tutor_id>` знает только
+сервер, поэтому он подставляется при рендере редактора, а не хранится в
+статическом JSON.
 
 Подписи блоков и категорий живут в русской локали
 (`app/static/dist/grapesjs/i18n-ru.js`): GrapesJS берёт их оттуда по id,
@@ -35,12 +38,19 @@ CATEGORY_LAYOUT = "layout"
 BLOCK_CATEGORIES = (CATEGORY_LANDING, CATEGORY_BASIC, CATEGORY_LAYOUT)
 
 # (id блока, категория, имя файла разметки в `templates/blocks/`). Порядок
-# кортежа — порядок показа в панели блоков.
+# кортежа — порядок показа в панели блоков: секции идут в том же порядке,
+# что и на странице по умолчанию. id `price` сохранён за секцией «Услуги и
+# цены» (раньше там была одна ставка) — подпись живёт в русской локали.
 BLOCK_TEMPLATES: tuple[tuple[str, str, str], ...] = (
     ("header", CATEGORY_LANDING, "header.html.j2"),
     ("hero", CATEGORY_LANDING, "hero.html.j2"),
-    ("about", CATEGORY_LANDING, "about.html.j2"),
     ("price", CATEGORY_LANDING, "price.html.j2"),
+    ("about", CATEGORY_LANDING, "about.html.j2"),
+    ("education", CATEGORY_LANDING, "education.html.j2"),
+    ("reviews", CATEGORY_LANDING, "reviews.html.j2"),
+    ("steps", CATEGORY_LANDING, "steps.html.j2"),
+    ("faq", CATEGORY_LANDING, "faq.html.j2"),
+    ("signup", CATEGORY_LANDING, "signup.html.j2"),
     ("contacts", CATEGORY_LANDING, "contacts.html.j2"),
     ("footer", CATEGORY_LANDING, "footer.html.j2"),
     ("heading", CATEGORY_BASIC, "heading.html.j2"),

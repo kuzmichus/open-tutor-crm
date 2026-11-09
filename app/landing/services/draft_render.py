@@ -10,28 +10,45 @@
 и CSS отдельно (`getHtml()` / `getCss()`), а на диске лежит полноценный
 документ. При загрузке редактора из документа извлекаются тело и первый
 `<style>`; при сохранении тело и CSS снова оборачиваются в фиксированную
-шапку. `<title>` переносится из текущего черновика, чтобы правка тела не
-сбрасывала заголовок страницы.
+шапку. `<title>` и служебные `<meta>` (description, robots) переносятся
+из текущего черновика, чтобы правка тела не сбрасывала их.
 
-Тег `<script src="/static/landing-auth.js" defer></script>` — часть
-опубликованной страницы (подмена кнопок входа), но не часть редактируемого
-контента: GrapesJS вырезал бы скрипт из тела. Поэтому при сохранении тег
-идемпотентно гарантируется в конце документа: маркер уже есть — документ
-не меняется, иначе тег вставляется перед `</body>`.
+Скрипты (`/static/landing-effects.js`, `/static/landing-auth.js`) — часть
+опубликованной страницы (тема, проявление секций, подмена кнопок входа),
+но не часть редактируемого контента: GrapesJS вырезал бы их из тела.
+Поэтому при сохранении теги идемпотентно гарантируются в конце документа:
+маркер уже есть — тег не дублируется, иначе он вставляется перед
+`</body>`. Эффекты идут раньше скрипта входов: тот помечен `defer`, а
+эффекты должны выставить тему до первой отрисовки.
 """
 
 import html
 import re
 
-# Тег подмены входов на опубликованной странице и его маркер. Проверка
-# идёт по маркеру, а не по полному тегу: старый черновик мог содержать
-# другой порядок атрибутов, и второй тег не нужен.
+# Служебные теги скриптов на опубликованной странице и их маркеры.
+# Проверка идёт по маркеру, а не по полному тегу: старый черновик мог
+# содержать другой порядок атрибутов, и второй тег не нужен. Порядок в
+# `RUNTIME_SCRIPTS` — порядок в документе: эффекты без `defer` ставят
+# тему до первой отрисовки, скрипт входов ждёт DOM.
 AUTH_SCRIPT = '<script src="/static/landing-auth.js" defer></script>'
 AUTH_MARKER = "landing-auth.js"
+EFFECTS_SCRIPT = '<script src="/static/landing-effects.js"></script>'
+EFFECTS_MARKER = "landing-effects.js"
+
+RUNTIME_SCRIPTS: tuple[tuple[str, str], ...] = (
+    (EFFECTS_SCRIPT, EFFECTS_MARKER),
+    (AUTH_SCRIPT, AUTH_MARKER),
+)
 
 _BODY_RE = re.compile(r"<body\b[^>]*>(.*?)</body\s*>", re.IGNORECASE | re.DOTALL)
 _STYLE_RE = re.compile(r"<style\b[^>]*>(.*?)</style\s*>", re.IGNORECASE | re.DOTALL)
 _TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title\s*>", re.IGNORECASE | re.DOTALL)
+# Служебные `<meta>` черновика: переносятся при сохранении, как `<title>`.
+_META_CONTENT_RE = re.compile(r'\bcontent="([^"]*)"')
+
+# Дефолт для `robots`, если в черновике тега нет: страница публичная и
+# должна индексироваться; тег в шаблоне по умолчанию — тот же.
+DEFAULT_ROBOTS = "index, follow"
 # Самозакрывающийся <script ... /> и обычный <script ...>...</script>.
 _SCRIPT_RE = re.compile(
     r"<script\b[^>]*/>|<script\b[^>]*>.*?</script\s*>",
@@ -87,6 +104,35 @@ def extract_title(document: str) -> str | None:
         return None
     title = match.group(1).strip()
     return title or None
+
+
+def _extract_meta(document: str, name: str) -> str | None:
+    """Значение `content` первого `<meta name="…">`; пустое — как отсутствующее.
+
+    Как и `<title>`, вставляется в собранный документ как есть: черновик
+    контролирует наш код, а значение экранирует шаблон (`| e`). Повторное
+    экранирование сломало бы сущности вроде `&amp;`.
+    """
+    tag = re.search(
+        rf'<meta\b[^>]*\bname="{name}"[^>]*/?>', document, re.IGNORECASE
+    )
+    if tag is None:
+        return None
+    content = _META_CONTENT_RE.search(tag.group(0))
+    if content is None:
+        return None
+    value = content.group(1).strip()
+    return value or None
+
+
+def extract_meta_description(document: str) -> str | None:
+    """`<meta name="description">` черновика — переживёт правку тела."""
+    return _extract_meta(document, "description")
+
+
+def extract_meta_robots(document: str) -> str | None:
+    """`<meta name="robots">` черновика; нет тега — дефолт `DEFAULT_ROBOTS`."""
+    return _extract_meta(document, "robots") or DEFAULT_ROBOTS
 
 
 def strip_scripts(fragment: str) -> str:
@@ -285,19 +331,34 @@ def default_title(tutor) -> str:
     return html.escape(f"{name} — репетитор", quote=False)
 
 
-def build_document(*, body: str, css: str, title: str) -> str:
-    """Собирает полный документ из тела, CSS и готового `<title>`.
+def build_document(
+    *,
+    body: str,
+    css: str,
+    title: str,
+    description: str | None = None,
+    robots: str | None = None,
+) -> str:
+    """Собирает полный документ из тела, CSS и готовой шапки.
 
-    `title` вставляется как уже готовый HTML: из черновика он берётся
-    как есть, а `default_title` экранирует имя заранее. Повторное
-    экранирование сломало бы сущности вроде `&amp;`.
+    `title`, `description` и `robots` вставляются как уже готовый HTML:
+    из черновика они берутся как есть, а `default_title` экранирует имя
+    заранее. Повторное экранирование сломало бы сущности вроде `&amp;`.
+    `description` без значения не пишется вовсе — пустая description хуже
+    отсутствующей.
     """
+    head = (
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+    )
+    if description:
+        head += f'<meta name="description" content="{description}">\n'
+    head += f'<meta name="robots" content="{robots or DEFAULT_ROBOTS}">\n'
     return (
         "<!doctype html>\n"
         '<html lang="ru">\n'
         "<head>\n"
-        '<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"{head}"
         f"<title>{title}</title>\n"
         f"<style>{css}</style>\n"
         "</head>\n"
@@ -306,20 +367,26 @@ def build_document(*, body: str, css: str, title: str) -> str:
     )
 
 
-def ensure_auth_script(document: str) -> str:
-    """Гарантирует ровно один тег `landing-auth.js` перед `</body>`.
+def ensure_runtime_scripts(document: str) -> str:
+    """Гарантирует служебные теги скриптов перед `</body>`, каждый — один.
 
-    Идемпотентна: если маркер уже встречается в документе, строка
-    возвращается без изменений. Без `</body>` (испорченный/фрагментный
-    документ) тег дописывается в конец.
+    Идемпотентна по маркеру каждого тега: тег уже в документе (пусть и с
+    другим порядком атрибутов) — второй не появляется. Без `</body>`
+    (испорченный/фрагментный документ) тег дописывается в конец. Порядок
+    вставки задаёт `RUNTIME_SCRIPTS`: тег темы — раньше тега входов.
     """
-    if AUTH_MARKER in document:
-        return document
-    matches = list(_BODY_END_RE.finditer(document))
-    if not matches:
-        return document + AUTH_SCRIPT
-    end = matches[-1]
-    return document[: end.start()] + AUTH_SCRIPT + document[end.start() :]
+    for script, marker in RUNTIME_SCRIPTS:
+        if marker in document:
+            continue
+        matches = list(_BODY_END_RE.finditer(document))
+        if matches:
+            end = matches[-1]
+            document = (
+                document[: end.start()] + script + document[end.start() :]
+            )
+        else:
+            document += script
+    return document
 
 
 def render_draft_document(
@@ -332,9 +399,9 @@ def render_draft_document(
     """Собирает итоговый `draft.html` для сохранения из редактора.
 
     `html` — содержимое тела от `editor.getHtml()`, `css` — от
-    `editor.getCss()`. Заголовок берётся из текущего черновика, чтобы
-    правка не сбрасывала `<title>`; если черновика нет или заголовок
-    пуст — подставляется «{имя} — репетитор».
+    `editor.getCss()`. Заголовок и служебные `<meta>` берутся из текущего
+    черновика, чтобы правка тела не сбрасывала их; если черновика нет или
+    заголовок пуст — подставляется «{имя} — репетитор».
 
     `editor.getHtml()` возвращает компонент-обёртку `<body>…</body>`
     (GrapesJS всегда оборачивает компоненты в body). Обёртка снимается,
@@ -347,4 +414,16 @@ def render_draft_document(
     title = extract_title(existing_html) if existing_html else None
     if title is None:
         title = default_title(tutor)
-    return ensure_auth_script(build_document(body=body, css=css, title=title))
+    description = (
+        extract_meta_description(existing_html) if existing_html else None
+    )
+    robots = extract_meta_robots(existing_html) if existing_html else None
+    return ensure_runtime_scripts(
+        build_document(
+            body=body,
+            css=css,
+            title=title,
+            description=description,
+            robots=robots,
+        )
+    )

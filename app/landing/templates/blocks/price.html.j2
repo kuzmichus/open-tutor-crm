@@ -1,9 +1,84 @@
-{# «Стоимость»: цена — плейсхолдер для посева, не живые данные, поэтому без
-   money() из finance.presentation. #}
-<section class="section">
-  <h2 class="section__title">Стоимость</h2>
-  <div class="price">
-    <span class="price__value">1 200 ₽</span>
-    <span class="price__unit">за занятие</span>
+{# «Услуги и цены»: три карточки-пакета, цены указаны явно — плейсхолдеры
+   для посева, не живые данные, поэтому без money() из finance.presentation.
+   CTA каждой карточки ведёт на страницу записи (адрес подставляет сервер). #}
+<section class="section" id="pricing" aria-labelledby="pricing-title">
+  <header class="section__head">
+    <h2 class="section__title" id="pricing-title">Услуги и цены</h2>
+    <p class="section__lead">Первое занятие — бесплатное пробное. Цены указаны явно, без «по запросу».</p>
+  </header>
+  <div class="pricing">
+    <article class="plan">
+      <h3 class="plan__name">Разовое занятие</h3>
+      <p class="plan__price">
+        <span class="plan__value"> 1 200 ₽</span>
+        <span class="plan__unit">занятие 60 минут</span>
+      </p>
+      <ul class="plan__list">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          Разбор текущей темы и домашки
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          Домашнее задание с проверкой
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          Вопросы между уроками в чате
+        </li>
+      </ul>
+      <a class="btn" href="{{ cta_url | e }}">Выбрать</a>
+    </article>
+
+    <article class="plan plan--popular">
+      <span class="plan__badge">Выбирают чаще всего</span>
+      <h3 class="plan__name">Абонемент на месяц</h3>
+      <p class="plan__price">
+        <span class="plan__value">4 400 ₽</span>
+        <span class="plan__unit">4 урока в месяц</span>
+      </p>
+      <ul class="plan__list">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          4 занятия по 60 минут
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          Личный план подготовки
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          Проверка ДЗ между уроками
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          Перенос урока без потери
+        </li>
+      </ul>
+      <a class="btn" href="{{ cta_url | e }}">Выбрать</a>
+    </article>
+
+    <article class="plan">
+      <h3 class="plan__name">Интенсив к экзамену</h3>
+      <p class="plan__price">
+        <span class="plan__value">9 600 ₽</span>
+        <span class="plan__unit">пакет 8 уроков</span>
+      </p>
+      <ul class="plan__list">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          Программа под формат экзамена
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          2 пробных экзамена с разбором
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          Стратегия решения и тайминг
+        </li>
+      </ul>
+      <a class="btn" href="{{ cta_url | e }}">Выбрать</a>
+    </article>
   </div>
 </section>

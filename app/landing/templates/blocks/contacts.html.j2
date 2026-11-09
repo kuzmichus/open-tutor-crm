@@ -1,6 +1,26 @@
-{# «Контакты»: телефон и tel:-ссылка — плейсхолдеры; реальный телефон
+{# «Контакты»: тот же набор пилюль, что в подвале шаблона, отдельной
+   секцией. Ссылки мессенджеров — плейсхолдеры; реальный телефон
    репетитора знает только шаблон по умолчанию, он рендерится из профиля. #}
-<section class="section">
-  <h2 class="section__title">Контакты</h2>
-  <a class="contact-link" href="tel:+79991234567">+7 (999) 123-45-67</a>
+<section class="section" id="contacts" aria-labelledby="contacts-title">
+  <header class="section__head">
+    <h2 class="section__title" id="contacts-title">Контакты</h2>
+  </header>
+  <div class="footer__contacts">
+    <a class="contact-link" href="tel:+79991234567">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>
+      +7 (999) 123-45-67
+    </a>
+    <a class="contact-link" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+      Telegram
+    </a>
+    <a class="contact-link" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+      WhatsApp
+    </a>
+    <a class="contact-link" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>
+      Почта
+    </a>
+  </div>
 </section>

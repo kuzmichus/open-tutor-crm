@@ -87,15 +87,20 @@ def _blocks_payload(response):
 
 
 def test_landing_blocks_cover_main_sections():
-    """В наборе есть все основные секции лендинга и служебные блоки."""
+    """В наборе есть все секции структуры ТЗ и служебные блоки."""
     blocks = landing_blocks("/s/tutor-id")
     ids = [block["id"] for block in blocks]
 
     for block_id in (
         "header",
         "hero",
-        "about",
         "price",
+        "about",
+        "education",
+        "reviews",
+        "steps",
+        "faq",
+        "signup",
         "contacts",
         "footer",
     ):
@@ -104,6 +109,31 @@ def test_landing_blocks_cover_main_sections():
         assert block_id in ids, f"нет базового блока {block_id}"
     for block_id in ("column2", "column3"):
         assert block_id in ids, f"нет блока раскладки {block_id}"
+
+
+def test_landing_blocks_follow_page_order():
+    """Секции в панели идут в том же порядке, что и на странице."""
+    ids = [block["id"] for block in landing_blocks("/s/tutor-id")]
+    sections = [
+        block_id
+        for block_id in ids
+        if block_id
+        in {"header", "hero", "price", "about", "education", "reviews", "steps", "faq", "signup", "contacts", "footer"}
+    ]
+
+    assert sections == [
+        "header",
+        "hero",
+        "price",
+        "about",
+        "education",
+        "reviews",
+        "steps",
+        "faq",
+        "signup",
+        "contacts",
+        "footer",
+    ]
 
 
 def test_blocks_use_only_known_categories():
@@ -122,11 +152,13 @@ def test_blocks_are_grouped_into_categories():
 
 
 def test_cta_links_to_tutor_public_page():
-    """CTA «Обложка» и кнопка ведут на публичную страницу этого репетитора."""
+    """CTA обложки, пакетов цен и записи ведут на страницу этого репетитора."""
     blocks = {block["id"]: block for block in landing_blocks("/s/tutor-id")}
 
     assert 'href="/s/tutor-id"' in blocks["hero"]["content"]
-    assert "Записаться на занятие" in blocks["hero"]["content"]
+    assert "Записаться на бесплатное пробное" in blocks["hero"]["content"]
+    assert blocks["price"]["content"].count('href="/s/tutor-id"') == 3
+    assert 'href="/s/tutor-id"' in blocks["signup"]["content"]
     assert 'href="/s/tutor-id"' in blocks["button"]["content"]
 
 
@@ -163,7 +195,7 @@ def test_editor_embeds_blocks_and_enables_click_insert(client, owner):
     assert "var blocks = JSON.parse(" in page
 
     blocks = _blocks_payload(response)
-    assert [block["id"] for block in blocks][:3] == ["header", "hero", "about"]
+    assert [block["id"] for block in blocks][:3] == ["header", "hero", "price"]
 
 
 def test_editor_blocks_use_tutor_cta_url(client, owner):

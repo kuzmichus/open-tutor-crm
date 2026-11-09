@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-09 22:20 | 699 files | 216033 tokens
+# rtt index | generated 2026-11-09 23:19 | 700 files | 216412 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -2232,6 +2232,9 @@ imports: html, re
 def extract_body(document: str) -> str  # Содержимое первого `<body>` без самого тега; тела нет — пустая строка.
 def extract_first_style(document: str) -> str  # Содержимое первого `<style>`; остальные блоки игнорируются.
 def extract_title(document: str) -> str | None  # Заголовок из первого `<title>`; пустой заголовок — как отсутствующий.
+def _extract_meta(document: str, name: str) -> str | None  # Значение `content` первого `<meta name="…">`; пустое — как отсутствующее.
+def extract_meta_description(document: str) -> str | None  # <meta name="description">` черновика — переживёт правку тела.
+def extract_meta_robots(document: str) -> str | None  # <meta name="robots">` черновика; нет тега — дефолт `DEFAULT_ROBOTS`.
 def strip_scripts(fragment: str) -> str  # Удаляет `<script>` из фрагмента, загружаемого в редактор.
 def _split_css_values(value: str) -> list[str]  # Делит значение по пробелам, не трогая пробелы внутри `var(...)`.
 def _box_values(values: list[str]) -> list[str]  # Приводит 1–4 значения `margin`/`padding` к порядку top/right/bottom/left.
@@ -2245,8 +2248,15 @@ def _expand_declaration(prop: str, value: str) -> list[tuple[str, str]] | None  
 def _expand_block(block: str) -> str  # Переписывает объявления одного блока, остальные оставляет дословно.
 def css_for_editor(css: str) -> str  # Готовит CSS черновика к загрузке в GrapesJS без потери оформления.
 def default_title(tutor) -> str  # <title>` по умолчанию: «{имя} — репетитор», безопасный для HTML.
-def build_document(*, body: str, css: str, title: str) -> str  # Собирает полный документ из тела, CSS и готового `<title>`.
-def ensure_auth_script(document: str) -> str  # Гарантирует ровно один тег `landing-auth.js` перед `</body>`.
+def build_document(
+    *,
+    body: str,
+    css: str,
+    title: str,
+    description: str | None = None,
+    robots: str | None = None,
+) -> str  # Собирает полный документ из тела, CSS и готовой шапки.
+def ensure_runtime_scripts(document: str) -> str  # Гарантирует служебные теги скриптов перед `</body>`, каждый — один.
 def render_draft_document(
     tutor,
     *,
@@ -3454,6 +3464,11 @@ function createIcons(options)
 
 # app/static/landing-auth.js [javascript]
 function applyStatus(status)
+
+# app/static/landing-effects.js [javascript]
+function storedTheme()
+function saveTheme(value)
+function syncExpanded(details)
 
 # app/static/lessons.js [javascript]
 function pad2(value)
@@ -7020,10 +7035,11 @@ def single_mode(monkeypatch)  # Включает сингл-режим: фича
 def _login(client, email=EMAIL)
 def owner(client, tutor_factory, landing_root, single_mode)  # Репетитор с заполненным профилем, вошедший в клиент.
 def _blocks_payload(response)  # Достаёт JSON блоков из `<script id="landing-blocks">`.
-def test_landing_blocks_cover_main_sections()  # В наборе есть все основные секции лендинга и служебные блоки.
+def test_landing_blocks_cover_main_sections()  # В наборе есть все секции структуры ТЗ и служебные блоки.
+def test_landing_blocks_follow_page_order()  # Секции в панели идут в том же порядке, что и на странице.
 def test_blocks_use_only_known_categories()  # Каждый блок отнесён к одной из объявленных категорий.
 def test_blocks_are_grouped_into_categories()  # Секции лендинга, простые элементы и раскладка лежат в своих группах.
-def test_cta_links_to_tutor_public_page()  # CTA «Обложка» и кнопка ведут на публичную страницу этого репетитора.
+def test_cta_links_to_tutor_public_page()  # CTA обложки, пакетов цен и записи ведут на страницу этого репетитора.
 def test_image_block_has_no_empty_src_and_opens_asset_manager()  # Блок изображения не тащит `src=""` и помечен для выбора картинки.
 def test_blocks_markup_has_no_source_indentation()  # HTML блоков не начинается с отступов: GrapesJS парсит строку как есть.
 def test_editor_embeds_blocks_and_enables_click_insert(client, owner)  # Редактор получает JSON блоков и включает вставку блока по клику.
@@ -7035,7 +7051,7 @@ def test_locale_has_labels_for_every_block()  # У каждого блока и 
 def _locale_section(locale: str, name: str) -> dict[str, str]  # Плоская секция `blockManager.<name>` из файла локали.
 
 # tests/test_landing_editor.py [python]
-imports: json, re, decimal.Decimal, pathlib.Path, types.SimpleNamespace, pytest, app.config.settings, app.landing.services.draft_render.AUTH_SCRIPT, app.landing.services.draft_render.build_document, app.landing.services.draft_render.css_for_editor, app.landing.services.draft_render.default_title, app.landing.services.draft_render.ensure_auth_script, app.landing.services.draft_render.extract_body, app.landing.services.draft_render.extract_first_style, app.landing.services.draft_render.extract_title, app.landing.services.draft_render.render_draft_document, app.landing.services.draft_render.strip_scripts, app.landing.services.storage.LandingStorage
+imports: json, re, decimal.Decimal, pathlib.Path, types.SimpleNamespace, pytest, app.config.settings, app.landing.services.draft_render.AUTH_SCRIPT, app.landing.services.draft_render.EFFECTS_SCRIPT, app.landing.services.draft_render.build_document, app.landing.services.draft_render.css_for_editor, app.landing.services.draft_render.default_title, app.landing.services.draft_render.ensure_runtime_scripts, app.landing.services.draft_render.extract_body, app.landing.services.draft_render.extract_first_style, app.landing.services.draft_render.extract_meta_description, app.landing.services.draft_render.extract_meta_robots, app.landing.services.draft_render.extract_title, app.landing.services.draft_render.render_draft_document, app.landing.services.draft_render.strip_scripts, app.landing.services.storage.LandingStorage
 def landing_root(tmp_path, monkeypatch)  # Изолированный каталог лендинга на время теста.
 def single_mode(monkeypatch)  # Включает сингл-режим: фича лендинга доступна.
 def _login(client, email=EMAIL)
@@ -7049,7 +7065,7 @@ def test_editor_payload_extracts_body_and_first_style(client, owner)  # В ре�
 def test_save_writes_full_document(client, owner, landing_root)  # Сохранение меняет `draft.html`, добавляя шапку и тег скрипта.
 def test_save_keeps_existing_title(client, owner, landing_root)  # <title>` текущего черновика переживает сохранение тела.
 def test_save_without_draft_uses_default_title(client, owner, landing_root)  # Без черновика заголовок строится из имени репетитора.
-def test_save_is_idempotent_for_auth_script(client, owner, landing_root)  # Два сохранения и тег в HTML не создают второй `landing-auth.js`.
+def test_save_is_idempotent_for_runtime_scripts(client, owner, landing_root)  # Два сохранения и теги в HTML не создают дубли служебных скриптов.
 def test_invalid_payload_is_validation_error(client, owner)  # Неверный JSON — 422 от FastAPI, а не 500.
 def test_round_trip_keeps_page_intact(client, owner, landing_root)  # Открыл → ничего не менял → сохранил: страница не теряет содержимое.
 def test_manage_page_links_to_editor(client, owner)  # Кнопка «Редактировать» на странице управления ведёт в редактор.
@@ -7059,10 +7075,13 @@ def test_extract_body_handles_attributes_and_missing_body()
 def test_extract_first_style_returns_only_first_block()
 def test_extract_title_strips_and_ignores_empty()
 def test_strip_scripts_removes_inline_and_external_tags()
-def test_ensure_auth_script_inserts_before_body_end()
-def test_ensure_auth_script_appends_without_body_end()
-def test_ensure_auth_script_does_not_duplicate()
+def test_ensure_runtime_scripts_inserts_both_before_body_end()
+def test_ensure_runtime_scripts_appends_without_body_end()
+def test_ensure_runtime_scripts_does_not_duplicate()
 def test_build_document_has_required_head_and_body()
+def test_build_document_carries_description_and_robots()
+def test_extract_meta_description_and_robots()
+def test_render_draft_document_carries_meta()
 def test_default_title_escapes_name()
 def test_render_draft_document_uses_existing_title()
 def test_render_draft_document_unwraps_editor_body()  # editor.getHtml()` отдаёт `<body>…</body>`: вторая обёртка не нужна.
@@ -7090,7 +7109,9 @@ def test_two_tutors_do_not_unlock_landing_in_multi_mode(
 def test_empty_state_shows_create_button(client, owner, landing_root)  # Без черновика страница показывает «Пусто» и создание черновика.
 def test_publish_without_draft_does_nothing(client, owner, landing_root)  # Публиковать нечего — редирект с подсказкой, `index.html` не создан.
 def test_reset_creates_draft_from_profile(client, owner, landing_root)  # «Создать черновик» рендерит шаблон данными профиля.
-def test_template_has_login_entries_and_no_external_assets(client, owner, landing_root)  # В шаблоне есть точки входа, локальный скрипт и нет CDN/app.css.
+def test_template_has_all_sections_and_demo_content(client, owner, landing_root)  # Структура по ТЗ: все 8 секций в порядке, демо-набор заполнен.
+def test_template_has_login_entries_and_no_external_assets(client, owner, landing_root)  # В шаблоне есть точки входа, локальные скрипты и нет CDN/app.css.
+def test_empty_profile_fields_do_not_render_sections(client, tutor_factory, landing_root, single_mode)  # Пустые поля профиля не рендерят пустые секции и «None».
 def test_profile_fields_are_escaped(client, tutor_factory, landing_root, single_mode)  # <script>` из профиля не становится исполняемым тегом.
 def test_get_does_not_overwrite_draft(client, owner, landing_root)  # Обычный просмотр страницы не трогает правки черновика.
 def test_preview_without_draft_is_not_found(client, owner)

@@ -2,8 +2,8 @@
 
 Редактор — автономная страница GrapesJS: из `draft.html` в неё попадают
 только тело (без скриптов) и первый `<style>`, а сохранение снова собирает
-полный документ, сохраняет `<title>` и идемпотентно гарантирует тег
-`/static/landing-auth.js`.
+полный документ, сохраняет `<title>` и служебные `<meta>`, идемпотентно
+гарантирует теги `/static/landing-effects.js` и `/static/landing-auth.js`.
 
 Публичная отдача и страница управления живут в соседних файлах
 (`test_landing_public.py`, `test_landing_page.py`).
@@ -19,12 +19,15 @@ import pytest
 from app.config import settings
 from app.landing.services.draft_render import (
     AUTH_SCRIPT,
+    EFFECTS_SCRIPT,
     build_document,
     css_for_editor,
     default_title,
-    ensure_auth_script,
+    ensure_runtime_scripts,
     extract_body,
     extract_first_style,
+    extract_meta_description,
+    extract_meta_robots,
     extract_title,
     render_draft_document,
     strip_scripts,
@@ -127,7 +130,7 @@ def test_editor_creates_missing_draft(client, owner, landing_root):
     assert response.status_code == 200
     draft = (landing_root / "draft.html").read_text(encoding="utf-8")
     assert "Анна Иванова" in draft
-    assert "hero__name" in draft
+    assert "hero__title" in draft
     assert response.headers["cache-control"] == "no-store"
 
 
@@ -164,7 +167,8 @@ def test_editor_payload_extracts_body_and_first_style(client, owner):
     assert "hero" in payload["body"]
     assert 'data-auth="student"' in payload["body"]
     assert "--accent" in payload["css"]
-    assert "@media (max-width: 640px)" in payload["css"]
+    assert ":root[data-theme=\"dark\"]" in payload["css"]
+    assert "@media (min-width: 768px)" in payload["css"]
     # Сокращения с var() развёрнуты: CSSOM GrapesJS иначе терял бы их.
     assert "background-color: var(--bg)" in payload["css"]
     assert "border-bottom-color: var(--border)" in payload["css"]
@@ -172,6 +176,7 @@ def test_editor_payload_extracts_body_and_first_style(client, owner):
     assert not re.search(r"background\s*:\s*var\(", payload["css"])
     assert "<script" not in payload["body"]
     assert "landing-auth.js" not in payload["body"]
+    assert "landing-effects.js" not in payload["body"]
 
 
 # --------------------------------------------------------------------------
@@ -196,6 +201,9 @@ def test_save_writes_full_document(client, owner, landing_root):
     assert '<meta charset="utf-8">' in draft
     assert 'name="viewport"' in draft
     assert draft.count("landing-auth.js") == 1
+    assert draft.count("landing-effects.js") == 1
+    # Эффекты стоят раньше входов: тема должна ставиться до отрисовки.
+    assert draft.index("landing-effects.js") < draft.index("landing-auth.js")
 
 
 def test_save_keeps_existing_title(client, owner, landing_root):
@@ -228,20 +236,21 @@ def test_save_without_draft_uses_default_title(client, owner, landing_root):
     assert "<title>Анна Иванова — репетитор</title>" in draft
 
 
-def test_save_is_idempotent_for_auth_script(client, owner, landing_root):
-    """Два сохранения и тег в HTML не создают второй `landing-auth.js`."""
+def test_save_is_idempotent_for_runtime_scripts(client, owner, landing_root):
+    """Два сохранения и теги в HTML не создают дубли служебных скриптов."""
     client.post("/tutor/landing/draft", json={"html": "<p>Раз</p>", "css": ""})
     client.post("/tutor/landing/draft", json={"html": "<p>Два</p>", "css": ""})
     client.post(
         "/tutor/landing/draft",
         json={
-            "html": f"<p>Три</p>{AUTH_SCRIPT}",
+            "html": f"<p>Три</p>{AUTH_SCRIPT}{EFFECTS_SCRIPT}",
             "css": "",
         },
     )
 
     draft = (landing_root / "draft.html").read_text(encoding="utf-8")
     assert draft.count("landing-auth.js") == 1
+    assert draft.count("landing-effects.js") == 1
 
 
 def test_invalid_payload_is_validation_error(client, owner):
@@ -271,16 +280,21 @@ def test_round_trip_keeps_page_intact(client, owner, landing_root):
     assert 'data-auth="student"' in after
     assert 'data-auth="parent"' in after
     assert 'data-auth="tutor"' in after
-    assert "hero" in after
-    assert "section" in after
+    # Аккордеон FAQ переживает разбор GrapesJS: нативные <details> живы.
+    assert "<details class=\"faq__item\">" in after
+    assert "Что если не понравится?" in after
+    # Переключатель темы: кнопка и тёмные токены дошли до документа.
+    assert "data-theme-toggle" in after
+    assert ":root[data-theme=\"dark\"]" in after
+    assert "@media (min-width: 768px)" in after
     assert "--accent" in after
-    assert "@media (max-width: 640px)" in after
     # После сохранения CSS пришёл из GrapesJS: сокращения раскрыты, но
     # значения с var() не потеряны.
     assert "background-color: var(--bg)" in after
     assert "border-bottom-color: var(--border)" in after
     assert "background: var(" not in after
     assert after.count("landing-auth.js") == 1
+    assert after.count("landing-effects.js") == 1
     assert before is not None
 
 
@@ -371,6 +385,7 @@ def test_extract_title_strips_and_ignores_empty():
 def test_strip_scripts_removes_inline_and_external_tags():
     fragment = (
         "<p>До</p><script>alert(1)</script>"
+        '<script src="/static/landing-effects.js"></script>'
         '<script src="/static/landing-auth.js" defer></script>'
         '<script src="x.js" />'
         "<p>После</p>"
@@ -380,26 +395,30 @@ def test_strip_scripts_removes_inline_and_external_tags():
     assert "<script" not in result
     assert "alert(1)" not in result
     assert "landing-auth.js" not in result
+    assert "landing-effects.js" not in result
     assert "<p>До</p>" in result
     assert "<p>После</p>" in result
 
 
-def test_ensure_auth_script_inserts_before_body_end():
+def test_ensure_runtime_scripts_inserts_both_before_body_end():
     document = "<html><body><p>Текст</p></body></html>"
-    result = ensure_auth_script(document)
+    result = ensure_runtime_scripts(document)
 
-    assert result == f"<html><body><p>Текст</p>{AUTH_SCRIPT}</body></html>"
+    assert result == (
+        f"<html><body><p>Текст</p>{EFFECTS_SCRIPT}{AUTH_SCRIPT}</body></html>"
+    )
     assert result.count("landing-auth.js") == 1
+    assert result.count("landing-effects.js") == 1
 
 
-def test_ensure_auth_script_appends_without_body_end():
-    result = ensure_auth_script("<p>Фрагмент</p>")
-    assert result == f"<p>Фрагмент</p>{AUTH_SCRIPT}"
+def test_ensure_runtime_scripts_appends_without_body_end():
+    result = ensure_runtime_scripts("<p>Фрагмент</p>")
+    assert result == f"<p>Фрагмент</p>{EFFECTS_SCRIPT}{AUTH_SCRIPT}"
 
 
-def test_ensure_auth_script_does_not_duplicate():
+def test_ensure_runtime_scripts_does_not_duplicate():
     document = f"<html><body>{AUTH_SCRIPT}</body></html>"
-    assert ensure_auth_script(document) == document
+    assert ensure_runtime_scripts(document) == f"<html><body>{AUTH_SCRIPT}{EFFECTS_SCRIPT}</body></html>"
 
 
 def test_build_document_has_required_head_and_body():
@@ -409,9 +428,50 @@ def test_build_document_has_required_head_and_body():
     assert '<html lang="ru">' in document
     assert '<meta charset="utf-8">' in document
     assert 'name="viewport"' in document
+    assert '<meta name="robots" content="index, follow">' in document
+    assert 'name="description"' not in document
     assert "<title>Заголовок</title>" in document
     assert "<style>.x{color:red}</style>" in document
     assert "<body><p>Тело</p></body>" in document
+
+
+def test_build_document_carries_description_and_robots():
+    document = build_document(
+        body="<p>Тело</p>",
+        css="",
+        title="Заголовок",
+        description="Репетитор по математике",
+        robots="index, follow",
+    )
+
+    assert '<meta name="description" content="Репетитор по математике">' in document
+    assert '<meta name="robots" content="index, follow">' in document
+
+
+def test_extract_meta_description_and_robots():
+    document = (
+        "<head><title>Заголовок</title>"
+        '<meta name="description" content="Подготовка к экзаменам">'
+        '<meta name="robots" content="index, follow"></head>'
+    )
+    assert extract_meta_description(document) == "Подготовка к экзаменам"
+    assert extract_meta_robots(document) == "index, follow"
+    assert extract_meta_description("<html></html>") is None
+    # Нет тега robots — дефолт: страница публичная и должна индексироваться.
+    assert extract_meta_robots("<html></html>") == "index, follow"
+
+
+def test_render_draft_document_carries_meta():
+    tutor = SimpleNamespace(name="Анна")
+    existing = (
+        "<html><head><title>Свой</title>"
+        '<meta name="description" content="Описание страницы"></head>'
+        "<body></body></html>"
+    )
+    document = render_draft_document(tutor, html="<p>Тело</p>", css="", existing_html=existing)
+
+    assert '<meta name="description" content="Описание страницы">' in document
+    assert '<meta name="robots" content="index, follow">' in document
 
 
 def test_default_title_escapes_name():
