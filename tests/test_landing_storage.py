@@ -6,12 +6,12 @@
 """
 
 import pytest
-
 from app.config import Settings
 from app.landing.services.storage import (
     ALLOWED_ASSET_EXTENSIONS,
     LandingStorage,
     is_asset_name,
+    is_valid_asset_content,
 )
 
 # --------------------------------------------------------------------------
@@ -281,6 +281,52 @@ def test_asset_path_rejects_traversal(tmp_path, name):
 def test_is_asset_name_rejects_foreign_names(name):
     """Публичный маршрут принимает только сгенерированные имена."""
     assert is_asset_name(name) is False
+
+
+@pytest.mark.parametrize(
+    ("filename", "content"),
+    [
+        ("a.png", b"\x89PNG\r\n\x1a\nrest"),
+        ("a.jpg", b"\xff\xd8\xff\xe0rest"),
+        ("a.jpeg", b"\xff\xd8\xff\xe0rest"),
+        ("a.gif", b"GIF87arest"),
+        ("a.gif", b"GIF89arest"),
+        ("a.webp", b"RIFF\x10\x00\x00\x00WEBPrest"),
+        ("a.svg", b'<svg xmlns="http://www.w3.org/2000/svg"/>'),
+    ],
+    ids=["png", "jpg", "jpeg", "gif87", "gif89", "webp", "svg"],
+)
+def test_is_valid_asset_content_accepts_matching_files(filename, content):
+    """Содержимое совпадает с расширением — файл принимается."""
+    assert is_valid_asset_content(filename, content) is True
+
+
+@pytest.mark.parametrize(
+    ("filename", "content"),
+    [
+        ("a.png", b"plain text"),
+        ("a.jpg", b"\x89PNG\r\n\x1a\n"),
+        ("a.gif", b"RIFF\x10\x00\x00\x00WEBP"),
+        ("a.webp", b"RIFF\x10\x00\x00\x00XXXX"),
+        ("a.webp", b"RIFFWEBP"),
+        ("a.svg", b""),
+        ("a.png", b""),
+        ("a.exe", b"\x89PNG\r\n\x1a\n"),
+    ],
+    ids=[
+        "png-text",
+        "jpg-png",
+        "gif-webp",
+        "webp-bad-marker",
+        "webp-short",
+        "svg-empty",
+        "png-empty",
+        "unknown-ext",
+    ],
+)
+def test_is_valid_asset_content_rejects_foreign_files(filename, content):
+    """Несовпадение сигнатуры, пустое тело и чужое расширение — отказ."""
+    assert is_valid_asset_content(filename, content) is False
 
 
 # --------------------------------------------------------------------------

@@ -112,6 +112,8 @@
     {# Данные черновика передаются JSON-ом: tojson экранирует <, >, & и ',
        поэтому </script> из HTML черновика не вырвется из тега. #}
     <script type="application/json" id="landing-draft">{{ draft | tojson }}</script>
+    {# Список картинок лендинга для Asset Manager: тот же приём передачи. #}
+    <script type="application/json" id="landing-assets">{{ assets | tojson }}</script>
     <script src="/static/dist/grapesjs/grapes.min.js"></script>
     <script src="/static/dist/grapesjs/i18n-ru.js"></script>
     <script>
@@ -121,6 +123,18 @@
             var draft = JSON.parse(
                 document.getElementById('landing-draft').textContent
             );
+            var assets = JSON.parse(
+                document.getElementById('landing-assets').textContent
+            );
+            var assetsUrl = '/tutor/landing/assets';
+            var assetPrefix = '/landing-assets/';
+            // Текст зоны загрузки GrapesJS 0.23.9 берёт из локали, а не из
+            // опции `uploadText`: опция оставлена ниже для совместимости с
+            // контрактом, но фактическую подпись задаёт локаль.
+            var uploadText = 'Загрузить изображение (png, jpg, gif, webp, svg)';
+            if (window.grapesjsI18nRu && window.grapesjsI18nRu.assetManager) {
+                window.grapesjsI18nRu.assetManager.uploadTitle = uploadText;
+            }
             var saveButton = document.getElementById('landing-save');
             var status = document.getElementById('landing-status');
 
@@ -132,6 +146,12 @@
                 // Черновик хранит сервер: встроенное хранилище GrapesJS
                 // (localStorage) не используется.
                 storageManager: { type: 'none' },
+                assetManager: {
+                    upload: assetsUrl,
+                    uploadName: 'files',
+                    uploadText: uploadText,
+                    assets: assets
+                },
                 i18n: {
                     locale: 'ru',
                     localeFallback: 'en',
@@ -145,6 +165,85 @@
                 status.textContent = text;
                 status.classList.toggle('editor-bar__status--error', !!isError);
             }
+
+            // Отказ сервера приходит текстом: `{"error": "…"}` или
+            // `{"detail": "…"}`. Разбираем его, чтобы показать понятную
+            // причину, а не «HTTP 400».
+            function uploadErrorText(raw) {
+                try {
+                    var data = JSON.parse(raw);
+                    return data.error || data.detail || '';
+                } catch (e) {
+                    return '';
+                }
+            }
+
+            function assetName(src) {
+                if (!src || src.indexOf(assetPrefix) !== 0) {
+                    return '';
+                }
+                var name = src.slice(assetPrefix.length);
+                if (!name ||
+                    name.indexOf('/') !== -1 ||
+                    name.indexOf('?') !== -1 ||
+                    name.indexOf('#') !== -1) {
+                    return '';
+                }
+                return name;
+            }
+
+            editor.on('asset:upload:start', function () {
+                setStatus('Загрузка…', false);
+            });
+
+            editor.on('asset:upload:end', function () {
+                setStatus('', false);
+            });
+
+            editor.on('asset:upload:error', function (response) {
+                setStatus(
+                    uploadErrorText(response) ||
+                        'Не удалось загрузить изображение',
+                    true
+                );
+            });
+
+            // Удаление ассета в редакторе удаляет и файл с диска: иначе
+            // `assets/` копил бы картинки без ссылок. Ссылки абсолютные,
+            // поэтому имя восстанавливается из префикса `/landing-assets/`.
+            // Сначала подтверждение: удалённый файл ломает ссылку на
+            // странице, и вернуть его из редактора нельзя.
+            editor.on('asset:remove:before', function (asset, remove, options) {
+                var name = assetName(asset && asset.get('src'));
+                if (!name) {
+                    return;
+                }
+                var confirmed = window.confirm(
+                    'Удалить изображение из библиотеки? Файл будет удалён ' +
+                    'с диска, а ссылки на него на странице перестанут ' +
+                    'работать.'
+                );
+                if (!confirmed && options) {
+                    options.abort = true;
+                }
+            });
+
+            editor.on('asset:remove', function (asset) {
+                var name = assetName(asset && asset.get('src'));
+                if (!name) {
+                    return;
+                }
+                fetch(assetsUrl + '/' + encodeURIComponent(name), {
+                    method: 'DELETE'
+                }).then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    setStatus('Изображение удалено', false);
+                }).catch(function () {
+                    setStatus('Не удалось удалить изображение', true);
+                });
+            });
 
             function editorCss() {
                 // avoidProtected убирает служебный CSS GrapesJS (* {box-sizing}
