@@ -114,6 +114,9 @@
     <script type="application/json" id="landing-draft">{{ draft | tojson }}</script>
     {# Список картинок лендинга для Asset Manager: тот же приём передачи. #}
     <script type="application/json" id="landing-assets">{{ assets | tojson }}</script>
+    {# Набор блоков для панели «Блоки»: готовые секции лендинга и простые
+       элементы. Подписи и категории — в русской локали по id блока. #}
+    <script type="application/json" id="landing-blocks">{{ blocks | tojson }}</script>
     <script src="/static/dist/grapesjs/grapes.min.js"></script>
     <script src="/static/dist/grapesjs/i18n-ru.js"></script>
     <script>
@@ -125,6 +128,9 @@
             );
             var assets = JSON.parse(
                 document.getElementById('landing-assets').textContent
+            );
+            var blocks = JSON.parse(
+                document.getElementById('landing-blocks').textContent
             );
             var assetsUrl = '/tutor/landing/assets';
             var assetPrefix = '/landing-assets/';
@@ -146,6 +152,14 @@
                 // Черновик хранит сервер: встроенное хранилище GrapesJS
                 // (localStorage) не используется.
                 storageManager: { type: 'none' },
+                // Панель «Блоки»: готовые секции лендинга и простые
+                // элементы. Подписи категорий и блоков GrapesJS берёт из
+                // русской локали по id. `appendOnClick` включает вставку
+                // по клику: в 0.23.9 по умолчанию блок только перетаскивают.
+                blockManager: {
+                    appendOnClick: true,
+                    blocks: blocks
+                },
                 assetManager: {
                     upload: assetsUrl,
                     uploadName: 'files',
@@ -191,6 +205,43 @@
                 }
                 return name;
             }
+
+            // Блок «Изображение» после вставки сразу открывает Asset Manager:
+            // пустой `<img>` на странице выглядел бы сломанной картинкой, а
+            // так репетитор выбирает файл в том же действии. Маркер
+            // `data-landing-image` отделяет только что вставленный блок от
+            // картинок, уже разобранных из черновика.
+            function pickImage(component) {
+                var manager = editor.Assets;
+                manager.open({
+                    types: ['image'],
+                    accept: 'image/*',
+                    target: component,
+                    select: function (asset, complete) {
+                        var src = typeof asset === 'string'
+                            ? asset
+                            : asset.get('src');
+                        if (src) {
+                            component.set({ src: src });
+                        }
+                        if (complete) {
+                            manager.close();
+                        }
+                    }
+                });
+            }
+
+            editor.on('component:add', function (component) {
+                if (!component.getAttributes) {
+                    return;
+                }
+                var attributes = component.getAttributes();
+                if (!attributes || !attributes['data-landing-image']) {
+                    return;
+                }
+                component.removeAttributes('data-landing-image');
+                pickImage(component);
+            });
 
             editor.on('asset:upload:start', function () {
                 setStatus('Загрузка…', false);
