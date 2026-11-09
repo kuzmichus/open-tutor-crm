@@ -279,6 +279,13 @@ app/<module>/
 - `tests/conftest.py` подменяет `DATABASE_URL` на `sqlite:///:memory:` **до импорта
   приложения**; база пересоздаётся на каждый тест (`Base.metadata.create_all` /
   `drop_all`).
+- Прогон герметичен к окружению: conftest **до импорта приложения** нейтрализует
+  «утекающие» переменные (`SINGLE_MODE`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `LANDING_ROOT`), иначе `.env` и данные живого workspace (например, опубликованный
+  лендинг) меняют результат тестов. Новое поле настроек, читаемое из `.env`, —
+  добавь его нейтрализацию в conftest; тест «дефолтного» значения поля снимает
+  переменную через `monkeypatch.delenv`, потому что `Settings(_env_file=None)`
+  читает реальное окружение.
 - Фикстуры: `client` (TestClient), `tutor_factory`, `student_factory`,
   `group_factory`, `group_member_factory`, `contact_factory`,
   `unavailability_factory`, `lesson_factory`, `operation_factory`,

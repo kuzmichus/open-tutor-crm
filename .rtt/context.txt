@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-09 22:04 | 699 files | 216010 tokens
+# rtt index | generated 2026-11-09 22:20 | 699 files | 216033 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models
@@ -5022,7 +5022,7 @@ def main() -> None  # Входит демо-репетитором и обход
 # scripts/vendor/lucide.min.js [javascript]
 
 # tests/conftest.py [python]
-imports: os, pytest, fastapi.testclient.TestClient, app.models, app.database.Base, app.database.engine, main.app
+imports: atexit, os, shutil, tempfile, pytest, fastapi.testclient.TestClient, app.models, app.database.Base, app.database.engine, main.app
 def _database()  # Изолированная БД на каждый тест (in-memory, общий StaticPool-коннект).
 def client()
 def tutor_factory()  # Создаёт репетитора в тестовой БД и возвращает его id.
@@ -7149,7 +7149,7 @@ def test_asset_path_rejects_traversal(tmp_path, name)  # Имя с раздел�
 def test_is_asset_name_rejects_foreign_names(name)  # Публичный маршрут принимает только сгенерированные имена.
 def test_is_valid_asset_content_accepts_matching_files(filename, content)  # Содержимое совпадает с расширением — файл принимается.
 def test_is_valid_asset_content_rejects_foreign_files(filename, content)  # Несовпадение сигнатуры, пустое тело и чужое расширение — отказ.
-def test_settings_default_landing_root()  # По умолчанию лендинг лежит в `./landing`.
+def test_settings_default_landing_root(monkeypatch)  # По умолчанию лендинг лежит в `./landing` (если переменная не задана).
 def test_env_overrides_landing_root(monkeypatch)  # LANDING_ROOT` из окружения переопределяет каталог.
 
 # tests/test_lesson_attendance.py [python]
@@ -8215,7 +8215,7 @@ imports: pytest, app.config.Settings, app.config.settings, app.database.SessionL
 def single_mode(monkeypatch)  # Включает сингл-режим на время теста.
 def _tutor_count() -> int
 def _register(client, email: str = "single@example.com", name: str = "Репетитор")
-def test_default_mode_is_multi()  # Без SINGLE_MODE установка работает в мульти-режиме.
+def test_default_mode_is_multi(monkeypatch)  # Без SINGLE_MODE установка работает в мульти-режиме.
 def test_env_overrides_single_mode(monkeypatch)  # SINGLE_MODE=true из окружения включает сингл-режим.
 def test_multi_mode_registration_is_always_open(client, tutor_factory)  # В мульти-режиме регистрация доступна и при существующих репетиторах.
 def test_multi_mode_login_does_not_redirect(client)  # В мульти-режиме пустая база не отправляет вход на регистрацию.

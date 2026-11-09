@@ -333,8 +333,13 @@ def test_is_valid_asset_content_rejects_foreign_files(filename, content):
 # Конфигурация
 # --------------------------------------------------------------------------
 
-def test_settings_default_landing_root():
-    """По умолчанию лендинг лежит в `./landing`."""
+def test_settings_default_landing_root(monkeypatch):
+    """По умолчанию лендинг лежит в `./landing` (если переменная не задана).
+
+    `_env_file=None` отключает .env, но не реальное окружение: conftest
+    задаёт LANDING_ROOT для герметичности прогона, здесь его снимаем.
+    """
+    monkeypatch.delenv("LANDING_ROOT", raising=False)
     assert Settings(_env_file=None).landing_root == "./landing"
 
 

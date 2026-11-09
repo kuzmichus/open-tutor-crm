@@ -1,9 +1,26 @@
 """Фикстуры pytest: изолированная in-memory БД и TestClient."""
 
+import atexit
 import os
+import shutil
+import tempfile
 
 # Переопределяем URL БД ДО импорта приложения, чтобы engine строился на тестовой базе.
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
+# Прогон должен зависеть только от кода и тестов, а не от окружения живого
+# workspace: иначе .env и данные на диске (опубликованный лендинг) меняют
+# результат — тесты падают или, наоборот, «зелёнеют» не по своей логике.
+# pydantic-settings читает реальный os.environ даже с `_env_file=None`,
+# причём переменные окружения сильнее значений из .env, поэтому
+# нейтрализация — явная перезапись, а не удаление из окружения.
+# Список растёт вместе с .env: новое «утекающее» поле — сюда.
+os.environ["SINGLE_MODE"] = "0"  # режим включают точечно сами тесты
+os.environ["GOOGLE_CLIENT_ID"] = ""  # иначе OAuth «настроен» не по умолчанию
+os.environ["GOOGLE_CLIENT_SECRET"] = ""
+# Публикация лендинга в ./landing меняла ответ GET / вместо 303.
+os.environ["LANDING_ROOT"] = tempfile.mkdtemp(prefix="tutor-tests-landing-")
+atexit.register(shutil.rmtree, os.environ["LANDING_ROOT"], ignore_errors=True)
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

@@ -51,8 +51,13 @@ def _register(client, email: str = "single@example.com", name: str = "Репет
 # Конфигурация
 # --------------------------------------------------------------------------
 
-def test_default_mode_is_multi():
-    """Без SINGLE_MODE установка работает в мульти-режиме."""
+def test_default_mode_is_multi(monkeypatch):
+    """Без SINGLE_MODE установка работает в мульти-режиме.
+
+    `_env_file=None` отключает .env, но не реальное окружение: conftest
+    задаёт SINGLE_MODE для герметичности прогона, здесь его снимаем.
+    """
+    monkeypatch.delenv("SINGLE_MODE", raising=False)
     assert Settings(_env_file=None).single_mode is False
 
 
