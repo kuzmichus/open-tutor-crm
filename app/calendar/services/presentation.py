@@ -16,6 +16,7 @@ from app.calendar.services.color_mode import (
 )
 from app.calendar.services.schedule_day import ScheduleDay
 from app.calendar.services.schedule_event import ScheduleEvent
+from app.homework.services.presentation import homework_badge_label
 from app.slot.services.presentation import is_muted as slot_is_muted
 from app.slot.services.presentation import state_label as slot_state_label
 from app.slot.services.public_link import PUBLIC_PREFIX
@@ -246,7 +247,7 @@ def build_event_view(
 def _lesson_fields(
     event: ScheduleEvent, *, now: datetime, color_mode: str, show_price: bool = True
 ) -> dict:
-    """Поля карточки урока: цель, цена, акцент и признаки состояния."""
+    """Поля карточки урока: цель, цена, акцент, состояние и значок ДЗ."""
     overdue = is_overdue(event, now=now)
     # Выключенный флаг «Показывать цену» гасит цену целиком: подпись и
     # подсказка собираются из одного значения, поэтому «₽» не остаётся
@@ -278,6 +279,19 @@ def _lesson_fields(
         "slot_state": "",
         "state_label": "",
         "is_muted": False,
+        # Значок ДЗ: статус приходит из события урока, подпись — для
+        # `title`/`aria-label`. Просроченный срок («Задано» + прошедший
+        # `due_at`) даёт подпись «Просрочено» и красный залитый значок.
+        # Пустая строка — задания нет, значка нет.
+        "homework_status": event.homework_status,
+        "homework_overdue": event.homework_overdue,
+        "homework_label": (
+            homework_badge_label(
+                event.homework_status, overdue=event.homework_overdue
+            )
+            if event.homework_status
+            else ""
+        ),
     }
 
 
@@ -307,6 +321,11 @@ def _slot_fields(event: ScheduleEvent) -> dict:
         "slot_state": event.slot_state,
         "state_label": label,
         "is_muted": slot_is_muted(event.slot_state),
+        # У окна нет урока, поэтому и ДЗ нет: поля пустые, чтобы шаблон мог
+        # читать их без `is defined` в общей ветке.
+        "homework_status": "",
+        "homework_overdue": False,
+        "homework_label": "",
     }
 
 

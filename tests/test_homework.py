@@ -638,3 +638,111 @@ def test_delete_series_cascades_homework(owner, client, student_factory):
         for lesson_id_value in lesson_ids:
             assert db.get(Lesson, lesson_id_value) is None
         assert db.scalars(select(Homework)).all() == []  # строк не осталось
+
+
+# --------------------------------------------------------------------------
+# 4. Общие сервисы ДЗ: карта статусов и подписи (календарь и кабинет)
+# --------------------------------------------------------------------------
+
+
+def test_homework_by_lesson_returns_visible_statuses(lesson_id):
+    """Карта статусов по id уроков; «Не задано» в неё не попадает."""
+    from app.homework.services.by_lesson import homework_by_lesson
+
+    with SessionLocal() as db:
+        db.add(Homework(lesson_id=lesson_id, assignment="ДЗ", status="submitted"))
+        db.commit()
+
+    with SessionLocal() as db:
+        assert homework_by_lesson(db, [lesson_id]) == {lesson_id: "submitted"}
+
+
+def test_homework_by_lesson_empty_input_skips_query():
+    """Пустой список уроков — пустая карта без запроса к БД."""
+    from app.homework.services.by_lesson import homework_by_lesson
+
+    with SessionLocal() as db:
+        assert homework_by_lesson(db, []) == {}
+
+
+def test_homework_presentation_classes_cover_all_statuses():
+    """Подписи и классы значков/чипов — на каждый статус, кроме «Не задано»."""
+    from app.homework.services.presentation import (
+        homework_badge_class,
+        homework_badge_label,
+        homework_chip_class,
+        homework_status_label,
+    )
+
+    for status in HOMEWORK_STATUSES:
+        assert homework_status_label(status) == HOMEWORK_STATUS_LABELS[status]
+        assert homework_chip_class(status).startswith("chip--hw-")
+        assert homework_badge_class(status).startswith("cal-hw-badge--")
+        assert homework_badge_label(status) == HOMEWORK_STATUS_LABELS[status]
+
+    # «Не выполнено» — единственный красный статус, он же «просрочен».
+    assert homework_badge_class("not_done") == "cal-hw-badge--not_done"
+
+
+def test_lesson_homework_overdue_rule():
+    """Просрочка: срок прошёл, статус «Задано», дедлайн учитывается."""
+    from app.homework.services.by_lesson import LessonHomework
+
+    now = datetime(2026, 10, 20, 12, 0, tzinfo=UTC)
+    past = datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
+    future = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
+
+    assert LessonHomework("assigned", past).is_overdue(now) is True
+    assert LessonHomework("assigned", future).is_overdue(now) is False
+    assert LessonHomework("assigned", None).is_overdue(now) is False
+    # Флаг «Учитывать дедлайн» выключает автоматическую просрочку.
+    assert (
+        LessonHomework("assigned", past, deadline_enabled=False).is_overdue(now)
+        is False
+    )
+    # Сданное, проверенное и невыполненное просрочкой не считаются:
+    # первые два уже закрыты, последнее красное по самому статусу.
+    for status in ("submitted", "checked", "not_done"):
+        assert LessonHomework(status, past).is_overdue(now) is False
+
+
+def test_homework_states_returns_due_and_deadline(lesson_id):
+    """Карта состояний несёт статус, срок и флаг дедлайна."""
+    from app.homework.services.by_lesson import homework_states
+
+    due = datetime(2026, 10, 25, 18, 0, tzinfo=UTC)
+    with SessionLocal() as db:
+        db.add(
+            Homework(
+                lesson_id=lesson_id,
+                assignment="ДЗ",
+                status="assigned",
+                due_at=due,
+                deadline_enabled=False,
+            )
+        )
+        db.commit()
+
+    with SessionLocal() as db:
+        state = homework_states(db, [lesson_id])[lesson_id]
+
+    assert state.status == "assigned"
+    assert state.deadline_enabled is False
+    # SQLite теряет tzinfo — сервис отдаёт значение как есть, сравнение
+    # делает `is_overdue` через `as_utc`.
+    assert state.due_at.replace(tzinfo=UTC) == due
+
+
+def test_homework_badge_overdue_state_and_label():
+    """Просрочка даёт отдельный класс и подпись, статус не подменяется."""
+    from app.homework.services.presentation import (
+        homework_badge_class,
+        homework_badge_label,
+        homework_badge_state,
+    )
+
+    assert homework_badge_state("assigned", overdue=True) == "overdue"
+    assert homework_badge_state("assigned") == "assigned"
+    assert homework_badge_class("assigned", overdue=True) == "cal-hw-badge--overdue"
+    assert homework_badge_label("assigned", overdue=True) == "Просрочено"
+    assert homework_badge_label("assigned") == "Задано"
