@@ -100,7 +100,7 @@ def type_chip_label(lesson_type: str) -> str:
 
 
 def status_label(status: str) -> str:
-    """Подпись статуса: «Запланирован» / «Проведён»."""
+    """Подпись статуса: «Запланирован» / «Проведён» / «Перенесён» / «Отменён»."""
     return LESSON_STATUS_LABELS.get(status, status)
 
 
