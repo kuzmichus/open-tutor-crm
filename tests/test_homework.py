@@ -1,7 +1,7 @@
 """Тесты модуля homework: модель, форма, сохранение, панель и изоляция."""
 
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -13,10 +13,12 @@ from app.homework.models.homework import (
     HOMEWORK_STATUSES,
     Homework,
 )
+from app.homework.services.due_default import next_lesson_start
 from app.homework.services.homework_form import parse_homework_form
 from app.homework.services.homework_writer import get_homework, save_homework
 from app.lesson.models.lesson import Lesson
 from app.lesson.models.lesson_series import LessonSeries
+from app.tutor.services.clock import as_utc, utcnow
 
 PASSWORD = "Секретный-Пароль-1"
 HTMX = {"HX-Request": "true"}
@@ -746,3 +748,252 @@ def test_homework_badge_overdue_state_and_label():
     assert homework_badge_class("assigned", overdue=True) == "cal-hw-badge--overdue"
     assert homework_badge_label("assigned", overdue=True) == "Просрочено"
     assert homework_badge_label("assigned") == "Задано"
+
+
+# --------------------------------------------------------------------------
+# 5. Срок сдачи по умолчанию — начало следующего занятия (TOCRM-62)
+# --------------------------------------------------------------------------
+
+HINT = "По умолчанию — начало следующего занятия"
+
+
+def _next_start(lesson_id: str, *, now: datetime) -> datetime | None:
+    """`next_lesson_start` для урока из БД с фиксированным «сейчас»."""
+    with SessionLocal() as db:
+        return next_lesson_start(db, db.get(Lesson, lesson_id), now=now)
+
+
+def test_next_lesson_start_finds_student_individual_lesson(
+    student_factory, lesson_factory
+):
+    """Следующее занятие ученика — ближайший его запланированный урок."""
+    student = student_factory()
+    current = lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 19, 10, 0, tzinfo=UTC),
+    )
+    lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 26, 10, 0, tzinfo=UTC),
+    )
+
+    assert _next_start(current, now=datetime(2026, 10, 18, tzinfo=UTC)) == datetime(
+        2026, 10, 26, 10, 0, tzinfo=UTC
+    )
+
+
+def test_next_lesson_start_finds_student_group_lesson(
+    student_factory, group_factory, group_member_factory, lesson_factory
+):
+    """Групповой урок группы ученика — тоже его следующее занятие."""
+    student = student_factory()
+    group = group_factory()
+    group_member_factory(group_id=group, student_id=student)
+    current = lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 19, 10, 0, tzinfo=UTC),
+    )
+    lesson_factory(
+        group_id=group,
+        status="planned",
+        starts_at=datetime(2026, 10, 22, 18, 0, tzinfo=UTC),
+    )
+
+    assert _next_start(current, now=datetime(2026, 10, 18, tzinfo=UTC)) == datetime(
+        2026, 10, 22, 18, 0, tzinfo=UTC
+    )
+
+
+def test_next_lesson_start_for_group_lesson_uses_same_group(
+    group_factory, lesson_factory
+):
+    """У группового урока следующее занятие ищется только по своей группе."""
+    group = group_factory()
+    other_group = group_factory()
+    current = lesson_factory(
+        group_id=group,
+        status="planned",
+        starts_at=datetime(2026, 10, 19, 10, 0, tzinfo=UTC),
+    )
+    # Чужая группа ближе по времени — но она не цель этого урока.
+    lesson_factory(
+        group_id=other_group,
+        status="planned",
+        starts_at=datetime(2026, 10, 20, 10, 0, tzinfo=UTC),
+    )
+    lesson_factory(
+        group_id=group,
+        status="planned",
+        starts_at=datetime(2026, 10, 26, 10, 0, tzinfo=UTC),
+    )
+
+    assert _next_start(current, now=datetime(2026, 10, 18, tzinfo=UTC)) == datetime(
+        2026, 10, 26, 10, 0, tzinfo=UTC
+    )
+
+
+def test_next_lesson_start_none_without_next_lesson(student_factory, lesson_factory):
+    """Единственный урок ученика — следующего занятия нет."""
+    student = student_factory()
+    current = lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 19, 10, 0, tzinfo=UTC),
+    )
+
+    assert _next_start(current, now=datetime(2026, 10, 18, tzinfo=UTC)) is None
+
+
+def test_next_lesson_start_skips_completed_and_past_lessons(
+    student_factory, lesson_factory
+):
+    """Проведённое занятие и занятие раньше «сейчас» сроком сдачи не бывают."""
+    student = student_factory()
+    current = lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 19, 10, 0, tzinfo=UTC),
+    )
+    lesson_factory(
+        student_id=student,
+        status="completed",
+        starts_at=datetime(2026, 10, 20, 10, 0, tzinfo=UTC),
+    )
+    # Запланирован позже текущего урока, но уже прошёл относительно «сейчас».
+    lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 19, 10, 30, tzinfo=UTC),
+    )
+    lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 25, 10, 0, tzinfo=UTC),
+    )
+
+    assert _next_start(current, now=datetime(2026, 10, 19, 11, 0, tzinfo=UTC)) == (
+        datetime(2026, 10, 25, 10, 0, tzinfo=UTC)
+    )
+
+
+def test_next_lesson_start_ignores_other_student(student_factory, lesson_factory):
+    """Уроки другого ученика на срок сдачи не влияют."""
+    student = student_factory()
+    other = student_factory()
+    current = lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 19, 10, 0, tzinfo=UTC),
+    )
+    lesson_factory(
+        student_id=other,
+        status="planned",
+        starts_at=datetime(2026, 10, 20, 10, 0, tzinfo=UTC),
+    )
+    lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=datetime(2026, 10, 25, 10, 0, tzinfo=UTC),
+    )
+
+    assert _next_start(current, now=datetime(2026, 10, 18, tzinfo=UTC)) == datetime(
+        2026, 10, 25, 10, 0, tzinfo=UTC
+    )
+
+
+def _lesson_with_next(
+    tutor_id: str, student_factory, lesson_factory
+) -> tuple[str, datetime]:
+    """Урок ученика с занятием через два дня; возвращает (id урока, начало)."""
+    student = student_factory(tutor_id=tutor_id)
+    now = utcnow().replace(microsecond=0)
+    lesson = lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=now - timedelta(days=1),
+    )
+    upcoming = now + timedelta(days=2)
+    lesson_factory(student_id=student, status="planned", starts_at=upcoming)
+    return lesson, upcoming
+
+
+def test_panel_prefills_due_at_from_next_lesson(
+    owner, client, student_factory, lesson_factory
+):
+    """Панель нового ДЗ показывает начало следующего занятия и подсказку."""
+    lesson_id_value, upcoming = _lesson_with_next(
+        owner, student_factory, lesson_factory
+    )
+
+    page = client.get(f"/tutor/lessons/{lesson_id_value}/edit").text
+
+    value = upcoming.strftime("%Y-%m-%dT%H:%M")
+    assert f'name="due_at" value="{value}"' in page
+    assert HINT in page
+
+
+def test_panel_without_next_lesson_leaves_due_empty(
+    owner, client, student_factory, lesson_factory
+):
+    """Нет следующего занятия — поле пустое, подсказки нет."""
+    student = student_factory(tutor_id=owner)
+    lesson = lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=utcnow().replace(microsecond=0) - timedelta(days=1),
+    )
+
+    page = client.get(f"/tutor/lessons/{lesson}/edit").text
+
+    assert 'name="due_at" value=""' in page
+    assert HINT not in page
+
+
+def test_save_without_due_at_uses_next_lesson(
+    owner, client, student_factory, lesson_factory
+):
+    """Первое сохранение без срока создаёт ДЗ со сроком следующего занятия."""
+    lesson_id_value, upcoming = _lesson_with_next(
+        owner, student_factory, lesson_factory
+    )
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id_value}/homework",
+        data=_hw_form(due_at=""),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+    with SessionLocal() as db:
+        saved = get_homework(db, lesson_id_value)
+        assert saved is not None
+        assert as_utc(saved.due_at) == upcoming
+    # Запись уже существует — подсказка о подстановке больше не нужна.
+    assert HINT not in response.text
+
+
+def test_resave_with_cleared_due_does_not_restore_default(
+    owner, client, student_factory, lesson_factory
+):
+    """Очищенный вручную срок не возвращается при повторном сохранении."""
+    lesson_id_value, upcoming = _lesson_with_next(
+        owner, student_factory, lesson_factory
+    )
+    client.post(
+        f"/tutor/lessons/{lesson_id_value}/homework",
+        data=_hw_form(due_at=""),
+        headers=HTMX,
+    )
+    assert as_utc(_saved_due_at(lesson_id_value)) == upcoming
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_id_value}/homework",
+        data=_hw_form(due_at="", assignment="Правка задания"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+    with SessionLocal() as db:
+        assert get_homework(db, lesson_id_value).due_at is None
+    assert HINT not in response.text
