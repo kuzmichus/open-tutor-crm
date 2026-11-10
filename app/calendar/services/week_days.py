@@ -26,6 +26,7 @@ from app.calendar.services.schedule_day import ScheduleDay
 from app.calendar.services.schedule_event import ScheduleEvent
 from app.calendar.services.week import week_lessons
 from app.common.services.tutor_time import now_utc
+from app.homework.services.by_lesson import homework_by_lesson
 from app.slot.services.busy import slot_states
 from app.slot.services.slots import week_slots
 from app.unavailability.services.marks import coverage_for_week
@@ -41,8 +42,13 @@ def build_week_days(db: Session, tutor_id: str, monday: date, tutor) -> list[Sch
     """
     coverage = coverage_for_week(db, tutor_id, monday)
 
+    # Статусы ДЗ — один SELECT на всю неделю (правило AGENTS.md 9): карточка
+    # берёт статус из карты, а не ходит в БД на каждый урок.
+    rows = week_lessons(db, tutor_id, monday, tutor)
+    homework = homework_by_lesson(db, [row.lesson.id for row in rows])
+
     events_by_day: dict[date, list[ScheduleEvent]] = {}
-    for row in week_lessons(db, tutor_id, monday, tutor):
+    for row in rows:
         event = ScheduleEvent.from_lesson(
             row.lesson,
             target_name=row.target_name,
@@ -52,6 +58,7 @@ def build_week_days(db: Session, tutor_id: str, monday: date, tutor) -> list[Sch
             # Цена посчитана в недельной выборке: у группового урока это
             # стоимость всей группы (одно правило с финансами).
             price=row.price,
+            homework_status=homework.get(row.lesson.id, ""),
         )
         events_by_day.setdefault(event.day, []).append(event)
 

@@ -4791,6 +4791,23 @@
     text-overflow: ellipsis;
   }
 
+  /* Строка «имя цели + значок ДЗ»: имя сокращается, значок остаётся
+     видимым даже в коротком уроке (30–45 минут — одна строка высотой).
+     Собственная обёртка нужна, чтобы значок не участвовал в сокращении
+     текста: у `.cal-event__title` внутри неё `flex: 0 1 auto`. */
+  .cal-event__head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space));
+    min-width: 0;
+  }
+
+  .cal-event__head .cal-event__title {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
   /* Вторая строка: цена и интервал времени. Обрезается первой, когда
      высоты карточки не хватает (см. @container ниже). */
   .cal-event__meta {
