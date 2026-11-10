@@ -760,23 +760,6 @@ def test_move_completed_lesson_is_rejected(owner, client, student_factory):
     assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 19, 10, 0)
 
 
-def test_move_cancelled_lesson_is_rejected(owner, client, student_factory):
-    """Отменённый урок переносить нельзя — 409, время не меняется."""
-    student = student_factory(tutor_id=owner)
-    lesson_id = _insert_lesson(
-        owner, student_id=student, status="cancelled",
-        starts_at=datetime(2026, 10, 19, 10, 0),
-    )
-
-    response = client.post(
-        f"/tutor/lessons/{lesson_id}/move",
-        data={"date": "2026-10-23", "time": "16:30"},
-        headers=HTMX,
-    )
-    assert response.status_code == 409
-    assert _lesson(lesson_id)["starts_at"] == datetime(2026, 10, 19, 10, 0)
-
-
 def test_move_lesson_with_bad_datetime_is_rejected(owner, client, student_factory):
     """5.1: кривые дата/время — 400, урок остаётся на месте."""
     student = student_factory(tutor_id=owner)

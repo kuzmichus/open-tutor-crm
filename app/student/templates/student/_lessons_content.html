@@ -15,7 +15,7 @@
    Контекст: student, tutor, status, rows ({lesson, subject}). #}
 <div class="student-lessons" id="student-lessons-content">
     <div class="period-chips" role="group" aria-label="Фильтр уроков">
-        {% for key, label in [('', 'Все'), ('completed', 'Прошедшие'), ('planned', 'Запланированные'), ('rescheduled', 'Перенесённые'), ('cancelled', 'Отменённые')] %}
+        {% for key, label in [('', 'Все'), ('completed', 'Прошедшие'), ('planned', 'Запланированные')] %}
         <label class="period-chip">
             <input class="period-chip__input" type="radio"
                    name="status" value="{{ key }}"

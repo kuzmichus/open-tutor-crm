@@ -247,7 +247,7 @@
                и это должна быть цель, а не время (спека «Содержимое блока»).
                Цена — второй строкой рядом со временем; полный текст всегда
                доступен во всплывающей подсказке `title`. #}
-            <div class="cal-event{% if event.is_past %} cal-event--past{% endif %}{% if event.is_overdue %} cal-event--overdue{% endif %}{% if event.is_cancelled %} cal-event--cancelled{% endif %}{% if event.is_rescheduled %} cal-event--rescheduled{% endif %}"
+            <div class="cal-event{% if event.is_past %} cal-event--past{% endif %}{% if event.is_overdue %} cal-event--overdue{% endif %}"
                  {% if event.lesson_id %}hx-get="/tutor/lessons/{{ event.lesson_id }}/edit"
                  hx-target="#modal"
                  hx-swap="innerHTML"{% endif %}
@@ -258,7 +258,6 @@
                  data-start-min="{{ event.start_min }}"
                  data-duration-min="{{ event.duration_min }}"
                  {% if event.is_completed %}data-completed="true"{% endif %}
-                 {% if event.is_cancelled %}data-cancelled="true"{% endif %}
                  title="{{ event.title }} · {{ event.time_label }}"
                  style="--top: {{ event.top_h }};
                         --dur: {{ event.height_h }};

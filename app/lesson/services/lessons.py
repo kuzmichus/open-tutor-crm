@@ -43,9 +43,8 @@ from app.tutor.services.clock import as_utc
 FILTER_PERIODS = ("", "today", "week")
 
 # Значения селекта статуса; пусто — «Все статусы», «unmarked» — прошедшие
-# уроки, не отмеченные как проведённые (change unmarked-lessons), дальше —
-# точные статусы урока (change add-lesson-cancelled-rescheduled-statuses).
-FILTER_STATUSES = ("", "unmarked", *LESSON_STATUSES)
+# уроки, не отмеченные как проведённые (change unmarked-lessons).
+FILTER_STATUSES = ("", "unmarked")
 
 # Колонки, по которым список умеет сортироваться (change lessons-table-scale).
 # Ключ — значение query-параметра `sort`, оно же имя колонки в разметке.
@@ -196,8 +195,6 @@ def list_lessons(
         ):
             continue
         if status == "unmarked" and not is_unmarked(lesson, now=moment):
-            continue
-        if status in LESSON_STATUSES and lesson.status != status:
             continue
         student_name = (
             " ".join(part for part in (first_name, last_name) if part)

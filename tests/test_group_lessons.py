@@ -161,28 +161,6 @@ def test_panel_status_filter(owner, client, group_factory, lesson_factory):
     assert "17.05.2026" in everything and "26.04.2026" in everything
 
 
-def test_panel_new_status_chips(owner, client, group_factory, lesson_factory):
-    """В панели группы есть чипы «Перенесённые» и «Отменённые»."""
-    group_id = group_factory(tutor_id=owner)
-    lesson_factory(
-        group_id=group_id,
-        status="cancelled",
-        price=None,
-        starts_at=datetime(2026, 3, 15, 15, 0, tzinfo=UTC),
-    )
-
-    html = client.get(f"/tutor/groups/{group_id}/lessons").text
-    assert "Перенесённые" in html
-    assert "Отменённые" in html
-    assert "Отменён" in html
-
-    filtered = client.get(
-        f"/tutor/groups/{group_id}/lessons?status=cancelled"
-    ).text
-    assert "15.03.2026" in filtered
-    assert "chip--cancelled" in filtered
-
-
 def test_panel_empty_states(owner, client, group_factory):
     """Без занятий — приглашение; с фильтром без совпадений — пояснение."""
     group_id = group_factory(tutor_id=owner)

@@ -8,7 +8,7 @@
 Валидация:
 - `get_owned_lesson` — чужой или несуществующий урок отвечает 404, как в
   `update.py` (существование чужой записи не раскрывается);
-- проведённый и отменённый урок переносить нельзя: 409 и понятное сообщение;
+- проведённый урок переносить нельзя: 409 и понятное сообщение;
 - `date`/`time` разбираются строго, кривое значение — 400; переданные
   дата и время — настенное время в зоне педагога, в БД уходит aware UTC
   (спека lesson-management, «Перенос урока на новое время»);
@@ -80,17 +80,12 @@ async def move_lesson(
     db: Session = Depends(get_db),
     tutor_id: str = Depends(require_tutor_id),
 ):
-    """Меняет только начало урока; проведённый и отменённый не переносятся."""
+    """Меняет только начало урока; проведённый урок не переносится."""
     lesson = get_owned_lesson(db, lesson_id, tutor_id)
     if lesson.status == "completed":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Проведённый урок нельзя перенести.",
-        )
-    if lesson.status == "cancelled":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Отменённый урок нельзя перенести.",
         )
 
     form = await request.form()

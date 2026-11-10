@@ -130,60 +130,6 @@ def test_empty_filter_state(client, tutor_factory, student_factory, lesson_facto
     assert "Измените поисковый запрос или фильтры." in html
 
 
-def test_cancelled_and_rescheduled_are_not_unmarked(
-    client, tutor_factory, student_factory, lesson_factory
-):
-    """Прошедшие «Отменён» и «Перенесён» не попадают в «Не отмеченные»."""
-    tutor_id = _login(client, tutor_factory, "unmarked-new-statuses@example.com")
-    student_id = student_factory(tutor_id=tutor_id)
-    cancelled = lesson_factory(
-        student_id=student_id,
-        status="cancelled",
-        starts_at=utcnow() - timedelta(hours=1),
-    )
-    rescheduled = lesson_factory(
-        student_id=student_id,
-        status="rescheduled",
-        starts_at=utcnow() - timedelta(hours=2),
-    )
-
-    html = client.get("/tutor/lessons/list?status=unmarked").text
-    assert _lesson_row(cancelled) not in html
-    assert _lesson_row(rescheduled) not in html
-
-
-def test_filter_by_exact_status(client, tutor_factory, student_factory, lesson_factory):
-    """`?status=cancelled|rescheduled` показывает только уроки этого статуса."""
-    tutor_id = _login(client, tutor_factory, "status-exact@example.com")
-    student_id = student_factory(tutor_id=tutor_id)
-    planned = lesson_factory(student_id=student_id, status="planned")
-    completed = lesson_factory(student_id=student_id, status="completed")
-    rescheduled = lesson_factory(student_id=student_id, status="rescheduled")
-    cancelled = lesson_factory(student_id=student_id, status="cancelled")
-
-    for status, shown, hidden in (
-        ("cancelled", cancelled, (planned, completed, rescheduled)),
-        ("rescheduled", rescheduled, (planned, completed, cancelled)),
-        ("completed", completed, (planned, rescheduled, cancelled)),
-        ("planned", planned, (completed, rescheduled, cancelled)),
-    ):
-        html = client.get(f"/tutor/lessons/list?status={status}").text
-        assert _lesson_row(shown) in html, status
-        for lesson_id in hidden:
-            assert _lesson_row(lesson_id) not in html, (status, lesson_id)
-
-
-def test_status_select_lists_new_statuses(client, tutor_factory):
-    """В селекте статуса есть «Перенесён» и «Отменён»."""
-    _login(client, tutor_factory, "status-options@example.com")
-
-    page = client.get("/tutor/lessons").text
-    assert '<option value="rescheduled"' in page
-    assert "Перенесён" in page
-    assert '<option value="cancelled"' in page
-    assert "Отменён" in page
-
-
 def test_isolation(client, tutor_factory, student_factory, lesson_factory):
     """Фильтр показывает только уроки вошедшего репетитора."""
     other_tutor = tutor_factory(email="unmarked-other@example.com")

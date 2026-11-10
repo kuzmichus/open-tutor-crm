@@ -168,12 +168,8 @@ def student_calendar_context(
             tutor=tutor,
         )
         # Проведённый урок — прошедший независимо от часов: репетитор мог
-        # отметить его заранее. Отменённый и перенесённый тоже уже не
-        # предстоят, поэтому гаснут серым, как и прошедшие.
-        if (
-            row.lesson.status in ("completed", "cancelled", "rescheduled")
-            or event.starts_at < now
-        ):
+        # отметить его заранее. Остальные гаснут, когда время прошло.
+        if row.lesson.status == "completed" or event.starts_at < now:
             past_ids.add(row.lesson.id)
             event = replace(event, color=PAST_COLOR)
         # Цена ученику не показывается: пустая цена убирает «1 200 ₽» из

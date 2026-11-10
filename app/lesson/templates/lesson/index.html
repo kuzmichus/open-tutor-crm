@@ -73,9 +73,6 @@
                                 name="status">
                             <option value="" {% if not status %}selected{% endif %}>Все статусы</option>
                             <option value="unmarked" {% if status == 'unmarked' %}selected{% endif %}>Не отмеченные</option>
-                            {% for value in ['planned', 'completed', 'rescheduled', 'cancelled'] %}
-                            <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ lesson_status_label(value) }}</option>
-                            {% endfor %}
                         </select>
 
                         <div class="period-chips" role="group" aria-label="Период">

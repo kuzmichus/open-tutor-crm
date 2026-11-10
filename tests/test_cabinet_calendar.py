@@ -264,33 +264,6 @@ def test_context_marks_past_lessons(owner, student_factory, lesson_factory):
     assert future_events[future]["is_past"] is False
 
 
-def test_context_marks_cancelled_and_rescheduled_as_not_upcoming(
-    owner, student_factory, lesson_factory
-):
-    """Отменённый и перенесённый уроки в кабинете гаснут, как прошедшие."""
-    student_id = student_factory(tutor_id=owner)
-    cancelled = lesson_factory(
-        student_id=student_id,
-        status="cancelled",
-        starts_at=datetime(2099, 1, 1, 10, 0, tzinfo=UTC),
-    )
-    rescheduled = lesson_factory(
-        student_id=student_id,
-        status="rescheduled",
-        starts_at=datetime(2099, 1, 1, 12, 0, tzinfo=UTC),
-    )
-
-    events = {
-        event["lesson_id"]: event
-        for event in _events(_context(student_id, owner, date(2099, 1, 1)))
-    }
-
-    for lesson in (cancelled, rescheduled):
-        assert events[lesson]["is_past"] is True
-        assert events[lesson]["color"] == "var(--muted-foreground)"
-        assert events[lesson]["is_overdue"] is False
-
-
 def test_context_does_not_show_price_or_unavailability(
     owner, student_factory, lesson_factory
 ):
