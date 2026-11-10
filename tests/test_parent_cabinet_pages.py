@@ -287,29 +287,35 @@ def test_parent_child_lessons_nearest_first_no_past(
     )
 
     # Прошедший урок не показывается; из будущих ближайший — первый.
+    # Даты считаются от «сейчас»: литеральные значения протухают — урок на
+    # 10 ноября 2026 стал «сегодняшним» и выпал из списка будущих, тест
+    # упал на ровном месте.
+    now = datetime.now(UTC)
     lesson_factory(
         student_id=student_id,
         status="completed",
-        starts_at=datetime(2026, 10, 1, 10, 0, tzinfo=UTC),
+        starts_at=now - timedelta(days=40),
     )
     lesson_factory(
         student_id=student_id,
         status="planned",
-        starts_at=datetime(2026, 11, 20, 10, 0, tzinfo=UTC),
+        starts_at=now + timedelta(days=10),
     )
     lesson_factory(
         student_id=student_id,
         status="planned",
-        starts_at=datetime(2026, 11, 10, 10, 0, tzinfo=UTC),
+        starts_at=now + timedelta(days=2),
     )
 
     page = client.get(f"/parent/students/{student_id}").text
     assert "Ближайшее занятие" in page
     assert "Запланированных занятий пока нет" not in page
-    # Порядок дат в разметке: 10 ноября раньше 20 ноября (формат
+    # Порядок дат в разметке: ближайший урок раньше дальнего (формат
     # `lesson_date` — «ДД.ММ.ГГГГ»).
-    assert page.index("10.11.2026") < page.index("20.11.2026")
-    assert "01.10.2026" not in page
+    near_date = (now + timedelta(days=2)).strftime("%d.%m.%Y")
+    far_date = (now + timedelta(days=10)).strftime("%d.%m.%Y")
+    assert page.index(near_date) < page.index(far_date)
+    assert (now - timedelta(days=40)).strftime("%d.%m.%Y") not in page
 
 
 def test_parent_child_group_lesson_visible(
