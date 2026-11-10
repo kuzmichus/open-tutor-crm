@@ -81,8 +81,14 @@ def _insert_lesson(tutor_id: str, **overrides) -> str:
         return str(lesson.id)
 
 
-def _make_homework(lesson_id: str, status: str) -> None:
-    """ДЗ урока напрямую в БД: значку календаря нужен только статус."""
+def _make_homework(
+    lesson_id: str,
+    status: str,
+    *,
+    due_at: datetime | None = None,
+    deadline_enabled: bool = True,
+) -> None:
+    """ДЗ урока напрямую в БД: значку календаря нужны статус, срок и флаг."""
     from app.database import SessionLocal
     from app.homework.models.homework import Homework
 
@@ -92,6 +98,8 @@ def _make_homework(lesson_id: str, status: str) -> None:
                 lesson_id=lesson_id,
                 assignment="Упражнение №3",
                 status=status,
+                due_at=due_at,
+                deadline_enabled=deadline_enabled,
             )
         )
         db.commit()
@@ -2880,6 +2888,120 @@ def test_week_days_carries_homework_status(calendar_owner, student_factory):
     assert events[without_homework].homework_status == ""
 
 
+def test_calendar_homework_badge_overdue_when_due_passed(
+    client, calendar_owner, student_factory
+):
+    """Срок прошёл, а работа всё ещё «Задано» — красный залитый значок."""
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Просрочил")
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 14, 14, 0),
+    )
+    _make_homework(lesson_id, "assigned", due_at=datetime(2020, 1, 1, 12, 0))
+
+    card = _card(client.get("/tutor/calendar?start=2026-10-12").text, lesson_id)
+
+    assert card, "Карточки урока нет в сетке"
+    assert 'class="cal-hw-badge cal-hw-badge--overdue"' in card
+    assert 'title="Домашнее задание: Просрочено"' in card
+    assert 'aria-label="Домашнее задание: Просрочено"' in card
+    assert "· ДЗ: Просрочено" in card
+
+
+def test_calendar_homework_badge_not_overdue_before_due(
+    client, calendar_owner, student_factory
+):
+    """Срок ещё не прошёл — значок остаётся нейтральным «Задано»."""
+    student_id = student_factory(tutor_id=calendar_owner, first_name="В срок")
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 14, 14, 0),
+    )
+    _make_homework(lesson_id, "assigned", due_at=datetime(2099, 1, 1, 12, 0))
+
+    card = _card(client.get("/tutor/calendar?start=2026-10-12").text, lesson_id)
+
+    assert 'class="cal-hw-badge cal-hw-badge--assigned"' in card
+    assert "· ДЗ: Задано" in card
+
+
+@pytest.mark.parametrize(
+    ("status", "badge_class", "label"),
+    [
+        ("submitted", "cal-hw-badge--submitted", "Сдано"),
+        ("checked", "cal-hw-badge--checked", "Проверено"),
+        ("not_done", "cal-hw-badge--not_done", "Не выполнено"),
+    ],
+)
+def test_calendar_homework_badge_not_overdue_for_closed_statuses(
+    client, calendar_owner, student_factory, status, badge_class, label
+):
+    """Прошедший срок не делает просроченным сданное и проверенное."""
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Закрытое")
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 14, 14, 0),
+    )
+    _make_homework(lesson_id, status, due_at=datetime(2020, 1, 1, 12, 0))
+
+    card = _card(client.get("/tutor/calendar?start=2026-10-12").text, lesson_id)
+
+    assert f'class="cal-hw-badge {badge_class}"' in card
+    assert f"· ДЗ: {label}" in card
+
+
+def test_calendar_homework_badge_overdue_disabled_by_deadline_flag(
+    client, calendar_owner, student_factory
+):
+    """Снятый флаг «Учитывать дедлайн» выключает автоматическую просрочку."""
+    student_id = student_factory(tutor_id=calendar_owner, first_name="Без учёта")
+    lesson_id = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 14, 14, 0),
+    )
+    _make_homework(
+        lesson_id,
+        "assigned",
+        due_at=datetime(2020, 1, 1, 12, 0),
+        deadline_enabled=False,
+    )
+
+    card = _card(client.get("/tutor/calendar?start=2026-10-12").text, lesson_id)
+
+    assert 'class="cal-hw-badge cal-hw-badge--assigned"' in card
+    assert "· ДЗ: Задано" in card
+
+
+def test_week_days_carries_homework_overdue(calendar_owner, student_factory):
+    """build_week_days считает просрочку ДЗ по срокам и флагу дедлайна."""
+    from app.calendar.services.week_days import build_week_days
+    from app.database import SessionLocal
+
+    student_id = student_factory(tutor_id=calendar_owner)
+    overdue = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 14, 10, 0),
+    )
+    in_time = _insert_lesson(
+        calendar_owner, student_id=student_id,
+        starts_at=datetime(2026, 10, 14, 12, 0),
+    )
+    _make_homework(overdue, "assigned", due_at=datetime(2020, 1, 1, 12, 0))
+    _make_homework(in_time, "assigned", due_at=datetime(2099, 1, 1, 12, 0))
+
+    with SessionLocal() as db:
+        days = build_week_days(db, calendar_owner, date(2026, 10, 12), _tutor())
+
+    events = {
+        event.lesson_id: event
+        for day in days
+        for event in day.events
+        if not event.is_slot
+    }
+    assert events[overdue].homework_overdue is True
+    assert events[in_time].homework_overdue is False
+
+
 def test_calendar_homework_badge_styles_static():
     """Обёртка строки и переиспользование значков описаны в styles.css."""
     css = (ROOT / "app" / "static" / "styles.css").read_text(encoding="utf-8")
@@ -2895,5 +3017,19 @@ def test_calendar_homework_badge_styles_static():
 
     # Значок не сжимается и окрашивается модификатором статуса.
     assert ".cal-hw-badge {" in css
-    for modifier in ("assigned", "submitted", "checked", "not_done"):
+    for modifier in ("assigned", "submitted", "checked", "not_done", "overdue"):
         assert f".cal-hw-badge--{modifier}" in css
+
+    # Просроченный значок красный, а красные значки залиты, а не контурные:
+    # `fill` перекрывает `fill="none"` разметки Lucide.
+    overdue = re.search(r"\.cal-hw-badge--overdue\s*\{([^}]*)\}", css)
+    assert overdue, "В styles.css нет правила .cal-hw-badge--overdue"
+    assert "color: var(--destructive)" in overdue.group(1)
+
+    filled = re.search(
+        r"\.cal-hw-badge--not_done \[data-lucide\],\s*"
+        r"\.cal-hw-badge--overdue \[data-lucide\]\s*\{([^}]*)\}",
+        css,
+    )
+    assert filled, "Красные значки должны быть залитыми (fill: currentColor)"
+    assert "fill: currentColor" in filled.group(1)

@@ -29,41 +29,53 @@
 
 **Non-Goals:**
 
-- Отдельный статус «Просрочено» и вычисление просрочки по `due_at`.
-- Учёт флага `deadline_enabled` в значке.
+- Отдельный статус «Просрочено» в закрытом списке `HOMEWORK_STATUSES`:
+  просрочка — вычисленное состояние, а не значение, которое ставит педагог.
 - Значок на карточке окна для записи (у окна нет урока и ДЗ).
 
 ## Decisions
 
-**D1. «Просрочен» = статус «Не выполнено» (`not_done`).**
-В кабинете ученика единственный красный статус — «Не выполнено». Отдельного
-статуса «Просрочено» в модели нет, а вычисление просрочки по `due_at`
-потребовало бы правила «срок прошёл, а статус всё ещё Задано» и меняло бы
-данные, которых задача не касается. Поэтому значок красится ровно по статусу
-ДЗ, а «красный, если просрочен» трактуется как «красный у невыполненного
-задания». `deadline_enabled` на поведение не влияет.
+**D1. «Просрочен» = срок сдачи прошёл, а статус всё ещё «Задано».**
+Просрочка вычисляется на рендере недели: `due_at` в прошлом, статус из
+`OPEN_STATUSES` (`assigned`), флаг `deadline_enabled` включён. Отдельного
+статуса «Просрочено» нет и не заводим: статус ставит педагог вручную, а
+просрочка зависит от текущего момента и меняется сама. «Сдано» и
+«Проверено» с прошедшим сроком не просрочка (работа сдана), «Не выполнено»
+красное и так. Флаг «Учитывать дедлайн» — это и есть «напоминания и
+автоматический статус»: снятый флаг выключает автоматическую просрочку.
+
+**D1a. Просроченный значок красный и залитый.**
+Красный контур на значке размером с иконку читается хуже, чем сплошная
+заливка: у `cal-hw-badge--overdue` и `cal-hw-badge--not_done` заливка
+`fill: currentColor` (у Lucide `fill="none"` — атрибут разметки, CSS его
+перекрывает). Так тревожное состояние видно в карточке без наведения, а
+нейтральное «Задано» остаётся контурным.
 
 **D2. Общие сервисы ДЗ переезжают в домен `homework`.**
-`app/homework/services/by_lesson.py` — `HIDDEN_STATUSES` и
-`homework_by_lesson(db, lesson_ids)`; `app/homework/services/presentation.py` —
-`_HOMEWORK_CHIPS`, `_HOMEWORK_BADGES`, `homework_status_label`,
-`homework_chip_class`, `homework_badge_class`, `homework_badge_label`,
-`register_template_helpers`. Кабинет ри-экспортирует их из своих модулей
-(`cabinet/services/calendar.py` оставляет имя `homework_by_lesson`, чтобы не
-ломать тесты), поэтому поведение кабинета не меняется, а календарь не тянет
-зависимость на чужой домен.
+`app/homework/services/by_lesson.py` — `HIDDEN_STATUSES`, `OPEN_STATUSES`,
+`LessonHomework` с `is_overdue(now)`, `homework_states(db, lesson_ids)` и
+узкая карта `homework_by_lesson` для кабинета;
+`app/homework/services/presentation.py` — `_HOMEWORK_CHIPS`,
+`_HOMEWORK_BADGES` (с виртуальным `overdue`), `homework_status_label`,
+`homework_chip_class`, `homework_badge_state`, `homework_badge_class`,
+`homework_badge_label`, `register_template_helpers`. Кабинет ри-экспортирует
+их из своих модулей (`cabinet/services/calendar.py` оставляет имя
+`homework_by_lesson`), поэтому поведение кабинета не меняется, а календарь
+не тянет зависимость на чужой домен.
 
 **D3. Статус кладётся в `ScheduleEvent`, представление — в `_lesson_fields`.**
-`ScheduleEvent.from_lesson` получает необязательный `homework_status=""`:
-событие остаётся единственным носителем данных карточки, а окна просто не
-заполняют поле. `_lesson_fields` отдаёт `homework_status` и `homework_label`
-(подпись через `homework_status_label`), `_slot_fields` — пустые значения,
-чтобы шаблон читал любое поле без `is defined`.
+`ScheduleEvent.from_lesson` получает необязательные `homework_status=""` и
+`homework_overdue=False`: событие остаётся единственным носителем данных
+карточки, а окна просто не заполняют поля. `_lesson_fields` отдаёт
+`homework_status`, `homework_overdue` и `homework_label` (подпись через
+`homework_badge_label`, у просрочки — «Просрочено»), `_slot_fields` —
+пустые значения, чтобы шаблон читал любое поле без `is defined`.
 
-**D4. Одна выборка статусов на неделю в `build_week_days`.**
-Сначала собираются строки `week_lessons`, затем `homework_by_lesson` по их id,
-и статус передаётся в `from_lesson`. Пустой список уроков даёт `{}` без
-запроса.
+**D4. Одна выборка состояний ДЗ на неделю в `build_week_days`.**
+Сначала собираются строки `week_lessons`, затем `homework_states` по их id,
+и статус с просрочкой передаются в `from_lesson`. «Сейчас» берётся один раз
+на неделю — по нему же считается занятость окон, чтобы карточки не
+расходились. Пустой список уроков даёт `{}` без запроса.
 
 **D5. Разметка: обёртка `.cal-event__head`, значок не сжимается.**
 Имя цели и значок стоят в одной строке: `span.cal-event__head` — flex с
