@@ -266,12 +266,14 @@
                         --accent: {{ event.color }};">
                 <span class="cal-event__strip" aria-hidden="true"></span>
                 {# Имя цели и значок ДЗ — одна строка: имя сокращается, значок
-                   не сжимается. Цвет значка кодирует статус ДЗ, подпись
-                   доступна в title/aria-label (значок размером с иконку). #}
+                   не сжимается. Цвет значка кодирует статус ДЗ, а
+                   просроченный срок («Задано», а срок прошёл) делает его
+                   красным и залитым; подпись доступна в title/aria-label
+                   (значок размером с иконку). #}
                 <span class="cal-event__head">
                     <span class="cal-event__title">{{ event.target_name }}</span>
                     {% if event.homework_status %}
-                    <span class="cal-hw-badge {{ homework_badge_class(event.homework_status) }}"
+                    <span class="cal-hw-badge {{ homework_badge_class(event.homework_status, overdue=event.homework_overdue) }}"
                           title="Домашнее задание: {{ event.homework_label }}"
                           aria-label="Домашнее задание: {{ event.homework_label }}">
                         <i data-lucide="book-open" aria-hidden="true"></i>
