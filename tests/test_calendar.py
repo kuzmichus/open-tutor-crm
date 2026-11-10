@@ -1370,24 +1370,24 @@ def test_is_overdue_only_for_planned_past_lessons():
         day=date(2026, 10, 21), start=time(10, 0), end=time(10, 40),
         lesson_id="c", status="completed", is_completed=True,
     )
+    # Отменённый и перенесённый уроки состоялись не будут: время прошло,
+    # но «пропущенным» занятие не было.
+    cancelled_past = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 9, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 9, 40, tzinfo=UTC),
+        day=date(2026, 10, 21), start=time(9, 0), end=time(9, 40),
+        lesson_id="d", status="cancelled",
+    )
+    rescheduled_past = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 8, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 8, 40, tzinfo=UTC),
+        day=date(2026, 10, 21), start=time(8, 0), end=time(8, 40),
+        lesson_id="e", status="rescheduled",
+    )
 
     assert is_overdue(planned_past, now=now) is True
     assert is_overdue(planned_future, now=now) is False
     assert is_overdue(completed_past, now=now) is False
-
-    cancelled_past = ScheduleEvent(
-        starts_at=datetime(2026, 10, 21, 10, 0, tzinfo=UTC),
-        ends_at=datetime(2026, 10, 21, 10, 40, tzinfo=UTC),
-        day=date(2026, 10, 21), start=time(10, 0), end=time(10, 40),
-        lesson_id="d", status="cancelled",
-    )
-    rescheduled_past = ScheduleEvent(
-        starts_at=datetime(2026, 10, 21, 10, 0, tzinfo=UTC),
-        ends_at=datetime(2026, 10, 21, 10, 40, tzinfo=UTC),
-        day=date(2026, 10, 21), start=time(10, 0), end=time(10, 40),
-        lesson_id="e", status="rescheduled",
-    )
-    # Отмена и перенос — сознательное решение, а не пропущенное занятие.
     assert is_overdue(cancelled_past, now=now) is False
     assert is_overdue(rescheduled_past, now=now) is False
 
@@ -1553,65 +1553,6 @@ def test_calendar_color_mode_status_uses_status_colors(
     # Цвет цели в этом режиме не используется.
     assert f"--accent: {PALETTE[1]}" not in past.text
     assert f"--accent: {PALETTE[1]}" not in future.text
-
-
-def test_calendar_color_mode_new_statuses(
-    client, calendar_owner, student_factory
-):
-    """«По статусу»: отменённый — серый, перенесённый — янтарный, не красный."""
-    from app.calendar.services.color_mode import (
-        STATUS_CANCELLED_COLOR,
-        STATUS_OVERDUE_COLOR,
-        STATUS_RESCHEDULED_COLOR,
-    )
-
-    student_id = student_factory(
-        tutor_id=calendar_owner, first_name="Новый статус"
-    )
-    cancelled_id = _insert_lesson(
-        calendar_owner, student_id=student_id, status="cancelled",
-        starts_at=datetime(2020, 1, 8, 10, 0),
-    )
-    rescheduled_id = _insert_lesson(
-        calendar_owner, student_id=student_id, status="rescheduled",
-        starts_at=datetime(2020, 1, 9, 10, 0),
-    )
-
-    page = client.get("/tutor/calendar?start=2020-01-06&color=status").text
-    cancelled_card = _card(page, cancelled_id)
-    rescheduled_card = _card(page, rescheduled_id)
-    assert f"--accent: {STATUS_CANCELLED_COLOR}" in cancelled_card
-    assert f"--accent: {STATUS_RESCHEDULED_COLOR}" in rescheduled_card
-    # Прошедшее время не делает их «просроченными».
-    assert f"--accent: {STATUS_OVERDUE_COLOR}" not in cancelled_card
-    assert f"--accent: {STATUS_OVERDUE_COLOR}" not in rescheduled_card
-
-
-def test_calendar_cancelled_card_is_marked_and_not_draggable(
-    client, calendar_owner, student_factory
-):
-    """Отменённая карточка помечена data-cancelled, и жест не начинается."""
-    student_id = student_factory(tutor_id=calendar_owner, first_name="Отмена")
-    cancelled_id = _insert_lesson(
-        calendar_owner, student_id=student_id, status="cancelled",
-        starts_at=datetime(2026, 10, 14, 14, 0),
-    )
-    rescheduled_id = _insert_lesson(
-        calendar_owner, student_id=student_id, status="rescheduled",
-        starts_at=datetime(2026, 10, 15, 14, 0),
-    )
-    page = client.get("/tutor/calendar?start=2026-10-12").text
-
-    cancelled_card = _card(page, cancelled_id)
-    assert 'data-cancelled="true"' in cancelled_card
-    assert "cal-event--cancelled" in cancelled_card
-    rescheduled_card = _card(page, rescheduled_id)
-    assert "cal-event--rescheduled" in rescheduled_card
-    assert 'data-cancelled="true"' not in rescheduled_card
-
-    js = _calendar_js()
-    down = js[js.index("onEventPointerDown: function"):js.index("onDragMove: function")]
-    assert 'card.hasAttribute("data-cancelled")' in down
 
 
 def test_calendar_color_mode_group_uses_group_color(

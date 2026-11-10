@@ -306,6 +306,31 @@ def test_new_tab_period_filter(
     assert _duo_value(garbage.text, "Заведено") == "2"
 
 
+def test_trial_conversion_ignores_cancelled_future_lesson(
+    client, tutor_factory, student_factory, lesson_factory
+):
+    """Будущий отменённый урок не считается удержанием после пробного."""
+    now = utcnow()
+    tutor_id = _login(client, tutor_factory)
+    student_id = student_factory(tutor_id=tutor_id, first_name="Вера", status="new")
+
+    lesson_factory(
+        student_id=student_id, type="trial", starts_at=now - timedelta(days=1), price=0
+    )
+    # Занятие на будущей неделе отменено: ученик не остался.
+    lesson_factory(
+        student_id=student_id,
+        starts_at=now + timedelta(days=7),
+        status="cancelled",
+        price=0,
+    )
+
+    page = client.get("/tutor/stats?tab=new")
+    assert page.status_code == 200
+    assert "не засчитано 1" in page.text
+    assert "не остался: занятий и оплат после пробного нет" in page.text
+
+
 def test_forecast_on_overview(
     client, tutor_factory, student_factory, lesson_factory, group_factory,
     group_member_factory,
