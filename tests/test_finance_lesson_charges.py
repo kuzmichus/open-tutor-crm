@@ -289,6 +289,40 @@ def test_edit_completed_lesson_back_to_planned_removes_charge(
         assert balance(session, student_id) == 0
 
 
+def test_edit_completed_lesson_to_cancelled_removes_charge(
+    owner, client, student_factory
+):
+    """«Проведён» → «Отменён» снимает списание: занятие не состоялось."""
+    student_id = student_factory(tutor_id=owner)
+    _, lesson_ids = _insert_series(owner, student_id, count=1, price=1200)
+    _mark_completed(client, student_id, lesson_ids[0])
+    assert len(_charges(student_id)) == 1
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_ids[0]}",
+        data=_update_form(student_id, price="1200", status="cancelled"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+    assert _charges(student_id) == []
+
+
+def test_edit_planned_lesson_to_cancelled_creates_no_charge(
+    owner, client, student_factory
+):
+    """«Запланирован» → «Отменён» не создаёт списание."""
+    student_id = student_factory(tutor_id=owner)
+    _, lesson_ids = _insert_series(owner, student_id, count=1, price=1200)
+
+    response = client.post(
+        f"/tutor/lessons/{lesson_ids[0]}",
+        data=_update_form(student_id, price="1200", status="cancelled"),
+        headers=HTMX,
+    )
+    assert response.status_code == 200
+    assert _charges(student_id) == []
+
+
 def test_edit_apply_to_series_skips_price_of_completed_lesson(
     owner, client, student_factory
 ):
