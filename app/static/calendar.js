@@ -577,11 +577,13 @@
              поэтому клик по кнопке «Записаться» никогда не
              интерпретируется как drag (design.md D3). Проведённый урок
              переносить нельзя (design.md D8) — карточка помечена
-             `data-completed` и жест не начинается. */
+             `data-completed` и жест не начинается. Отменённый урок тоже
+             не перетаскивается: его время менять бессмысленно. */
           var slotCard = event.target.closest(".cal-event--slot");
           var card = event.target.closest(".cal-event");
           if (slotCard || !card || !this.$root.contains(card) || this._drag) return;
           if (card.hasAttribute("data-completed")) return;
+          if (card.hasAttribute("data-cancelled")) return;
           /* Новый жест снимает подавитель клика от прошлого переноса. */
           this._suppressClick = false;
           /* Слушатели жеста висят на document, а не на карточке: пока

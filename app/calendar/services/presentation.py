@@ -269,6 +269,10 @@ def _lesson_fields(
         # (design.md D5): отличается от проведённого и от будущего.
         "is_overdue": overdue,
         "is_completed": event.is_completed,
+        # Отменённый урок не переносится и не краснеет как просроченный;
+        # перенесённый помечается янтарным акцентом (design D5).
+        "is_cancelled": event.status == "cancelled",
+        "is_rescheduled": event.status == "rescheduled",
         # Данные реального урока: непустой id отличает его от окна и
         # служит адресом формы редактирования (design.md D7).
         "lesson_id": event.lesson_id,
@@ -301,6 +305,8 @@ def _slot_fields(event: ScheduleEvent) -> dict:
         "is_past": False,
         "is_overdue": False,
         "is_completed": False,
+        "is_cancelled": False,
+        "is_rescheduled": False,
         "lesson_id": "",
         "target_id": "",
         "slot_id": event.slot_id,
@@ -315,8 +321,14 @@ def is_overdue(event: ScheduleEvent, *, now: datetime) -> bool:
 
     Сравниваются aware UTC: `ends_at` события и `now` из контекста
     (design D4), поэтому результат не зависит от зоны машины.
+
+    Отменённый и перенесённый уроки не просрочены: время прошло, но
+    занятие сознательно не состоялось — красная рамка «пропущен» здесь
+    вводила бы в заблуждение.
     """
     if event.is_completed:
+        return False
+    if event.status in ("cancelled", "rescheduled"):
         return False
     return event.ends_at < now
 
@@ -332,6 +344,7 @@ def event_accent(event: ScheduleEvent, *, now: datetime, color_mode: str) -> str
         return status_color(
             is_completed=event.is_completed,
             is_overdue=is_overdue(event, now=now),
+            status=event.status,
         )
     return event.color
 

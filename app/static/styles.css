@@ -1865,7 +1865,9 @@
   .chip--trial      { background: var(--status-cancelled);   color: var(--status-cancelled-fg); }
   .chip--practice   { background: var(--muted);              color: var(--muted-foreground); }
 
-  /* Статусы урока: «Проведён» — зелёным (спека), «Запланирован» — нейтрально */
+  /* Статусы урока: «Проведён» — зелёным (спека), «Запланирован» —
+     нейтрально, «Перенесён» и «Отменён» переиспользуют чипы
+     `.chip--rescheduled` и `.chip--cancelled` из блока статусов ученика. */
   .chip--planned   { background: var(--muted);            color: var(--muted-foreground); }
   .chip--completed { background: var(--status-unplanned); color: var(--status-unplanned-fg); }
 
@@ -4788,6 +4790,21 @@
     border-color: color-mix(in srgb, var(--destructive) 55%, transparent);
   }
 
+  /* Отменённый урок: приглушён и зачёркнут, переносить его нельзя —
+     курсор не обещает drag. Акцент остаётся серым в режиме «По статусу». */
+  .cal-event--cancelled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* Перенесённый урок: пунктирная янтарная рамка — занятие состоится
+     (или состоялось) в другое время, но карточка осталась в истории. */
+  .cal-event--rescheduled {
+    border-style: dashed;
+    border-left-style: solid;
+    border-color: color-mix(in srgb, var(--status-rescheduled) 70%, transparent);
+  }
+
   /* Карточка в процессе перетаскивания: transform двигает calendar.js;
      сам hit-тест по сетке делает calendar.js (elementUnder), поэтому
      pointer-events здесь не трогаем — они нужны для pointer capture. */
@@ -4815,6 +4832,12 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Отменённое занятие зачёркнуто: подпись остаётся читаемой, но видно,
+     что урок не состоится (цвет и прозрачность — у карточки). */
+  .cal-event--cancelled .cal-event__title {
+    text-decoration: line-through;
   }
 
   /* Вторая строка: цена и интервал времени. Обрезается первой, когда
