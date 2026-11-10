@@ -638,3 +638,47 @@ def test_delete_series_cascades_homework(owner, client, student_factory):
         for lesson_id_value in lesson_ids:
             assert db.get(Lesson, lesson_id_value) is None
         assert db.scalars(select(Homework)).all() == []  # строк не осталось
+
+
+# --------------------------------------------------------------------------
+# 4. Общие сервисы ДЗ: карта статусов и подписи (календарь и кабинет)
+# --------------------------------------------------------------------------
+
+
+def test_homework_by_lesson_returns_visible_statuses(lesson_id):
+    """Карта статусов по id уроков; «Не задано» в неё не попадает."""
+    from app.homework.services.by_lesson import homework_by_lesson
+
+    with SessionLocal() as db:
+        db.add(Homework(lesson_id=lesson_id, assignment="ДЗ", status="submitted"))
+        db.commit()
+
+    with SessionLocal() as db:
+        assert homework_by_lesson(db, [lesson_id]) == {lesson_id: "submitted"}
+
+
+def test_homework_by_lesson_empty_input_skips_query():
+    """Пустой список уроков — пустая карта без запроса к БД."""
+    from app.homework.services.by_lesson import homework_by_lesson
+
+    with SessionLocal() as db:
+        assert homework_by_lesson(db, []) == {}
+
+
+def test_homework_presentation_classes_cover_all_statuses():
+    """Подписи и классы значков/чипов — на каждый статус, кроме «Не задано»."""
+    from app.homework.services.presentation import (
+        homework_badge_class,
+        homework_badge_label,
+        homework_chip_class,
+        homework_status_label,
+    )
+
+    for status in HOMEWORK_STATUSES:
+        assert homework_status_label(status) == HOMEWORK_STATUS_LABELS[status]
+        assert homework_chip_class(status).startswith("chip--hw-")
+        assert homework_badge_class(status).startswith("cal-hw-badge--")
+        assert homework_badge_label(status) == HOMEWORK_STATUS_LABELS[status]
+
+    # «Не выполнено» — единственный красный статус, он же «просрочен».
+    assert homework_badge_class("not_done") == "cal-hw-badge--not_done"
