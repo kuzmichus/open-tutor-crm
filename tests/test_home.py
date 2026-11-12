@@ -50,6 +50,14 @@ def _stat_value(html: str, label: str) -> str:
     return match.group(1).strip()
 
 
+def _panel(html: str, title: str) -> str:
+    """HTML панели главной по её заголовку: от `<article>` до закрытия."""
+    start = html.index(f">{title}</h2>")
+    start = html.rindex("<article", 0, start)
+    end = html.index("</article>", start)
+    return html[start:end]
+
+
 def _month_noon(tutor) -> datetime:
     """Полдень 1-го числа текущего месяца педагога (зона тестов — UTC)."""
     first = today_local(tutor).replace(day=1)
@@ -277,5 +285,58 @@ def test_dashboard_isolation(
     assert _stat_value(response.text, "Активные ученики") == "0"
     assert _stat_value(response.text, "Доход за месяц") == "0\u00a0₽"
     assert _stat_value(response.text, "Проведено часов") == "0"
-    assert "На сегодня уроков нет" in response.text
-    assert "Платежей пока нет" in response.text
+    assert "Нет запланированных уроков" in response.text
+    assert "Нет платежей" in response.text
+
+
+def test_dashboard_empty_blocks_have_placeholder(client, tutor_factory):
+    """Пустые блоки главной — заглушки с иконкой, заголовком и подсказкой.
+
+    Референс TOCRM-64: пустой блок не просто пишет «уроков нет», а держит
+    ту же высоту, что и заполненный, и подсказывает следующее действие.
+    Иконки проверяем по `data-lucide`: их отрисовывает клиентский набор,
+    поэтому искать SVG в ответе сервера бессмысленно.
+    """
+    _login(client, tutor_factory, email="empty-blocks@example.com")
+
+    response = client.get("/tutor/")
+    assert response.status_code == 200
+
+    schedule = _panel(response.text, "Расписание на сегодня")
+    assert 'class="home-empty"' in schedule
+    assert 'data-lucide="calendar"' in schedule
+    assert "Нет запланированных уроков" in schedule
+    assert "Добавьте урок в календаре" in schedule
+
+    payments = _panel(response.text, "Недавние платежи")
+    assert 'class="home-empty"' in payments
+    assert 'data-lucide="credit-card"' in payments
+    assert "Нет платежей" in payments
+    assert "Платежи появятся здесь" in payments
+
+
+def test_dashboard_filled_blocks_hide_placeholder(
+    client,
+    tutor_factory,
+    student_factory,
+    lesson_factory,
+    operation_factory,
+):
+    """Когда данные есть, заглушки не показываются — только списки."""
+    tutor_id = _login(client, tutor_factory, email="filled-blocks@example.com")
+    tutor = _tutor(tutor_id)
+    day_start, _ = local_day_bounds(today_local(tutor), tutor)
+    month_start = _month_noon(tutor)
+
+    student = student_factory(tutor_id=tutor_id, first_name="Иван", last_name="Иванов")
+    lesson_factory(
+        student_id=student,
+        status="planned",
+        starts_at=day_start.replace(hour=10, minute=0, tzinfo=UTC),
+    )
+    operation_factory(student_id=student, amount=2400, status="paid", occurred_at=month_start)
+
+    response = client.get("/tutor/")
+    assert response.status_code == 200
+    assert "home-empty" not in response.text
+    assert "Иван Иванов" in response.text

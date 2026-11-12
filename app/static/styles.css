@@ -1552,10 +1552,36 @@
     white-space: nowrap;
   }
 
+  /* Заглушка пустого блока главной: иконка, заголовок и подсказка по
+     центру панели (референс TOCRM-64). Минимальная высота держит блок
+     той же высоты, что и заполненный список, — при появлении данных
+     страница не «прыгает». */
   .home-empty {
-    color: var(--muted-foreground);
-    font-size: var(--text-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--space) * 2);
+    min-height: calc(var(--space) * 45);
     padding: calc(var(--space) * 4) 0;
+    text-align: center;
+    color: var(--muted-foreground);
+  }
+
+  .home-empty__icon {
+    width: 32px;
+    height: 32px;
+    color: var(--muted-foreground);
+    opacity: 0.55;
+  }
+
+  .home-empty__title {
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  .home-empty__text {
+    font-size: var(--text-xs);
   }
 
 
