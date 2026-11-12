@@ -403,7 +403,13 @@ def test_batch_uses_tutor_zone_for_utc_conversion():
 # --------------------------------------------------------------------------
 
 
-def _save_lesson(tutor_id: str, student_id: str, starts_at: datetime, duration_min: int = 40) -> str:
+def _save_lesson(
+    tutor_id: str,
+    student_id: str,
+    starts_at: datetime,
+    duration_min: int = 40,
+    status: str = "planned",
+) -> str:
     """Урок напрямую в БД."""
     with SessionLocal() as session:
         lesson = Lesson(
@@ -411,7 +417,7 @@ def _save_lesson(tutor_id: str, student_id: str, starts_at: datetime, duration_m
             type="individual",
             starts_at=starts_at,
             duration_min=duration_min,
-            status="planned",
+            status=status,
         )
         session.add(lesson)
         session.commit()
@@ -548,6 +554,25 @@ def test_plan_for_tutor_reads_lessons_and_coverage(tutor_factory, student_factor
 
     assert len(report.create) == 8
     assert [skip.reason for skip in report.skip] == [SKIP_BUSY_LESSON]
+
+
+@pytest.mark.parametrize("status", ["cancelled", "rescheduled"])
+def test_plan_ignores_not_held_lesson(tutor_factory, student_factory, status):
+    """Отменённый и перенесённый уроки окно пачки не занимают."""
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    _save_lesson(
+        tutor_id, student_id, datetime(2026, 10, 12, 10, 55, tzinfo=UTC), status=status
+    )
+
+    from app.tutor.models.tutor import Tutor
+
+    with SessionLocal() as session:
+        tutor = session.get(Tutor, tutor_id)
+        report = plan_for_tutor(session, tutor, _params(), now=NOW)
+
+    assert len(report.create) == 9
+    assert report.skip == ()
 
 
 # --------------------------------------------------------------------------
