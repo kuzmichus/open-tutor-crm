@@ -15,6 +15,7 @@ from app.cabinet.services.contact_invites import create_invite
 from app.database import SessionLocal
 from app.student.models.contact import Contact
 from app.student.models.student_contact import StudentContact
+from app.tutor.services.clock import utcnow
 from app.tutor.services.password_hasher import PasswordHasher
 
 PASSWORD = "Пароль-1"
@@ -287,29 +288,24 @@ def test_parent_child_lessons_nearest_first_no_past(
     )
 
     # Прошедший урок не показывается; из будущих ближайший — первый.
-    lesson_factory(
-        student_id=student_id,
-        status="completed",
-        starts_at=datetime(2026, 10, 1, 10, 0, tzinfo=UTC),
-    )
-    lesson_factory(
-        student_id=student_id,
-        status="planned",
-        starts_at=datetime(2026, 11, 20, 10, 0, tzinfo=UTC),
-    )
-    lesson_factory(
-        student_id=student_id,
-        status="planned",
-        starts_at=datetime(2026, 11, 10, 10, 0, tzinfo=UTC),
-    )
+    # Даты относительно текущего момента: фиксированные даты протухают,
+    # когда тестовый день наступает (кабинет показывает только будущее).
+    past = utcnow() - timedelta(days=10)
+    nearest = utcnow() + timedelta(days=2)
+    later = utcnow() + timedelta(days=5)
+    lesson_factory(student_id=student_id, status="completed", starts_at=past)
+    lesson_factory(student_id=student_id, status="planned", starts_at=later)
+    lesson_factory(student_id=student_id, status="planned", starts_at=nearest)
 
     page = client.get(f"/parent/students/{student_id}").text
     assert "Ближайшее занятие" in page
     assert "Запланированных занятий пока нет" not in page
-    # Порядок дат в разметке: 10 ноября раньше 20 ноября (формат
-    # `lesson_date` — «ДД.ММ.ГГГГ»).
-    assert page.index("10.11.2026") < page.index("20.11.2026")
-    assert "01.10.2026" not in page
+    # Порядок дат в разметке: ближайший раньше позднего (формат
+    # `lesson_date` — «ДД.ММ.ГГГГ»; у тестового репетитора зона UTC).
+    assert page.index(nearest.strftime("%d.%m.%Y")) < page.index(
+        later.strftime("%d.%m.%Y")
+    )
+    assert past.strftime("%d.%m.%Y") not in page
 
 
 def test_parent_child_group_lesson_visible(
@@ -331,7 +327,7 @@ def test_parent_child_group_lesson_visible(
         group_id=group_id,
         student_id=None,
         status="planned",
-        starts_at=datetime(2026, 11, 12, 10, 0, tzinfo=UTC),
+        starts_at=utcnow() + timedelta(days=1),
     )
 
     page = client.get(f"/parent/students/{student_id}").text
