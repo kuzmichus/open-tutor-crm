@@ -96,7 +96,11 @@
                         {% endfor %}
                     </ul>
                     {% else %}
-                    <p class="home-empty">На сегодня уроков нет</p>
+                    <div class="home-empty">
+                        <i data-lucide="calendar" class="home-empty__icon" aria-hidden="true"></i>
+                        <p class="home-empty__title">Нет запланированных уроков</p>
+                        <p class="home-empty__text">Добавьте урок в календаре</p>
+                    </div>
                     {% endif %}
                 </article>
 
@@ -115,7 +119,11 @@
                         {% endfor %}
                     </ul>
                     {% else %}
-                    <p class="home-empty">Платежей пока нет</p>
+                    <div class="home-empty">
+                        <i data-lucide="credit-card" class="home-empty__icon" aria-hidden="true"></i>
+                        <p class="home-empty__title">Нет платежей</p>
+                        <p class="home-empty__text">Платежи появятся здесь</p>
+                    </div>
                     {% endif %}
                 </article>
             </section>
