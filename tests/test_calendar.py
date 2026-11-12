@@ -1370,10 +1370,26 @@ def test_is_overdue_only_for_planned_past_lessons():
         day=date(2026, 10, 21), start=time(10, 0), end=time(10, 40),
         lesson_id="c", status="completed", is_completed=True,
     )
+    # Отменённый и перенесённый уроки состоялись не будут: время прошло,
+    # но «пропущенным» занятие не было.
+    cancelled_past = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 9, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 9, 40, tzinfo=UTC),
+        day=date(2026, 10, 21), start=time(9, 0), end=time(9, 40),
+        lesson_id="d", status="cancelled",
+    )
+    rescheduled_past = ScheduleEvent(
+        starts_at=datetime(2026, 10, 21, 8, 0, tzinfo=UTC),
+        ends_at=datetime(2026, 10, 21, 8, 40, tzinfo=UTC),
+        day=date(2026, 10, 21), start=time(8, 0), end=time(8, 40),
+        lesson_id="e", status="rescheduled",
+    )
 
     assert is_overdue(planned_past, now=now) is True
     assert is_overdue(planned_future, now=now) is False
     assert is_overdue(completed_past, now=now) is False
+    assert is_overdue(cancelled_past, now=now) is False
+    assert is_overdue(rescheduled_past, now=now) is False
 
 
 def test_is_past_compares_aware_utc_not_local_wall_time():

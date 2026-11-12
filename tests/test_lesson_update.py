@@ -321,6 +321,55 @@ def test_edit_status_and_rating(owner, client, student_factory):
     assert "★★★★★" in row
 
 
+def test_edit_status_cancelled_and_rescheduled(owner, client, student_factory):
+    """«Отменён» и «Перенесён» сохраняются и не дают «(Оплачено)»."""
+    student = student_factory(tutor_id=owner)
+    cancelled = _insert_lesson(owner, student_id=student, price=1200)
+    rescheduled = _insert_lesson(
+        owner,
+        student_id=student,
+        starts_at=datetime(2026, 10, 20, 10, 0),
+        price=1200,
+    )
+
+    for lesson_id, status, label in (
+        (cancelled, "cancelled", "Отменён"),
+        (rescheduled, "rescheduled", "Перенесён"),
+    ):
+        response = client.post(
+            f"/tutor/lessons/{lesson_id}",
+            data=_update_form(student, status=status, price="1200"),
+            headers=HTMX,
+        )
+        assert response.status_code == 200
+        assert _lesson(lesson_id)["status"] == status
+
+        page = client.get("/tutor/lessons").text
+        row = re.search(
+            rf'<tr class="lessons-table__row" id="lesson-row-{re.escape(lesson_id)}[^>]*>.*?</tr>',
+            page,
+            re.S,
+        ).group(0)
+        assert label in row
+        assert "Оплачено" not in row
+
+
+def test_edit_form_lists_four_statuses(owner, client, student_factory):
+    """Селект статуса содержит все четыре значения закрытого списка."""
+    student = student_factory(tutor_id=owner)
+    lesson_id = _insert_lesson(owner, student_id=student)
+
+    page = client.get(f"/tutor/lessons/{lesson_id}/edit").text
+    for value, label in (
+        ("planned", "Запланирован"),
+        ("completed", "Проведён"),
+        ("rescheduled", "Перенесён"),
+        ("cancelled", "Отменён"),
+    ):
+        assert f'<option value="{value}"' in page
+        assert label in page
+
+
 def test_edit_rating_must_be_1_to_5(owner, client, student_factory):
     """Оценка вне 1–5 блокирует сохранение и не меняет урок."""
     student = student_factory(tutor_id=owner)

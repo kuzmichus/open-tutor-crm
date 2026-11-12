@@ -177,7 +177,7 @@ def test_lesson_duration_outside_list_is_rejected(tutor_factory, student_factory
 
 
 def test_lesson_status_and_rating_checks(tutor_factory, student_factory):
-    """Статус вне planned/completed и оценка вне 1–5 не сохраняются."""
+    """Статус вне закрытого списка и оценка вне 1–5 не сохраняются."""
     student_id = student_factory(tutor_id=tutor_factory())
 
     with _expect_integrity_error() as session:
@@ -186,7 +186,7 @@ def test_lesson_status_and_rating_checks(tutor_factory, student_factory):
                 student_id=student_id,
                 starts_at=_starts_at(),
                 duration_min=60,
-                status="cancelled",
+                status="no_show",
             )
         )
 
@@ -199,6 +199,31 @@ def test_lesson_status_and_rating_checks(tutor_factory, student_factory):
                 rating=6,
             )
         )
+
+
+def test_lesson_new_statuses_are_saved(tutor_factory, student_factory):
+    """«Перенесён» и «Отменён» — часть закрытого списка и сохраняются."""
+    from app.lesson.models.lesson import LESSON_STATUSES
+
+    assert LESSON_STATUSES == ("planned", "completed", "rescheduled", "cancelled")
+    student_id = student_factory(tutor_id=tutor_factory())
+
+    saved = {}
+    for status in ("rescheduled", "cancelled"):
+        with SessionLocal() as session:
+            lesson = Lesson(
+                student_id=student_id,
+                starts_at=_starts_at(),
+                duration_min=60,
+                status=status,
+            )
+            session.add(lesson)
+            session.commit()
+            saved[status] = lesson.id
+
+    with SessionLocal() as session:
+        for status, lesson_id in saved.items():
+            assert session.get(Lesson, lesson_id).status == status
 
 
 def test_lesson_boundary_values_are_saved(tutor_factory, student_factory):

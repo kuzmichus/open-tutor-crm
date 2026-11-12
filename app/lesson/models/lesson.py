@@ -47,11 +47,15 @@ LESSON_DURATIONS = (
     180,
 )
 
-# Статусы (паттерн STUDENT_STATUSES): «Запланирован» / «Проведён».
-LESSON_STATUSES = ("planned", "completed")
+# Статусы (паттерн STUDENT_STATUSES): «Запланирован» / «Проведён» /
+# «Перенесён» / «Отменён». Отмена и перенос не удаляют урок: занятие
+# остаётся в истории и списках, меняя только подпись и цвет чипа.
+LESSON_STATUSES = ("planned", "completed", "rescheduled", "cancelled")
 LESSON_STATUS_LABELS = {
     "planned": "Запланирован",
     "completed": "Проведён",
+    "rescheduled": "Перенесён",
+    "cancelled": "Отменён",
 }
 
 # Оценка для семьи: 1–5 звёзд, NULL — без оценки.
@@ -151,8 +155,10 @@ class Lesson(Base):
     # Оплата ученика, рубли. NULL — цена не задана; у группового урока
     # в списке отображается «—», независимо от значения.
     price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # `rescheduled` — 11 символов: String(10) обрезал бы значение на
+    # PostgreSQL, поэтому ширина колонки — 12.
     status: Mapped[str] = mapped_column(
-        String(10),
+        String(12),
         nullable=False,
         default="planned",
     )

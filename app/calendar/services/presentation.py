@@ -315,8 +315,13 @@ def is_overdue(event: ScheduleEvent, *, now: datetime) -> bool:
 
     Сравниваются aware UTC: `ends_at` события и `now` из контекста
     (design D4), поэтому результат не зависит от зоны машины.
+
+    Отменённый и перенесённый уроки не просрочены: время прошло, но занятие
+    сознательно не состоялось — красная рамка «пропущен» здесь врёт.
     """
     if event.is_completed:
+        return False
+    if event.status in ("cancelled", "rescheduled"):
         return False
     return event.ends_at < now
 

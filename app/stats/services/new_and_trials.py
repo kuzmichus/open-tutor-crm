@@ -156,7 +156,12 @@ def trial_conversion(db: Session, tutor, *, start, end, now) -> dict:
         for starts_at, status in regular:
             if starts_at <= trial_at:
                 continue
-            if status == "completed" or starts_at >= now:
+            # Будущий отменённый или перенесённый урок не говорит о том, что
+            # ученик остался: занятия не будет. Удержанием считаются только
+            # состоявшийся урок или ещё предстоящее запланированное занятие.
+            if status == "completed" or (
+                starts_at >= now and status not in ("cancelled", "rescheduled")
+            ):
                 kept = "lesson"
                 detail = starts_at
                 break
