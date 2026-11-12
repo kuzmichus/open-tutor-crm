@@ -142,6 +142,36 @@ def test_create_slot_conflicting_with_lesson_is_rejected(
     assert _slots(owner) == []
 
 
+@pytest.mark.parametrize("status", ["cancelled", "rescheduled"])
+def test_create_slot_over_not_held_lesson_is_allowed(
+    client, owner, student_factory, status
+):
+    """Отменённый или перенесённый урок не мешает создать окно на его время."""
+    from app.lesson.models.lesson import Lesson
+
+    student_id = student_factory(tutor_id=owner)
+    with SessionLocal() as session:
+        session.add(
+            Lesson(
+                student_id=student_id,
+                type="individual",
+                starts_at=datetime(2026, 10, 14, 14, 20, tzinfo=UTC),
+                duration_min=40,
+                status=status,
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        "/tutor/slots",
+        data={"date": "2026-10-14", "time": "14:00", "duration_min": "40"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.headers["HX-Trigger"] == "slot-saved"
+    assert len(_slots(owner)) == 1
+
+
 def test_create_duplicate_slot_is_rejected(client, owner, slot_factory):
     """Второе окно на то же время отклоняется, а не падает с 500."""
     slot_factory(owner, datetime(2026, 10, 14, 14, 0, tzinfo=UTC))
@@ -243,6 +273,38 @@ def test_move_slot_onto_lesson_is_rejected(client, owner, student_factory, slot_
     assert "На это время уже стоит урок." in response.text
     slots = _slots(owner)
     assert slots[0].starts_at.replace(tzinfo=UTC) == datetime(2026, 10, 14, 14, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("status", ["cancelled", "rescheduled"])
+def test_move_slot_onto_not_held_lesson_is_allowed(
+    client, owner, student_factory, slot_factory, status
+):
+    """Перенос на время отменённого или перенесённого урока разрешён."""
+    from app.lesson.models.lesson import Lesson
+
+    student_id = student_factory(tutor_id=owner)
+    slot_id = slot_factory(owner, datetime(2026, 10, 14, 14, 0, tzinfo=UTC))
+    with SessionLocal() as session:
+        session.add(
+            Lesson(
+                student_id=student_id,
+                type="individual",
+                starts_at=datetime(2026, 10, 15, 10, 0, tzinfo=UTC),
+                duration_min=40,
+                status=status,
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        f"/tutor/slots/{slot_id}",
+        data={"date": "2026-10-15", "time": "10:00", "duration_min": "40"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.headers["HX-Trigger"] == "slot-saved"
+    slots = _slots(owner)
+    assert slots[0].starts_at.replace(tzinfo=UTC) == datetime(2026, 10, 15, 10, 0, tzinfo=UTC)
 
 
 def test_slot_dialog_opens_for_owner(client, owner, slot_factory):

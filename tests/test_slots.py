@@ -24,6 +24,7 @@ from app.slot.services.busy import (
     SLOT_LESSON,
     SLOT_PAST,
     SLOT_PENDING,
+    conflicts,
     slot_states,
 )
 from app.slot.services.slots import slots_between, week_slots
@@ -52,7 +53,13 @@ def _slot(tutor_id: str, starts_at: datetime, duration_min: int = 40, **extra) -
 
 
 
-def _save_lesson(tutor_id: str, student_id: str, starts_at: datetime, duration_min: int = 40) -> str:
+def _save_lesson(
+    tutor_id: str,
+    student_id: str,
+    starts_at: datetime,
+    duration_min: int = 40,
+    status: str = "planned",
+) -> str:
     """Сохраняет урок напрямую в БД и возвращает его id."""
     with SessionLocal() as session:
         lesson = Lesson(
@@ -60,7 +67,7 @@ def _save_lesson(tutor_id: str, student_id: str, starts_at: datetime, duration_m
             type="individual",
             starts_at=starts_at,
             duration_min=duration_min,
-            status="planned",
+            status=status,
         )
         session.add(lesson)
         session.commit()
@@ -186,6 +193,33 @@ def test_touching_lesson_does_not_make_slot_busy(tutor_factory, student_factory)
         states = slot_states(session, tutor_id, [slot], now=_utc(2026, 10, 12, 9, 0))
 
     assert states[slot.id] == SLOT_FREE
+
+
+@pytest.mark.parametrize("status", ["cancelled", "rescheduled"])
+def test_not_held_lesson_does_not_make_slot_busy(
+    tutor_factory, student_factory, status
+):
+    """Отменённый и перенесённый уроки время не занимают: окно свободно.
+
+    Статус вводился вместо удаления урока — иначе отмена не освобождала бы
+    время и вела себя хуже прежнего обхода.
+    """
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    slot = _slot(tutor_id, _utc(2026, 10, 14, 14, 0))
+    _save_lesson(tutor_id, student_id, _utc(2026, 10, 14, 14, 20), 40, status=status)
+
+    with SessionLocal() as session:
+        states = slot_states(session, tutor_id, [slot], now=_utc(2026, 10, 12, 9, 0))
+        kinds = conflicts(
+            session,
+            tutor_id,
+            _utc(2026, 10, 14, 14, 0),
+            _utc(2026, 10, 14, 14, 40),
+        )
+
+    assert states[slot.id] == SLOT_FREE
+    assert kinds == []
 
 
 def test_past_slot_with_confirmed_booking_shows_booking(tutor_factory, slot_factory, booking_factory):

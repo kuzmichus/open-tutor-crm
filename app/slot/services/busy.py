@@ -12,6 +12,11 @@
 в прошлом полезнее показать как «занято уроком» тому, кто разбирается,
 почему время ушло.
 
+Отменённый и перенесённый уроки занятостью не считаются: статус вводился
+именно для того, чтобы отказаться от удаления урока, не теряя историю, ДЗ и
+списания. Поэтому в выборке уроков диапазона (`lessons_for_range`) они
+исключены — это одна точка на состояние окна, конфликты записи и пачку окон.
+
 *Почему не колонка*: урок появляется четырьмя путями (форма, серия,
 перетаскивание, подтверждение брони). Хранимое поле `is_busy` пришлось бы
 обновлять в каждом из них и разошлось бы при первом пропущенном вызове.
@@ -31,7 +36,7 @@ from app.booking.models.booking import (
     Booking,
 )
 from app.group.models.group import Group
-from app.lesson.models.lesson import Lesson
+from app.lesson.models.lesson import NOT_HELD_STATUSES, Lesson
 from app.slot.models.slot import Slot
 from app.student.models.student import Student
 from app.tutor.services.clock import as_utc
@@ -111,6 +116,11 @@ def lessons_for_range(
     Один `SELECT` на весь диапазон: владелец урока выводится из цели
     (ученик или группа), поэтому выборка джойнит обе таблицы — как
     `calendar/services/week.py::week_lessons`.
+
+    Отменённый и перенесённый уроки в выборку не попадают: занятие
+    сознательно не состоялось, и его время свободно. Это одна точка на
+    все проверки записи — состояние окна, конфликты создания/переноса,
+    подтверждение брони и генератор пачки окон.
     """
     lower, upper = _overlap_condition(Lesson.starts_at, start, end)
     stmt = (
@@ -119,6 +129,7 @@ def lessons_for_range(
         .join(Group, Group.id == Lesson.group_id, isouter=True)
         .where(
             or_(Student.tutor_id == tutor_id, Group.tutor_id == tutor_id),
+            Lesson.status.notin_(NOT_HELD_STATUSES),
             lower,
             upper,
         )

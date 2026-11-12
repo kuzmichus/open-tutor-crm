@@ -317,6 +317,41 @@ def test_confirm_rejects_when_time_taken_by_lesson(client, owner, student_factor
     assert _get(Booking, booking_id).status == "pending"
     assert _count(Lesson) == 1
 
+
+@pytest.mark.parametrize("status", ["cancelled", "rescheduled"])
+def test_confirm_ignores_not_held_lesson(
+    client, owner, student_factory, slot_factory, booking_factory, status
+):
+    """Отменённый и перенесённый уроки не мешают подтвердить бронь."""
+    from app.booking.models.booking import Booking
+    from app.lesson.models.lesson import Lesson
+
+    student_id = student_factory(tutor_id=owner)
+    slot_id = slot_factory(owner)
+    booking_id = booking_factory(slot_id)
+    with SessionLocal() as session:
+        session.add(
+            Lesson(
+                student_id=student_id,
+                type="individual",
+                starts_at=datetime(2027, 10, 14, 14, 20, tzinfo=UTC),
+                duration_min=40,
+                status=status,
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        f"/tutor/bookings/{booking_id}/confirm",
+        data={"kind": "child"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert _get(Booking, booking_id).status == "confirmed"
+    assert _count(Lesson) == 2
+
+
 def test_confirm_does_not_use_archived_student(client, owner, student_factory, slot_factory, booking_factory):
     """Архивный ученик не подставляется: создаётся новый."""
     from app.booking.models.booking import Booking

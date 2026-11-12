@@ -16,6 +16,7 @@ from app.calendar.services.color_mode import (
 )
 from app.calendar.services.schedule_day import ScheduleDay
 from app.calendar.services.schedule_event import ScheduleEvent
+from app.lesson.models.lesson import NOT_HELD_STATUSES
 from app.slot.services.presentation import is_muted as slot_is_muted
 from app.slot.services.presentation import state_label as slot_state_label
 from app.slot.services.public_link import PUBLIC_PREFIX
@@ -321,7 +322,7 @@ def is_overdue(event: ScheduleEvent, *, now: datetime) -> bool:
     """
     if event.is_completed:
         return False
-    if event.status in ("cancelled", "rescheduled"):
+    if event.status in NOT_HELD_STATUSES:
         return False
     return event.ends_at < now
 

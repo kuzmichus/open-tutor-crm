@@ -18,7 +18,7 @@ from app.finance.models.account_operation import (
     BALANCE_PAYMENT_STATUS,
     AccountOperation,
 )
-from app.lesson.models.lesson import Lesson
+from app.lesson.models.lesson import NOT_HELD_STATUSES, Lesson
 from app.student.models.student import Student
 from app.tutor.services.clock import as_utc
 
@@ -160,7 +160,7 @@ def trial_conversion(db: Session, tutor, *, start, end, now) -> dict:
             # ученик остался: занятия не будет. Удержанием считаются только
             # состоявшийся урок или ещё предстоящее запланированное занятие.
             if status == "completed" or (
-                starts_at >= now and status not in ("cancelled", "rescheduled")
+                starts_at >= now and status not in NOT_HELD_STATUSES
             ):
                 kept = "lesson"
                 detail = starts_at
