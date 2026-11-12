@@ -69,14 +69,6 @@ from app.lesson.services.presentation import (  # noqa: E402
 
 register_lesson_template_helpers()
 
-# Функции отображения модуля ДЗ (подписи статусов «Задано»/«Проверено»,
-# чипы списков и значок ДЗ в карточках календаря и кабинета).
-from app.homework.services.presentation import (  # noqa: E402
-    register_template_helpers as register_homework_template_helpers,
-)
-
-register_homework_template_helpers()
-
 # Функции отображения модуля недоступности (подписи причин «Отпуск»/
 # «Больничный»/«Выходной» и форматы срока «26.10 – 30.10», «с 26.10 —
 # бессрочно», «сб, бессрочно»).

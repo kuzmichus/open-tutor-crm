@@ -28,8 +28,7 @@
    Контекст: lesson, hw_form (assignment, due_at_value, deadline_enabled,
    status, recording_url, teacher_note, teacher_comment), hw_files
    (строки {id, name, size_label, url}), hw_errors, hw_saved (маркер
-   успеха на форме, design D8), hw_due_default (срок подставлен из начала
-   следующего занятия, TOCRM-62), hw_statuses, hw_status_labels. #}
+   успеха на форме, design D8), hw_statuses, hw_status_labels. #}
 <form id="homework-panel"
       hx-post="/tutor/lessons/{{ lesson.id }}/homework"
       hx-target="#homework-panel"
@@ -60,9 +59,6 @@
             <label class="label" for="hw-due-at">Срок сдачи</label>
             <input class="input" id="hw-due-at" type="datetime-local"
                    name="due_at" value="{{ hw_form.due_at_value }}">
-            {% if hw_due_default %}
-            <p class="form-hint">По умолчанию — начало следующего занятия</p>
-            {% endif %}
         </div>
 
         <div class="field">

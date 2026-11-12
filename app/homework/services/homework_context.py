@@ -6,11 +6,6 @@
 перекрывают сохранённые — панель показывает введённое пользователем, а
 не старое (паттерн `lesson_form_context`).
 
-У новой записи «Срок сдачи» предзаполняется началом следующего занятия
-(`due_default.next_lesson_start`, TOCRM-62): педагог почти всегда сдаёт
-ДЗ к следующей встрече, и вводить её руками незачем. Существующую запись
-подстановка не трогает — сохранённый или вручную очищенный срок важнее.
-
 Сервис не знает про FastAPI: на вход — сессия и очищенные значения
 формы, на выход — контекст шаблона.
 
@@ -31,7 +26,6 @@ from app.homework.models.homework import (
     HOMEWORK_STATUS_LABELS,
     HOMEWORK_STATUSES,
 )
-from app.homework.services.due_default import next_lesson_start
 from app.homework.services.homework_writer import get_homework
 from app.lesson.models.lesson import Lesson
 
@@ -47,17 +41,12 @@ def _input_datetime(value, tutor) -> str:
     return str(value or "")
 
 
-def panel_values(homework, tutor, *, default_due_at=None) -> dict:
-    """Значения полей панели из записи ДЗ; записи нет — дефолты панели.
-
-    `default_due_at` — срок по умолчанию для ещё не созданной записи
-    (начало следующего занятия, TOCRM-62). У существующей записи он не
-    применяется: сохранённый срок не перезаписывается.
-    """
+def panel_values(homework, tutor) -> dict:
+    """Значения полей панели из записи ДЗ; записи нет — дефолты панели."""
     if homework is None:
         return {
             "assignment": "",
-            "due_at_value": _input_datetime(default_due_at, tutor),
+            "due_at_value": "",
             # Чекбокс включён по умолчанию (макет, решение D5).
             "deadline_enabled": True,
             "status": "not_assigned",
@@ -119,16 +108,9 @@ def homework_panel_context(
     `saved=True` — ответ на успешное сохранение: панель показывает
     кнопку в состоянии успеха («Успешно сохранено»), которую `lessons.js`
     через пару секунд возвращает в обычный вид (design D8).
-
-    Срок по умолчанию считается только для новой записи ДЗ: у
-    существующей сохранённый (в том числе очищенный вручную) срок не
-    перекрывается подсказкой (TOCRM-62).
     """
     homework = get_homework(db, lesson.id)
-    default_due_at = (
-        next_lesson_start(db, lesson) if homework is None else None
-    )
-    values = panel_values(homework, tutor, default_due_at=default_due_at)
+    values = panel_values(homework, tutor)
     if data is not None:
         values.update(
             {
@@ -148,9 +130,6 @@ def homework_panel_context(
         "hw_files": _file_rows(db, homework),
         "hw_errors": errors or [],
         "hw_saved": saved,
-        # Подсказка о подстановке — только когда значение пришло из
-        # «следующего занятия», а не из присланных полей после ошибки.
-        "hw_due_default": data is None and default_due_at is not None,
         "hw_statuses": HOMEWORK_STATUSES,
         "hw_status_labels": HOMEWORK_STATUS_LABELS,
         "files_max_size_mb": settings.files_max_size_mb,

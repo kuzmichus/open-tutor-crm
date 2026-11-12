@@ -24,8 +24,8 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.homework.services.by_lesson import homework_by_lesson
-from app.homework.services.presentation import homework_status_label
+from app.cabinet.services.homework import HIDDEN_STATUSES
+from app.cabinet.services.presentation import homework_status_label
 from app.calendar.services.presentation import build_calendar_context, clock_to_minutes
 from app.calendar.services.schedule_day import ScheduleDay
 from app.calendar.services.schedule_event import ScheduleEvent
@@ -35,6 +35,7 @@ from app.common.colors import DEFAULT_TARGET_COLOR
 from app.common.services.tutor_time import now_local, tutor_zone_name
 from app.group.models.group import Group
 from app.group.models.group_member import GroupMember
+from app.homework.models.homework import Homework
 from app.lesson.models.lesson import Lesson
 from app.student.models.student import Student
 from app.tutor.services.settings import get_settings
@@ -104,6 +105,23 @@ def student_week_lessons(
 
     rows.sort(key=lambda row: (row.lesson.starts_at, row.lesson.id))
     return rows
+
+
+def homework_by_lesson(db: Session, lesson_ids: list[str]) -> dict[str, str]:
+    """Статусы ДЗ по id уроков: один SELECT на всю неделю.
+
+    «Не задано» (`HIDDEN_STATUSES`) не попадает в карту: пустая запись —
+    это отсутствие домашнего задания, значка в карточке быть не должно.
+    """
+    if not lesson_ids:
+        return {}
+    rows = db.execute(
+        select(Homework.lesson_id, Homework.status).where(
+            Homework.lesson_id.in_(lesson_ids),
+            Homework.status.not_in(HIDDEN_STATUSES),
+        )
+    ).all()
+    return {lesson_id: status for lesson_id, status in rows}
 
 
 def student_calendar_context(

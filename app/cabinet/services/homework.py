@@ -22,8 +22,10 @@ from app.group.models.group_member import GroupMember
 from app.homework.models.answer import HomeworkAnswer
 from app.homework.models.answer_link import HomeworkAnswerLink
 from app.homework.models.homework import Homework
-from app.homework.services.by_lesson import HIDDEN_STATUSES
 from app.lesson.models.lesson import Lesson
+
+# Статус «Не задано» — запись без домашнего задания: в кабинете её нет.
+HIDDEN_STATUSES = ("not_assigned",)
 
 def _file_rows(files) -> list[dict]:
     """Строки списка файлов: id, имя, подпись размера, адрес скачивания."""

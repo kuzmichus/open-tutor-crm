@@ -1,4 +1,4 @@
-# rtt index | generated 2026-11-09 23:19 | 700 files | 216412 tokens
+# rtt index | generated 2026-11-12 17:03 | 700 files | 216412 tokens
 # If this looks outdated, ask the user to run: rtt update
 # alembic/env.py [python]
 imports: logging.config.fileConfig, sqlalchemy.engine_from_config, sqlalchemy.pool, alembic.context, app.config.settings, app.database.Base, app.models

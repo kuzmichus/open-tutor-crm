@@ -59,12 +59,6 @@ class ScheduleEvent:
     slot_id: str = ""
     slot_state: str = ""
     duration_min: int = 0
-    # Статус ДЗ урока ("" — задания нет): карточка рисует значок по нему.
-    # Окна поле не заполняют — у окна нет урока и домашнего задания.
-    homework_status: str = ""
-    # Просрочка ДЗ: срок сдачи прошёл, а работа всё ещё «Задано».
-    # Вычисляется в `build_week_days` по моменту рендера недели.
-    homework_overdue: bool = False
 
     @property
     def is_slot(self) -> bool:
@@ -81,8 +75,6 @@ class ScheduleEvent:
         target_color: str,
         tutor,
         price: int | None = None,
-        homework_status: str = "",
-        homework_overdue: bool = False,
     ) -> "ScheduleEvent":
         """Событие из строки БД: цель, цена, цвет и статус урока (D2).
 
@@ -95,11 +87,6 @@ class ScheduleEvent:
         группы, а не `lesson.price` (у группового занятия в поле цены урока
         цены может не быть вовсе). Переданное значение важнее
         `lesson.price`; без него поведение прежнее.
-
-        `homework_status` — статус ДЗ урока из массовой карты недели
-        (`homework_by_lesson`): пустая строка означает «задания нет», и
-        значок в карточке не рисуется. `homework_overdue` — срок сдачи
-        прошёл, а работа всё ещё «Задано»: значок красный и залитый.
         """
         starts_at = as_utc(lesson.starts_at)
         finish = starts_at + timedelta(minutes=lesson.duration_min or 0)
@@ -125,8 +112,6 @@ class ScheduleEvent:
             target_id=target_id,
             kind=EVENT_LESSON,
             duration_min=lesson.duration_min or 0,
-            homework_status=homework_status,
-            homework_overdue=homework_overdue,
         )
 
     @classmethod

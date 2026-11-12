@@ -6,9 +6,6 @@
 ДЗ отдельно от урока»). При любой ошибке транзакция откатывается и в БД
 не меняется ничего (design D4).
 
-Срок сдачи нового ДЗ при пустом поле подставляется из начала следующего
-занятия (`due_default.next_lesson_start`, TOCRM-62).
-
 `commit=False` — режим вьюхи с файлами: запись ДЗ только сбрасывается
 (`flush`), чтобы у неё появился id для привязки файлов, а коммит делает
 вызывающий после успешной загрузки. Ошибка файла тогда откатывает и ДЗ, и
@@ -22,7 +19,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.homework.models.homework import Homework
-from app.homework.services.due_default import next_lesson_start
 from app.homework.services.homework_form import validate_homework_data
 from app.lesson.models.lesson import Lesson
 
@@ -58,11 +54,6 @@ def save_homework(
 
     `commit=False` — запись сбрасывается, но не коммитится: вьюха прикрепляет
     файлы и коммитит сама (или откатывает всё при ошибке файла).
-
-    Новое ДЗ без указанного срока получает начало следующего занятия
-    (`next_lesson_start`, TOCRM-62): форма без JS присылает пустое поле, и
-    полагаться на предзаполнение в браузере нельзя. У существующей записи
-    срок берётся из формы как есть — очищенный вручную остаётся пустым.
     """
     errors = validate_homework_data(data)
     if errors:
@@ -81,8 +72,6 @@ def save_homework(
 
     homework = get_homework(db, lesson.id)
     if homework is None:
-        if values["due_at"] is None:
-            values["due_at"] = next_lesson_start(db, lesson)
         db.add(Homework(lesson_id=lesson.id, **values))
     else:
         for field in _VALUE_FIELDS:

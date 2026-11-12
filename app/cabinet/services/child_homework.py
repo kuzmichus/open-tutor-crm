@@ -23,8 +23,10 @@ from app.files.services.presentation import file_size_label
 from app.files.services.removal import files_of_homeworks
 from app.group.models.group_member import GroupMember
 from app.homework.models.homework import Homework
-from app.homework.services.by_lesson import HIDDEN_STATUSES
 from app.lesson.models.lesson import Lesson
+
+# Статус «Не задано» — записи без домашнего задания: в кабинете её нет.
+HIDDEN_STATUSES = ("not_assigned",)
 
 # Сколько последних заданий показывает вкладка: пагинации нет, страница
 # открывают ради актуальной домашки, а не ради архива (список ограничен —
