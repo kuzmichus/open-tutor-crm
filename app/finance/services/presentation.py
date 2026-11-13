@@ -113,21 +113,30 @@ def expense_category_label(category: str | None) -> str:
     return EXPENSE_CATEGORY_LABELS.get(category or "", category or "")
 
 
+def _plural(count: int, one: str, few: str, many: str) -> str:
+    """Русская форма слова по числу: «1 ученик», «2 ученика», «5 учеников».
+
+    Единственное место с правилом плюрализации модуля: и «занятие», и
+    «ученик» склоняются одинаково, а вторая копия правила разошлась бы с
+    первой на 11–14 (у них окончание «многих», хотя последняя цифра 1–4).
+    """
+    if count % 100 in (11, 12, 13, 14):
+        return many
+    if count % 10 == 1:
+        return one
+    if count % 10 in (2, 3, 4):
+        return few
+    return many
+
+
 def lessons_count_label(count: int) -> str:
     """«1 занятие» / «2 занятия» / «5 занятий» — русская плюрализация.
 
-    Исключения на «-надцать» (11–14) идут первыми: у них окончание
-    «занятий», хотя последняя цифра — 1–4. Ноль не подписывается вовсе —
-    «0 занятий» при пустом периоде выглядело бы данными, а не их
-    отсутствием (правило student-management о показе нулей).
+    Ноль подписывается как «0 занятий», но вызывающие его не показывают:
+    при пустом периоде такая подпись читалась бы как данные, а не как их
+    отсутствие (правило student-management о показе нулей).
     """
-    if count % 100 in (11, 12, 13, 14):
-        return f"{count} занятий"
-    if count % 10 == 1:
-        return f"{count} занятие"
-    if count % 10 in (2, 3, 4):
-        return f"{count} занятия"
-    return f"{count} занятий"
+    return f"{count} {_plural(count, 'занятие', 'занятия', 'занятий')}"
 
 
 def operation_datetime(value: datetime | None, tutor) -> str:
@@ -223,6 +232,25 @@ def free_hours_phrase(minutes: int) -> str:
         return f"{number} свободный час"
     return f"{number} свободных {word}"
 
+def balance_notice_label(count: int, missing: int) -> str:
+    """«Сегодня занятие у 1 ученика, а на счёте не хватает 1 500 ₽».
+
+    Подпись плашки о нехватке денег на сегодняшние уроки. После «у» нужен
+    родительный падеж: «у 1 ученика», «у 2 учеников», «у 21 ученика» —
+    форму единственного числа даёт последняя цифра, кроме 11–14 (правило
+    общее с `lessons_count_label`). «Занятие» стоит в единственном числе
+    только при одном ученике: у двух и более занятий несколько, поэтому
+    «Сегодня занятия у 2 учеников», в том числе «у 21 ученика». Деньги —
+    через `money()`, чтобы сумма читалась так же, как в счёте ученика.
+    """
+    students_word = _plural(count, "ученика", "учеников", "учеников")
+    lesson_word = "занятие" if count == 1 else "занятия"
+    return (
+        f"Сегодня {lesson_word} у {count} {students_word}, "
+        f"а на счёте не хватает {money(missing)}"
+    )
+
+
 def ratio_label(ratio: float) -> str:
     """Во сколько раз: «2 раза», «1,5 раза», «3 раза».
 
@@ -250,4 +278,5 @@ def register_template_helpers() -> None:
         npd_rate_label=npd_rate_label,
         free_hours_phrase=free_hours_phrase,
         ratio_label=ratio_label,
+        balance_notice_label=balance_notice_label,
     )

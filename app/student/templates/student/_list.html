@@ -5,10 +5,24 @@
    только их» — обычный запрос того же маршрута, и долг с карточками
    перерисовываются одним ответом, числа не могут разойтись.
 
+   Фильтр `shortfall` — адресат ссылки «Открыть» из плашки о нехватке
+   денег: в выборке остаются ученики, которым не хватает на сегодняшние
+   занятия. Он не совпадает с «должниками» (баланс < 0), поэтому у него
+   своя плашка сброса: иначе из отфильтрованного списка не было бы видно,
+   что показаны не все ученики.
+
    Вид «сетка/список» переключает Alpine-класс `students-grid--list` прямо
    на контейнере `#students-grid`, и сервер об этом ничего не знает. Поэтому
    обе разметки отдаются сразу (карточки и таблица), а видимость решает CSS:
    в «список» карточки скрываются и показывается таблица зеброй. #}
+{% if shortfall %}
+<section class="students-filter" role="status">
+    <span class="students-filter__text">
+        Показаны ученики, которым не хватает денег на сегодняшние занятия
+    </span>
+    <a class="students-filter__reset" href="/tutor/students">Показать всех</a>
+</section>
+{% endif %}
 {% if debt %}
 <section class="students-debt" aria-label="Задолженность учеников">
     <span class="students-debt__icon" aria-hidden="true">
@@ -124,7 +138,7 @@
     {% else %}
         <div class="empty-state">
             <i data-lucide="users"></i>
-            {% if q or status or debtors %}
+            {% if q or status or debtors or shortfall %}
                 <p class="empty-state__title">Ничего не найдено</p>
                 <p class="empty-state__text">Измените поисковый запрос или фильтр статуса.</p>
             {% else %}
