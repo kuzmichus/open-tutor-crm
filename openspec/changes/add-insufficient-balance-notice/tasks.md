@@ -7,7 +7,8 @@
   `digest_lessons`, агрегация цен по ученику, `shortfall` от суммы.
 - [x] 1.2 `app/finance/services/presentation.py`:
   `balance_notice_label(count, missing)` и регистрация в
-  `register_template_helpers()`.
+  `register_template_helpers()`; общее правило склонения — `_plural()`
+  (им же пользуется `lessons_count_label`).
 
 ## 2. Партиал и контейнер
 
@@ -15,11 +16,17 @@
   пустое тело без данных, ключ закрытия `debt:<ids>#<missing>`.
 - [x] 2.2 `app/lesson/views/__init__.py`: подключить роутер рядом с `notices`.
 - [x] 2.3 `app/lesson/templates/lesson/_balance_notice.html`: красная плашка,
-  иконка `wallet`, ссылка на должников, крестик.
+  иконка `wallet`, ссылка «Открыть» на фильтр нехватки, крестик.
 - [x] 2.4 `app/templates/_notice_banner.html`: контейнер
   `#tutor-balance-notice` перед контейнером не отмеченных уроков.
 - [x] 2.5 `app/static/styles.css`: `.notice-banner--danger` и подсветка
   крестика на токене `--destructive`.
+- [x] 2.6 `app/student/services/insufficient.py` + `student/views/index.py`,
+  `student/views/list_partial.py`: фильтр `shortfall=1` — ученики, которым не
+  хватает на сегодняшние занятия (критерий из `today_balance_notice`).
+- [x] 2.7 `app/student/templates/student/_list.html` и `index.html`: плашка
+  активного фильтра со сбросом, скрытое поле формы для поиска/сортировки,
+  `.students-filter*` в `styles.css`.
 
 ## 3. Тесты
 
@@ -31,6 +38,11 @@
   изоляция по репетитору.
 - [x] 3.4 Ключ закрытия следует за составом и суммой; контейнер есть на
   страницах кабинета; без сессии — редирект на вход.
+- [x] 3.5 Адресат ссылки «Открыть»: ученик с положительным, но недостаточным
+  балансом виден в фильтре `shortfall=1`; оплатившие и ученики без уроков —
+  нет; изоляция по репетитору; фильтр сохраняется в партиале списка.
+- [x] 3.6 Склонение подписи: «1 занятие / 2 занятия», «1 ученика / 2 учеников,
+  21 ученика, 11 учеников» (`tests/test_finance_presentation.py`).
 
 ## 4. Документация
 
