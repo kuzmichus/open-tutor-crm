@@ -6,6 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.student.services.access import require_tutor_id
+from app.student.services.insufficient import (
+    FILTER_PARAM,
+    filter_cards,
+    is_requested,
+    students_with_shortfall,
+)
 from app.student.services.list_metrics import attach_metrics, debt_summary
 from app.student.services.page_context import page_context
 from app.student.services.students import build_cards, list_students, normalize_sort
@@ -43,6 +49,14 @@ def students_index(
     if debtors:
         cards = [card for card in cards if card["balance"] < 0]
 
+    # Фильтр «кому не хватает на сегодня» — адресат ссылки «Открыть» из
+    # плашки-напоминания. Критерий берётся у сервиса плашки, а не выводится
+    # из знака баланса: у ученика с балансом 500 ₽ при цене 2 000 ₽ долга
+    # нет, но нехватка есть, и фильтр должников его бы скрыл.
+    shortfall = is_requested(request.query_params.get(FILTER_PARAM))
+    if shortfall:
+        cards = filter_cards(cards, students_with_shortfall(db, tutor))
+
     return templates.TemplateResponse(
         request,
         "student/index.html",
@@ -54,6 +68,7 @@ def students_index(
             total=len(cards),
             sort=normalize_sort(request.query_params.get("sort", "")),
             debtors=debtors,
+            shortfall=shortfall,
             debt=debt_summary(cards),
             tutor=tutor,
         ),

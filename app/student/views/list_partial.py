@@ -6,6 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.student.services.access import require_tutor_id
+from app.student.services.insufficient import (
+    FILTER_PARAM,
+    filter_cards,
+    is_requested,
+    students_with_shortfall,
+)
 from app.student.services.list_metrics import attach_metrics, debt_summary
 from app.student.services.students import build_cards, list_students, normalize_sort
 from app.templating import templates
@@ -40,6 +46,13 @@ def students_list_partial(
     if debtors:
         cards = [card for card in cards if card["balance"] < 0]
 
+    # Тот же фильтр нехватки, что у страницы списка: партиал — её ответ на
+    # поиск/переключение вида, и адресат ссылки «Открыть» должен остаться
+    # в выборке при любом обновлении.
+    shortfall = is_requested(request.query_params.get(FILTER_PARAM))
+    if shortfall:
+        cards = filter_cards(cards, students_with_shortfall(db, tutor))
+
     return templates.TemplateResponse(
         request,
         "student/_list.html",
@@ -49,6 +62,7 @@ def students_list_partial(
             "status": request.query_params.get("status", ""),
             "sort": normalize_sort(request.query_params.get("sort", "")),
             "debtors": debtors,
+            "shortfall": shortfall,
             "debt": debt_summary(cards),
             "tutor": tutor,
             "total": len(cards),

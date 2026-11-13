@@ -2469,6 +2469,39 @@
     cursor: pointer;
   }
 
+  /* Плашка активного фильтра «кому не хватает на сегодня»: ссылка «Открыть»
+     из напоминания ведёт в отфильтрованный список, и без этой строки не
+     видно, что показаны не все ученики. Тон нейтральный — это не долг, а
+     состояние выборки. */
+  .students-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2) calc(var(--space) * 3);
+    margin-bottom: calc(var(--space) * 4);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    font-size: var(--text-sm);
+  }
+
+  .students-filter__text {
+    color: var(--muted-foreground);
+  }
+
+  .students-filter__reset {
+    margin-left: auto;
+    color: var(--foreground);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .students-filter__reset:hover {
+    text-decoration-thickness: 2px;
+  }
+
   /* Деньги с окраской: долг — красным, плюс — зелёным (только токены) */
   .money-value {
     font-weight: 600;
