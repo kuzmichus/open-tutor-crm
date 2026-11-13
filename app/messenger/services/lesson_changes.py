@@ -5,6 +5,7 @@
 Снимок до редактирования сохраняет исходное время и получателей.
 """
 
+import logging
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
@@ -13,11 +14,14 @@ from sqlalchemy.orm import Session
 from app.common.services.tutor_time import tutor_zone
 from app.group.models.group_member import GroupMember
 from app.messenger.models.student_invite import StudentMessengerInvite
+from app.messenger.services.history import log_send
 from app.messenger.services.messengers import SUPPORTED
 from app.messenger.services.send import send_message
 from app.student.models.student import Student
 from app.tutor.services.clock import as_utc
 from app.tutor.services.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def lesson_change_snapshot(lesson) -> dict:
@@ -71,7 +75,7 @@ def notify_lesson_change(db: Session, tutor, lesson, before: dict) -> None:
         if timezone:
             try:
                 zone = ZoneInfo(timezone)
-            except ZoneInfoNotFoundError:
+            except (ZoneInfoNotFoundError, ValueError):
                 pass
         old_time = before["starts_at"].astimezone(zone)
         text = f"Урок {old_time:%d.%m.%Y в %H:%M} отменён репетитором."
@@ -81,5 +85,12 @@ def notify_lesson_change(db: Session, tutor, lesson, before: dict) -> None:
                 f"Урок {old_time:%d.%m.%Y в %H:%M} перенесён репетитором.\n"
                 f"Новое время: {new_time:%d.%m.%Y в %H:%M}."
             )
-        send_message(db, tutor.id, messenger, chat_id, text)
+        try:
+            # Сбой одного канала не должен откатывать журнал предыдущих доставок
+            # или мешать синхронизации уже сохранённого урока с календарём.
+            with db.begin_nested():
+                send_message(db, tutor.id, messenger, chat_id, text)
+        except Exception:
+            logger.exception("Сбой оповещения об изменении урока %s (%s)", lesson.id, messenger)
+            log_send(db, tutor.id, messenger, chat_id, text, ["Непредвиденная ошибка отправки"])
     db.commit()

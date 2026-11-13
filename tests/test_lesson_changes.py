@@ -111,8 +111,9 @@ def test_no_notification(client, owner, student_factory, lesson_factory, deliver
     assert messages() == []
 
 
+@pytest.mark.parametrize("error", [SendError, RuntimeError])
 def test_group_recipients_and_channel_failure(client, owner, student_factory, group_factory,
-                                            group_member_factory, lesson_factory, deliveries, monkeypatch):
+                                            group_member_factory, lesson_factory, deliveries, monkeypatch, error):
     group = group_factory(tutor_id=owner)
     students = [student_factory(tutor_id=owner, timezone=zone) for zone in ("UTC", "Asia/Tokyo", "UTC")]
     for student in students:
@@ -123,14 +124,14 @@ def test_group_recipients_and_channel_failure(client, owner, student_factory, gr
 
     def fail(self, config, recipient, text):
         failures.append(recipient)
-        raise SendError("Недоступен")
+        raise error("Недоступен")
 
     monkeypatch.setattr(MaxSender, "send", fail)
     lesson = lesson_factory(group_id=group, type="group", starts_at=START, status="planned")
     data = form("", type="group", group_id=group, status="cancelled")
     assert client.post(f"/tutor/lessons/{lesson}", data=data, follow_redirects=False).status_code == 303
     assert len(deliveries) == 2
-    assert len(failures) == 3
+    assert len(failures) == (3 if error is SendError else 1)
     assert {message.status for message in messages()} == {"sent", "error"}
     assert len(messages()) == 3
     assert "10.01.2027 в 22:30" in deliveries[0][2]
@@ -154,6 +155,69 @@ def test_series_only_selected_lesson(client, owner, student_factory, lesson_fact
     assert "последующ" not in deliveries[0][2]
     with SessionLocal() as db:
         assert db.get(Lesson, other).status == "planned"
+
+
+@pytest.mark.parametrize("timezone", ["/Europe/Moscow", "../UTC", "Unknown/Zone"])
+def test_invalid_student_timezone(client, owner, student_factory, lesson_factory, deliveries, timezone):
+    student = student_factory(tutor_id=owner, timezone=timezone)
+    lesson = lesson_factory(student_id=student, starts_at=START, status="planned")
+    bind(owner, student)
+    response = client.post(f"/tutor/lessons/{lesson}", data=form(student, status="cancelled"), follow_redirects=False)
+    assert response.status_code == 303
+    assert "10.01.2027 в 22:30" in deliveries[0][2]
+    assert messages()[0].status == "sent"
+
+
+@pytest.mark.parametrize("channel", ["telegram", "max"])
+@pytest.mark.parametrize("drag", [False, True])
+def test_transport_timeout_preserves_request(client, owner, student_factory, lesson_factory,
+                                            monkeypatch, channel, drag):
+    student = student_factory(tutor_id=owner)
+    lesson = lesson_factory(student_id=student, starts_at=START, status="planned")
+    bind(owner, student, ("telegram", "max"))
+    attempts = []
+    synced = []
+
+    class Response:
+        """Успешный ответ другого канала без выхода в сеть."""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"ok": true, "message": {"id": "1"}}'
+
+    def urlopen(request, **kwargs):
+        failed = ("api.telegram.org" in request.full_url) == (channel == "telegram")
+        if failed:
+            attempts.append(request.full_url)
+            raise TimeoutError("read timed out")
+        return Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    view = "move" if drag else "update"
+    monkeypatch.setattr(f"app.lesson.views.{view}.sync_lesson", lambda *args: synced.append(True))
+    url = f"/tutor/lessons/{lesson}"
+    data = form(student, status="cancelled")
+    if drag:
+        url += "/move"
+        data = {"date": "2027-01-12", "time": "01:15"}
+    response = client.post(url, data=data, follow_redirects=False)
+    assert response.status_code == 303
+    assert len(attempts) == 3
+    assert synced == [True]
+    journal = messages()
+    assert len(journal) == 2
+    assert {message.status for message in journal} == {"sent", "error"}
+    with SessionLocal() as db:
+        saved = db.get(Lesson, lesson)
+        if drag:
+            assert saved.starts_at == datetime(2027, 1, 12, 1, 15)
+        else:
+            assert saved.status == "cancelled"
 
 
 def test_foreign_lesson_not_notified(client, owner, student_factory, lesson_factory, deliveries):
