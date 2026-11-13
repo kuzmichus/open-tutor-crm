@@ -44,6 +44,8 @@ class TelegramSender:
             ) from exc
         except urllib.error.URLError as exc:
             raise SendError(f"Telegram: сеть недоступна ({exc.reason})") from exc
+        except TimeoutError as exc:
+            raise SendError("Telegram: превышено время ожидания ответа") from exc
 
         if not body.get("ok"):
             raise SendError(

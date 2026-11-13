@@ -35,6 +35,7 @@ from app.lesson.services.unavailability_check import (
     start_unavailability_warning,
     warning_context,
 )
+from app.messenger.services.lesson_changes import lesson_change_snapshot, notify_lesson_change
 from app.tutor.models.tutor import Tutor
 
 router = APIRouter()
@@ -106,8 +107,10 @@ async def move_lesson(
                 detail=warning_context(warning)["message"],
             )
 
+    before = lesson_change_snapshot(lesson)
     lesson.starts_at = starts_at
     db.commit()
+    notify_lesson_change(db, tutor, lesson, before)
 
     # Перенос времени — ключевой сценарий задачи: событие правится сразу,
     # после коммита; ошибка Google не отменяет перенос (design D2, D10).
