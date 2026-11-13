@@ -96,6 +96,24 @@ def test_lesson_without_price_creates_no_charge(student_factory):
         assert balance(session, student_id) == 0
 
 
+def test_lesson_with_zero_price_creates_no_charge(student_factory):
+    """Бесплатный урок (цена 0) не создаёт строки: CHECK требует amount > 0.
+
+    Форма принимает ноль как легальную цену («бесплатное занятие») —
+    sync обязан трактовать его как «цены нет», а не как списание 0 ₽.
+    """
+    student_id = student_factory()
+
+    with SessionLocal() as session:
+        lesson = _lesson(session, student_id=student_id, price=0)
+
+        assert sync_lesson_charge(session, lesson) == 0
+        session.commit()
+
+        assert _charges(session, lesson.id) == []
+        assert balance(session, student_id) == 0
+
+
 def test_returning_to_planned_removes_charge(student_factory):
     """Возврат в «Запланирован» снимает списание и возвращает баланс."""
     student_id = student_factory()
@@ -230,6 +248,27 @@ def test_group_without_price_creates_no_charges(
 
         assert _charges(session, lesson.id) == []
         assert balance(session, member) == 0
+
+
+def test_group_with_zero_price_creates_no_charges(
+    group_factory, student_factory, group_member_factory
+):
+    """Группа с ценой 0 и нулевая индивидуальная цена участника: списаний нет."""
+    group_id = group_factory(price_per_lesson=0)
+    member = student_factory()
+    free = student_factory()
+    group_member_factory(group_id=group_id, student_id=member)
+    group_member_factory(group_id=group_id, student_id=free, price_override=0)
+
+    with SessionLocal() as session:
+        lesson = _lesson(session, group_id=group_id, price=None)
+
+        assert sync_lesson_charge(session, lesson) == 0
+        session.commit()
+
+        assert _charges(session, lesson.id) == []
+        assert balance(session, member) == 0
+        assert balance(session, free) == 0
 
 
 def test_group_member_without_any_price_gets_no_charge(

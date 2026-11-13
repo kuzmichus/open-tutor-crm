@@ -64,6 +64,29 @@ def test_completes_overdue_and_charges(tutor_factory, student_factory, lesson_fa
     assert charges[0].occurred_at.replace(tzinfo=None) == OVERDUE_START.replace(tzinfo=None)
 
 
+def test_zero_price_lesson_completes_without_charge(
+    tutor_factory, student_factory, lesson_factory
+):
+    """Бесплатный урок (цена 0) автозавершается без списания.
+
+    Инцидент на проде 2026-11-13: ноль попадал в списание, CHECK
+    `ck_account_operations_amount` отклонял батч, и транзакция cron
+    откатывалась целиком — автозавершение вставало навсегда.
+    """
+    student_id = student_factory()
+    lesson_id = lesson_factory(
+        student_id=student_id,
+        status="planned",
+        starts_at=OVERDUE_START,
+        price=0,
+    )
+
+    assert _run_auto_complete() == 1
+
+    assert _lesson(lesson_id).status == "completed"
+    assert _charges(student_id) == []
+
+
 def test_first_charge_activates_student(tutor_factory, student_factory, lesson_factory):
     """Автозавершение активирует «нового» ученика, как ручная отметка."""
     student_id = student_factory()

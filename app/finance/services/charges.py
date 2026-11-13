@@ -183,8 +183,14 @@ def sync_lesson_charge(db: Session, lesson: Lesson) -> int:
     occurred_at = as_utc(lesson.starts_at)
     targets = lesson_targets(db, lesson)
     # Цена не определима — строки быть не должно: «0 ₽» в истории
-    # выглядел бы как списание, а не как отсутствие цены.
-    priced = {student_id: price for student_id, price in targets if price is not None}
+    # выглядело бы как списание, а не как отсутствие цены. Ноль тоже
+    # считается «цены нет»: бесплатный урок не списывает ничего, а CHECK
+    # `ck_account_operations_amount` требует положительной суммы.
+    priced = {
+        student_id: price
+        for student_id, price in targets
+        if price is not None and price > 0
+    }
 
     existing = {
         operation.student_id: operation
