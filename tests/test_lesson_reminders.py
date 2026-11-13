@@ -20,7 +20,7 @@ from sqlalchemy import select
 from app.common.services import cron as cron_module
 from app.database import SessionLocal
 from app.lesson.models.lesson import Lesson
-from app.lesson.models.lesson_reminder import LessonReminder
+from app.lesson.models.lesson_reminder import REMINDER_CLAIM_LEASE, LessonReminder
 from app.messenger.models.student_invite import StudentMessengerInvite
 from app.messenger.services import lesson_reminders as lesson_reminders_module
 from app.messenger.services.binding import chat_id_key
@@ -552,6 +552,128 @@ def test_reminders_run_before_auto_complete():
     assert names.index("messenger.lesson_reminders") < names.index(
         "lesson.auto_complete"
     )
+
+
+def test_failed_channel_retries_after_auto_complete(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Сбойный канал досылается, даже если урок уже закрыло автозавершение.
+
+    Долгий простой: cron восстановился спустя больше суток после окончания
+    урока. Telegram отвечает ошибкой, MAX получает сообщение, а
+    `lesson.auto_complete` в том же прогоне переводит урок в «Проведён».
+    Раньше фильтр «Запланирован» навсегда скрывал такой урок, и сбойная
+    доставка терялась. Теперь закрытый урок возвращается в выборку ради
+    повтора: досылается только незавершённый канал.
+    """
+    calls = []
+    failing = {"telegram"}
+    _patch_urlopen_flaky(monkeypatch, calls, failing)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    lesson_id = lesson_factory(
+        student_id=student_id,
+        status="planned",
+        starts_at=utcnow() - timedelta(hours=26),
+    )
+    _settings(tutor_id, notify_daily_digest=False, notify_birthday=False)
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+        _connect_tutor(db, tutor_id, "max", MAX_CHAT_ID)
+
+    # Первый прогон после простоя: MAX доставлен, Telegram захвачен и не
+    # подтверждён, автозавершение закрывает урок.
+    assert cron_module.run_tasks() == 0
+    with SessionLocal() as db:
+        assert db.get(Lesson, lesson_id).status == "completed"
+    by_channel = {marker.channel: marker for marker in _markers()}
+    assert by_channel["max"].delivered_at is not None
+    assert by_channel["telegram"].delivered_at is None
+    max_calls = len([call for call in calls if "max.ru" in call["url"]])
+
+    # Канал починили, аренда захвата истекла — повторяем только сбойный
+    # канал, хотя урок уже «Проведён».
+    failing.clear()
+    with SessionLocal() as db:
+        marker = db.scalars(
+            select(LessonReminder).where(LessonReminder.channel == "telegram")
+        ).one()
+        marker.claimed_at = utcnow() - REMINDER_CLAIM_LEASE - timedelta(minutes=1)
+        db.commit()
+
+    assert cron_module.run_tasks() == 0
+    by_channel = {marker.channel: marker for marker in _markers()}
+    assert by_channel["telegram"].delivered_at is not None
+    assert by_channel["max"].delivered_at is not None
+    assert len([call for call in calls if "max.ru" in call["url"]]) == max_calls
+
+    # Оба канала закрыты — дальше тишина.
+    assert cron_module.run_tasks() == 0
+
+
+def test_completed_lesson_does_not_get_new_reminders(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Закрытый урок не догоняет напоминания, которых не было в плане.
+
+    Повтор по закрытому уроку — только для уже захваченных каналов.
+    Мессенджер, подключённый после занятия, новых напоминаний не получает:
+    иначе автозавершение превращалось бы в источник запоздалых сообщений.
+    """
+    calls = []
+    failing = {"telegram"}
+    _patch_urlopen_flaky(monkeypatch, calls, failing)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    lesson_factory(
+        student_id=student_id,
+        status="planned",
+        starts_at=utcnow() - timedelta(hours=26),
+    )
+    _settings(tutor_id, notify_daily_digest=False, notify_birthday=False)
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+
+    # Первый прогон: единственный канал сбоит, урок закрывается.
+    assert cron_module.run_tasks() == 0
+    assert len(_markers()) == 1
+    assert _markers()[0].delivered_at is None
+
+    # Подключаем второй мессенджер уже после занятия и чиним первый.
+    failing.clear()
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "max", MAX_CHAT_ID)
+        marker = db.scalars(select(LessonReminder)).one()
+        marker.claimed_at = utcnow() - REMINDER_CLAIM_LEASE - timedelta(minutes=1)
+        db.commit()
+
+    assert cron_module.run_tasks() == 0
+    # Дослан только Telegram; MAX, подключённый позже, молчит.
+    assert len([call for call in calls if "max.ru" in call["url"]]) == 0
+    assert _markers()[0].delivered_at is not None
+    assert len(_markers()) == 1
+
+
+def test_completed_lesson_without_pending_delivery_is_silent(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """«Проведён» без незавершённых доставок напоминаний не получает."""
+    calls = []
+    _patch_urlopen(monkeypatch, calls)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id, remind_lesson=True)
+    lesson_factory(
+        student_id=student_id,
+        status="completed",
+        starts_at=utcnow() - timedelta(hours=26),
+    )
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+        _connect_student(db, tutor_id, student_id, "telegram", STUDENT_CHAT_ID)
+
+    assert _run() == 0
+    assert calls == []
+    assert _markers() == []
 
 
 def test_cancelled_lesson_is_silent(

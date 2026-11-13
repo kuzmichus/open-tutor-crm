@@ -15,6 +15,10 @@ class ReminderLesson:
     `target_name` — имя ученика или название группы: первая строка
     сообщения репетитору. `students` — только те участники, у которых
     включены напоминания (`remind_lesson`).
+
+    `retry_only` — урок уже не «Запланирован» (его закрыло автозавершение),
+    но в каналах остались недоставленные напоминания. Такой урок попадает
+    в выборку только ради повтора: новых захватов по нему не создаётся.
     """
 
     lesson_id: str
@@ -22,3 +26,4 @@ class ReminderLesson:
     is_group: bool
     target_name: str
     students: tuple[ReminderStudent, ...]
+    retry_only: bool = False
