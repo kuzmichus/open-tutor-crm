@@ -446,6 +446,53 @@ def test_missed_tick_sends_next_run_with_same_text(
     ]
 
 
+def test_first_tick_after_start_still_sends(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Первый тик после начала урока догоняет пропущенное напоминание.
+
+    Постановка требует обязательной отправки следующим тиком и не задаёт
+    границы «только до начала»: если cron не работал последние 15 минут до
+    урока и поднялся через минуту после начала, напоминание всё равно уходит
+    с исходной формулировкой интервала.
+    """
+    calls = []
+    _patch_urlopen(monkeypatch, calls)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id, first_name="Иван", last_name="Иванов")
+    lesson_factory(student_id=student_id, status="planned", starts_at=LESSON_AT)
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+
+    assert _run(now=LESSON_AT + timedelta(minutes=1)) == 1
+    assert _texts(calls) == [
+        "Через 1 час урок с Иван Иванов — \nВремя: 13 ноября в 09:30"
+    ]
+    # Второй прогон дубля не даёт: напоминание уже доставлено.
+    assert _run(now=LESSON_AT + timedelta(minutes=2)) == 0
+    assert len(calls) == 1
+
+
+def test_lesson_started_long_ago_is_not_reminded(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Давно прошедший урок не догоняется: окно догона ограничено.
+
+    Иначе восстановление cron после долгого простоя рассылало бы пачку
+    сообщений о занятиях, которые давно закончились.
+    """
+    calls = []
+    _patch_urlopen(monkeypatch, calls)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    lesson_factory(student_id=student_id, status="planned", starts_at=LESSON_AT)
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+
+    assert _run(now=LESSON_AT + timedelta(hours=2)) == 0
+    assert calls == []
+
+
 def test_cancelled_lesson_is_silent(
     monkeypatch, tutor_factory, student_factory, lesson_factory
 ):
@@ -460,22 +507,6 @@ def test_cancelled_lesson_is_silent(
         _connect_student(db, tutor_id, student_id, "telegram", STUDENT_CHAT_ID)
 
     assert _run() == 0
-    assert calls == []
-
-
-def test_lesson_after_start_is_not_reminded(
-    monkeypatch, tutor_factory, student_factory, lesson_factory
-):
-    """После начала урока догонять нечего."""
-    calls = []
-    _patch_urlopen(monkeypatch, calls)
-    tutor_id = tutor_factory()
-    student_id = student_factory(tutor_id=tutor_id)
-    lesson_factory(student_id=student_id, status="planned", starts_at=LESSON_AT)
-    with SessionLocal() as db:
-        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
-
-    assert _run(now=LESSON_AT) == 0
     assert calls == []
 
 
@@ -612,3 +643,38 @@ def test_stale_delivery_cache_does_not_duplicate_send(
     assert _run(now=NOW + timedelta(minutes=1)) == 0
     assert len(calls) == 2
     assert len(_markers()) == 2
+
+
+def test_long_job_does_not_hand_out_expired_claims(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Долгое задание захватывает канал текущим временем, а не временем старта.
+
+    Пока прогон обходил предыдущих получателей, прошло больше аренды. Если
+    бы захват писался временем старта задания, он был бы сразу просрочен, и
+    наложившийся минутный прогон перехватил бы канал и отправил дубль.
+    """
+    calls = []
+    _patch_urlopen(monkeypatch, calls)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    lesson_factory(student_id=student_id, status="planned", starts_at=LESSON_AT)
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+
+    # Задание стартовало в NOW, но дошло до отправки через 6 минут — больше
+    # аренды захвата (5 минут).
+    late = NOW + timedelta(minutes=6)
+    with SessionLocal() as db:
+        assert run_lesson_reminders(db, now=NOW, clock=lambda: late) == 1
+        db.commit()
+    assert len(calls) == 1
+
+    # Наложившийся прогон видит живую аренду и дубль не отправляет, даже
+    # если его карта доставок устарела.
+    monkeypatch.setattr(
+        lesson_reminders_module, "_existing_deliveries", lambda db, ids: {}
+    )
+    assert _run(now=late) == 0
+    assert len(calls) == 1
+    assert _markers()[0].delivered_at is not None

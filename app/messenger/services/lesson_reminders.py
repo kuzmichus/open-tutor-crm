@@ -25,13 +25,21 @@
 напоминание целиком — успешный канал помечается доставленным, сбойный
 отпускает захват и повторяется следующим прогоном (только он). Захват без
 подтверждения истекает через `REMINDER_CLAIM_LEASE`, поэтому упавший
-посреди отправки прогон не «съедает» напоминание навсегда. Гарантия —
-«хотя бы один раз»: если прогон завис дольше аренды и всё-таки доставил,
-сообщение может прийти повторно; потеря напоминания хуже редкого дубля.
+посреди отправки прогон не «съедает» напоминание навсегда. Аренда
+отсчитывается от фактического момента захвата канала, а не от начала
+задания: пока прогон обходит предыдущих получателей, время идёт, и захват,
+записанный временем старта, был бы сразу просрочен — наложившийся прогон
+перехватил бы его и отправил дубль. Гарантия — «хотя бы один раз»: если
+прогон завис дольше аренды и всё-таки доставил, сообщение может прийти
+повторно; потеря напоминания хуже редкого дубля.
 
-Пропущенный тик догоняется следующим прогоном: интервал считается
-наступившим, пока урок не начался (`due_at <= now < starts_at`), а текст
-строится от интервала, а не от фактического остатка, поэтому не меняется.
+Пропущенный тик догоняется следующим прогоном, даже если тот наступил уже
+после начала урока (`due_at <= now`): в постановке нет ограничения «только
+до начала», а напоминание должно уйти обязательно. Текст строится от
+интервала, а не от фактического остатка, поэтому не меняется. Глубину
+догона ограничивает окно выборки уроков (`CATCHUP_AFTER_DUE`), чтобы
+восстановление cron через сутки не рассылало напоминания о давно прошедших
+занятиях.
 
 Строки не создаются, если у получателя нет ни одного канала: подключение
 канала внутри окна ещё успеет получить напоминание. Отменённый урок в
@@ -42,6 +50,7 @@
 """
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -133,18 +142,20 @@ def student_reminder_text(
 def due_offsets(
     offsets: list[int], starts_at: datetime, now: datetime
 ) -> list[int]:
-    """Интервалы, момент отправки которых уже наступил, а урок не начался.
+    """Интервалы, момент отправки которых уже наступил.
 
-    Проверка «до начала» не даёт догонять напоминание после урока, а
-    отсутствие нижней границы — догонять пропущенный тик: если cron не
-    сработал вовремя, сообщение уйдёт следующим прогоном с тем же текстом.
+    Верхней границы нет намеренно: если cron не сработал в целевой момент
+    и восстановился уже после начала урока, напоминание всё равно должно
+    уйти следующим прогоном с исходной формулировкой интервала. Отсечку
+    по глубине догона держит выборка уроков (`CATCHUP_AFTER_DUE`), а не
+    эта функция: тексты и набор интервалов не зависят от момента прогона.
     """
     moment = as_utc(now)
     start = as_utc(starts_at)
     return [
         offset
         for offset in offsets
-        if start - timedelta(minutes=offset) <= moment < start
+        if start - timedelta(minutes=offset) <= moment
     ]
 
 
@@ -235,7 +246,7 @@ def _claim_delivery(
     db: Session,
     key: tuple[str, int, str, str, str],
     existing: dict[tuple, LessonReminder],
-    now: datetime,
+    clock: Callable[[], datetime],
 ) -> LessonReminder | None:
     """Атомарно захватывает доставку в канал; None — канал уже взят.
 
@@ -248,8 +259,14 @@ def _claim_delivery(
     Просроченный захват перехватывается условным UPDATE: два прогона
     одновременно увидят истёкшую аренду, но обновит строку только один —
     у второго `rowcount` будет 0.
+
+    Время аренды берётся из `clock()` в момент захвата, а не из начала
+    задания: обход предыдущих получателей может занять минуты, и захват
+    со временем старта был бы сразу просрочен — наложившийся прогон
+    перехватил бы канал и отправил дубль.
     """
     lesson_id, offset_min, audience, recipient_id, channel = key
+    now = as_utc(clock())
     row = existing.get(key)
     if row is not None:
         if row.delivered_at is not None:
@@ -261,9 +278,9 @@ def _claim_delivery(
             .where(
                 LessonReminder.id == row.id,
                 LessonReminder.delivered_at.is_(None),
-                LessonReminder.claimed_at <= as_utc(now) - REMINDER_CLAIM_LEASE,
+                LessonReminder.claimed_at <= now - REMINDER_CLAIM_LEASE,
             )
-            .values(claimed_at=as_utc(now))
+            .values(claimed_at=now)
             # SQLite отдаёт время без tzinfo, а сравниваем с aware `now`:
             # ORM-синхронизация падает на этом сравнении. Состояние строки
             # выставляем ниже руками.
@@ -272,7 +289,7 @@ def _claim_delivery(
         db.commit()
         if claimed.rowcount != 1:  # перехватил параллельный прогон
             return None
-        row.claimed_at = as_utc(now)
+        row.claimed_at = now
         return row
 
     row = LessonReminder(
@@ -281,7 +298,7 @@ def _claim_delivery(
         audience=audience,
         recipient_id=recipient_id,
         channel=channel,
-        claimed_at=as_utc(now),
+        claimed_at=now,
     )
     db.add(row)
     try:
@@ -304,7 +321,7 @@ def _deliver(
     audience: str,
     recipient_id: str,
     existing: dict[tuple, LessonReminder],
-    now: datetime,
+    clock: Callable[[], datetime],
 ) -> int:
     """Доставляет текст в каналы получателя; возвращает число доставок.
 
@@ -317,7 +334,7 @@ def _deliver(
     sent = 0
     for messenger, chat_id in chats.items():
         key = (lesson_id, offset_min, audience, recipient_id, messenger)
-        row = _claim_delivery(db, key, existing, now)
+        row = _claim_delivery(db, key, existing, clock)
         if row is None:
             continue
         errors = send_message(db, tutor_id, messenger, chat_id, text)
@@ -326,13 +343,18 @@ def _deliver(
                 "напоминание об уроке: %s не доставлено (%s)", messenger, errors[0]
             )
             continue
-        row.delivered_at = as_utc(now)
+        row.delivered_at = as_utc(clock())
         db.commit()
         sent += 1
     return sent
 
 
-def _send_reminders(db: Session, tutor: Tutor, now: datetime) -> int:
+def _send_reminders(
+    db: Session,
+    tutor: Tutor,
+    now: datetime,
+    clock: Callable[[], datetime],
+) -> int:
     """Отправляет напоминания одному репетитору; число доставок."""
     settings = get_settings(db, tutor.id)
     if not settings.notify_lesson_reminder:
@@ -365,7 +387,7 @@ def _send_reminders(db: Session, tutor: Tutor, now: datetime) -> int:
                     audience="tutor",
                     recipient_id=tutor.id,
                     existing=existing,
-                    now=now,
+                    clock=clock,
                 )
 
             for student in lesson.students:
@@ -384,30 +406,45 @@ def _send_reminders(db: Session, tutor: Tutor, now: datetime) -> int:
                     audience="student",
                     recipient_id=student.student_id,
                     existing=existing,
-                    now=now,
+                    clock=clock,
                 )
     return sent
 
 
-def run_lesson_reminders(db: Session, *, now: datetime | None = None) -> int:
+def run_lesson_reminders(
+    db: Session,
+    *,
+    now: datetime | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> int:
     """Отправляет напоминания всем, кому пора; число доставленных сообщений.
 
-    `now` — момент проверки (aware UTC); в тестах подменяется, в бою —
-    `utcnow()`. Захват и подтверждение доставки коммитятся внутри
+    `now` — момент отбора интервалов (aware UTC); в тестах подменяется, в
+    бою — `utcnow()`. Захват и подтверждение доставки коммитятся внутри
     `_deliver` (до и после сетевого вызова), поэтому открытая транзакция
     SQLite не держится на время отправки и не блокирует запись
     веб-приложению; коммит в конце закрывает остаток работы (журнал
     отправок, чтение настроек). Сбой одного репетитора не роняет рассылку
     остальным.
+
+    `clock` — часы аренды захвата. Аренда отсчитывается от фактического
+    момента захвата канала, а не от начала задания: длинный обход
+    получателей иначе выдавал бы сразу просроченные захваты, и
+    наложившийся прогон перехватил бы канал, отправив дубль. По умолчанию
+    это настоящие часы, а при явном `now` (тест, ручной прогон) они
+    заморожены на нём, чтобы результат не зависел от реального времени.
     """
-    moment = as_utc(now or utcnow())
+    moment = as_utc(now) if now is not None else as_utc(utcnow())
+    tick: Callable[[], datetime] = clock or (
+        utcnow if now is None else lambda: moment
+    )
     sent = 0
     for tutor_id in _tutors_with_channels(db):
         tutor = db.get(Tutor, tutor_id)
         if tutor is None:  # pragma: no cover — FK CASCADE: строка не может пропасть
             continue
         try:
-            sent += _send_reminders(db, tutor, moment)
+            sent += _send_reminders(db, tutor, moment, tick)
         except Exception:
             db.rollback()
             logger.exception("напоминания об уроке: сбой у репетитора %s", tutor_id)
