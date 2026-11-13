@@ -8,6 +8,7 @@
 from fastapi import APIRouter
 
 from app.lesson.views import (
+    balance_notice,
     complete_selected,
     create,
     create_group,
@@ -50,3 +51,6 @@ router.include_router(group_lessons.router)
 # Баннер-напоминание `/tutor/notices`: собственный префикс, с маршрутами
 # `/tutor/lessons/{lesson_id}` не пересекается.
 router.include_router(notices.router)
+# Плашка о нехватке денег `/tutor/notices/balance` — соседний статический
+# путь: с `/tutor/notices` и `/tutor/lessons/{lesson_id}` не конфликтует.
+router.include_router(balance_notice.router)

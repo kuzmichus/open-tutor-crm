@@ -1,13 +1,24 @@
-{# Контейнер баннера-напоминания о не отмеченных уроках.
+{# Контейнеры баннеров-напоминаний вверху страниц кабинета.
 
    Включается в шаблоны страниц кабинета сразу после открытия
    `main__container` (AGENTS.md: партиалы htmx начинаются с `_` —
-   этот файл является включаемым, не роутом). Данные подгружает
-   партиал `/tutor/notices` (design D1 change'а unmarked-lessons):
-   вьюхам страниц контекст баннера не нужен. Перезагрузка по
-   `lesson-saved` — урок отметили, плашка должна исчезнуть сразу.
-   Пояснение про автозавершение — только у главной: перед включением
-   поставьте `{% set notice_explain = true %}`. #}
+   этот файл является включаемым, не роутом). Данные подгружают два
+   независимых партиала: вьюхам страниц их контекст не нужен.
+
+   1. `/tutor/notices/balance` — «сегодня занятие, а на счёте не хватает
+      денег» (красная плашка). Перезапрашивается по `payment-saved`
+      (оплата меняет баланс) и `student-saved` (правка ученика), а также
+      по `lesson-saved`: правка цены урока меняет сумму нехватки.
+   2. `/tutor/notices` — «N уроков не отмечены» (design D1 change'а
+      unmarked-lessons). Перезагрузка по `lesson-saved` — урок отметили,
+      плашка должна исчезнуть сразу. Пояснение про автозавершение — только
+      у главной: перед включением поставьте `{% set notice_explain = true %}`.
+
+   Плашка о деньгах идёт первой: неоплаченное занятие важнее отметки. #}
+<div id="tutor-balance-notice"
+     hx-get="/tutor/notices/balance"
+     hx-trigger="load, lesson-saved from:body, payment-saved from:body, student-saved from:body"
+     hx-swap="innerHTML"></div>
 <div id="tutor-notices"
      hx-get="/tutor/notices{% if notice_explain | default(false) %}?explain=1{% endif %}"
      hx-trigger="load, lesson-saved from:body"

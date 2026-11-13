@@ -6029,6 +6029,21 @@
     line-height: 1.5;
   }
 
+  /* Плашка о нехватке денег на сегодняшние занятия: тот же каркас, но
+     опасный тон. Цвета — токен `--destructive` через `color-mix`, как у
+     панели долга: литералы ломают тёмную тему. */
+  .notice-banner--danger {
+    border: 1px solid color-mix(in srgb, var(--destructive) 30%, transparent);
+    background: color-mix(in srgb, var(--destructive) 8%, transparent);
+    color: var(--destructive);
+  }
+
+  /* Подсветка крестика берётся из цвета плашки: у опасной это
+     `--destructive`, иначе на красном фоне был бы жёлтый оттенок. */
+  .notice-banner--danger .notice-banner__close:hover {
+    background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  }
+
   .notice-banner__icon {
     display: inline-flex;
     flex-shrink: 0;

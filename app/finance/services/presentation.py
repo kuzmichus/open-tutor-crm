@@ -223,6 +223,27 @@ def free_hours_phrase(minutes: int) -> str:
         return f"{number} свободный час"
     return f"{number} свободных {word}"
 
+def balance_notice_label(count: int, missing: int) -> str:
+    """«Сегодня занятие у 1 ученика, а на счёте не хватает 1 500 ₽».
+
+    Подпись плашки о нехватке денег на сегодняшние уроки. После «у» нужен
+    родительный падеж: «у 1 ученика», «у 2 учеников» — форма «ученика»
+    только при последней цифре 1 (и не 11). Деньги — через `money()`, чтобы
+    сумма читалась так же, как в счёте ученика.
+    """
+    if count % 100 in (11, 12, 13, 14):
+        word = "учеников"
+    elif count % 10 == 1:
+        word = "ученика"
+    else:
+        word = "учеников"
+    lesson_word = "занятие" if count == 1 else "занятия"
+    return (
+        f"Сегодня {lesson_word} у {count} {word}, "
+        f"а на счёте не хватает {money(missing)}"
+    )
+
+
 def ratio_label(ratio: float) -> str:
     """Во сколько раз: «2 раза», «1,5 раза», «3 раза».
 
@@ -250,4 +271,5 @@ def register_template_helpers() -> None:
         npd_rate_label=npd_rate_label,
         free_hours_phrase=free_hours_phrase,
         ratio_label=ratio_label,
+        balance_notice_label=balance_notice_label,
     )
