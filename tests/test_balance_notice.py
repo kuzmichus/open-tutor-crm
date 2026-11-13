@@ -65,8 +65,9 @@ def test_shows_single_student_shortfall(
         f"Сегодня занятие у 1 ученика, а на счёте не хватает 1{NBSP}500{NBSP}₽"
         in html
     )
-    # «Открыть» ведёт на экран должников (design D4).
-    assert 'href="/tutor/students?debtors=1"' in html
+    # «Открыть» ведёт в список учеников, которым не хватает на сегодня
+    # (design D4): фильтр должников скрыл бы ученика с балансом 500 ₽.
+    assert 'href="/tutor/students?shortfall=1"' in html
     assert 'aria-label="Скрыть напоминание"' in html
     # Ключ закрытия — состав учеников и сумма нехватки.
     assert _key_of(html) == f"debt:{student_id}#1500"
@@ -266,3 +267,80 @@ def test_container_on_cabinet_pages(client, tutor_factory, student_factory):
         html = client.get(url).text
         assert 'id="tutor-balance-notice"' in html, url
         assert 'hx-get="/tutor/notices/balance"' in html, url
+
+
+# --------------------------------------------------------------------------
+# Адресат ссылки «Открыть»: список учеников с нехваткой на сегодня
+# --------------------------------------------------------------------------
+
+
+def test_open_link_filter_shows_positive_balance_shortfall(
+    client, tutor_factory, student_factory, lesson_factory, operation_factory
+):
+    """Баланс 500 ₽ при цене 2 000 ₽ — не долг, но в фильтре «Открыть» виден.
+
+    Фильтр должников (`debtors=1`) оставляет только отрицательный баланс и
+    такого ученика скрыл бы: плашка сообщала бы нехватку, а список был бы
+    пуст. Поэтому ссылка ведёт в собственный фильтр нехватки.
+    """
+    tutor_id = _login(client, tutor_factory, "balance-filter@example.com")
+    poor = student_factory(tutor_id=tutor_id, first_name="Недоплативший")
+    operation_factory(student_id=poor, kind="payment", amount=500)
+    lesson_factory(student_id=poor, status="planned", starts_at=utcnow(), price=2000)
+
+    page = client.get("/tutor/students", params={"shortfall": "1"}).text
+    assert "Недоплативший" in page
+    # Плашка фильтра объясняет, почему список неполный, и даёт выход.
+    assert "не хватает денег на сегодняшние занятия" in page
+    assert 'href="/tutor/students"' in page
+    # Скрытое поле сохраняет фильтр при поиске и сортировке в партиале.
+    assert 'name="shortfall" value="1"' in page
+
+
+def test_open_link_filter_skips_paid_and_unrelated_students(
+    client, tutor_factory, student_factory, lesson_factory, operation_factory
+):
+    """В фильтре нехватки нет тех, кому хватает, и тех, у кого нет уроков."""
+    tutor_id = _login(client, tutor_factory, "balance-filter-skip@example.com")
+    payer = student_factory(tutor_id=tutor_id, first_name="Оплативший")
+    operation_factory(student_id=payer, kind="payment", amount=5000)
+    lesson_factory(student_id=payer, status="planned", starts_at=utcnow(), price=2000)
+    idle = student_factory(tutor_id=tutor_id, first_name="БезУрока")
+
+    page = client.get("/tutor/students", params={"shortfall": "1"}).text
+    assert "Оплативший" not in page
+    assert "БезУрока" not in page
+    # Пустая выборка — заглушка, а не весь список.
+    assert "Ничего не найдено" in page
+
+
+def test_open_link_filter_isolated_by_tutor(
+    client, tutor_factory, student_factory, lesson_factory
+):
+    """Чужие ученики в фильтр нехватки не попадают."""
+    other_tutor = tutor_factory(email="balance-filter-other@example.com")
+    other_student = student_factory(tutor_id=other_tutor, first_name="ЧужойДолжник")
+    lesson_factory(
+        student_id=other_student, status="planned", starts_at=utcnow(), price=2000
+    )
+
+    _login(client, tutor_factory, "balance-filter-mine@example.com")
+    page = client.get("/tutor/students", params={"shortfall": "1"}).text
+    assert "ЧужойДолжник" not in page
+    assert "Ничего не найдено" in page
+
+
+def test_open_link_filter_survives_list_partial(
+    client, tutor_factory, student_factory, lesson_factory, operation_factory
+):
+    """Партиал списка (поиск, смена вида) тоже уважает фильтр нехватки."""
+    tutor_id = _login(client, tutor_factory, "balance-filter-partial@example.com")
+    poor = student_factory(tutor_id=tutor_id, first_name="Недоплативший")
+    operation_factory(student_id=poor, kind="payment", amount=500)
+    lesson_factory(student_id=poor, status="planned", starts_at=utcnow(), price=2000)
+    student_factory(tutor_id=tutor_id, first_name="Обычный")
+
+    page = client.get("/tutor/students/list", params={"shortfall": "1"}).text
+    assert "Недоплативший" in page
+    assert "Обычный" not in page
+
