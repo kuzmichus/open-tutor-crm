@@ -611,6 +611,68 @@ def test_failed_channel_retries_after_auto_complete(
     assert cron_module.run_tasks() == 0
 
 
+def test_transport_exception_does_not_lose_deliveries_after_auto_complete(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Исключение чтения ответа не теряет остальные каналы и интервалы.
+
+    Полный cron после простоя закрывает урок в том же тике. Все доставки
+    должны успеть пройти захват, чтобы повтор после автозавершения дослал
+    сбойный канал, не дублируя успешные.
+    """
+    calls = []
+    _patch_urlopen(monkeypatch, calls)
+    original_read = _FakeResponse.read
+    failed = False
+
+    def read_with_timeout(response):
+        """Первое чтение ответа обрывается необработанной ошибкой транспорта."""
+        nonlocal failed
+        if not failed:
+            failed = True
+            raise TimeoutError("истекло время чтения ответа")
+        return original_read(response)
+
+    monkeypatch.setattr(_FakeResponse, "read", read_with_timeout)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id, remind_lesson=True)
+    lesson_id = lesson_factory(
+        student_id=student_id,
+        status="planned",
+        starts_at=utcnow() - timedelta(hours=26),
+    )
+    _settings(
+        tutor_id, notify_daily_digest=False, notify_birthday=False,
+        reminder_offsets=[15, 60, 1440],
+    )
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+        _connect_tutor(db, tutor_id, "max", MAX_CHAT_ID)
+        _connect_student(db, tutor_id, student_id, "telegram", STUDENT_CHAT_ID)
+
+    assert cron_module.run_tasks() == 0
+    with SessionLocal() as db:
+        assert db.get(Lesson, lesson_id).status == "completed"
+    markers = _markers()
+    assert len(markers) == 9  # три интервала × три канала получателей
+    assert sum(row.delivered_at is not None for row in markers) == 8
+    assert len(calls) == 9
+
+    with SessionLocal() as db:
+        pending = db.scalars(
+            select(LessonReminder).where(LessonReminder.delivered_at.is_(None))
+        ).one()
+        pending.claimed_at = utcnow() - REMINDER_CLAIM_LEASE - timedelta(minutes=1)
+        db.commit()
+
+    assert cron_module.run_tasks() == 0
+    assert len(calls) == 10
+    assert calls[-1] == calls[0]  # повтор сохраняет адресата и текст интервала
+    assert all(row.delivered_at is not None for row in _markers())
+    assert cron_module.run_tasks() == 0
+    assert len(calls) == 10
+
+
 def test_completed_lesson_does_not_get_new_reminders(
     monkeypatch, tutor_factory, student_factory, lesson_factory
 ):

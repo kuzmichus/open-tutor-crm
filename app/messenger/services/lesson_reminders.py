@@ -366,7 +366,18 @@ def _deliver(
         row = _claim_delivery(db, key, existing, clock, allow_new=allow_new)
         if row is None:
             continue
-        errors = send_message(db, tutor_id, messenger, chat_id, text)
+        try:
+            errors = send_message(db, tutor_id, messenger, chat_id, text)
+        except Exception:
+            # Захват уже закоммичен. Исключение транспорта не должно
+            # прерывать обход: автозавершение в этом тике закроет урок,
+            # и ещё не захваченные каналы/интервалы потеряются для повтора.
+            db.rollback()
+            logger.exception(
+                "напоминание об уроке %s: сбой доставки в %s (%s %s, интервал %s)",
+                lesson_id, messenger, audience, recipient_id, offset_min,
+            )
+            continue
         if errors:
             logger.warning(
                 "напоминание об уроке: %s не доставлено (%s)", messenger, errors[0]
