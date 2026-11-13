@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.common.services import cron as cron_module
 from app.database import SessionLocal
+from app.lesson.models.lesson import Lesson
 from app.lesson.models.lesson_reminder import LessonReminder
 from app.messenger.models.student_invite import StudentMessengerInvite
 from app.messenger.services import lesson_reminders as lesson_reminders_module
@@ -26,6 +27,7 @@ from app.messenger.services.binding import chat_id_key
 from app.messenger.services.lesson_reminders import run_lesson_reminders
 from app.messenger.services.messengers import token_key
 from app.tutor.models.tutor_settings import TutorSettings
+from app.tutor.services.clock import utcnow
 from app.tutor.services.params import set_param
 
 TOKEN = "123456:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
@@ -498,6 +500,58 @@ def test_first_tick_after_long_downtime_still_sends(
     # Напоминание ушло ровно один раз: повторный тик дубля не делает.
     assert _run(now=LESSON_AT + timedelta(hours=2, minutes=1)) == 0
     assert len(calls) == 1
+
+
+def test_full_cron_catches_up_reminder_after_downtime_longer_than_a_day(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Полный прогон cron догоняет напоминание после простоя дольше суток.
+
+    `lesson.auto_complete` закрывает урок через 24 часа после окончания, а
+    выборка напоминаний берёт только «Запланирован». Поэтому напоминания в
+    реестре стоят раньше автозавершения: иначе на первом прогоне после
+    простоя урок уже стал бы «Проведён» и напоминание потерялось бы
+    навсегда. Тест запускает именно `run_tasks`, а не сервис, — проверяется
+    взаимодействие заданий, а не только логика отправки.
+    """
+    calls = []
+    _patch_urlopen(monkeypatch, calls)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id, first_name="Иван", last_name="Иванов")
+    # Урок закончился 25 часов назад: автозавершение уже вправе его закрыть.
+    lesson_id = lesson_factory(
+        student_id=student_id,
+        status="planned",
+        starts_at=utcnow() - timedelta(hours=26),
+    )
+    _settings(tutor_id, notify_daily_digest=False, notify_birthday=False)
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+
+    assert cron_module.run_tasks() == 0
+
+    # Напоминание ушло до автозавершения — ровно один раз и с тем же текстом.
+    assert len(calls) == 1
+    assert _texts(calls)[0].startswith("Через 1 час урок с Иван Иванов — \n")
+    with SessionLocal() as db:
+        assert db.get(Lesson, lesson_id).status == "completed"
+
+    # Повторный прогон cron дубля не даёт: напоминание уже доставлено.
+    assert cron_module.run_tasks() == 0
+    assert len(calls) == 1
+
+
+def test_reminders_run_before_auto_complete():
+    """Напоминания стоят в реестре cron раньше автозавершения уроков.
+
+    Порядок — часть контракта: автозавершение закрывает урок через сутки
+    после окончания, и если оно отработает первым, пропущенное напоминание
+    уже не увидит урок «Запланированным».
+    """
+    names = [name for name, _ in cron_module.TASKS]
+    assert names.index("messenger.lesson_reminders") < names.index(
+        "lesson.auto_complete"
+    )
 
 
 def test_cancelled_lesson_is_silent(
