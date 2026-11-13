@@ -473,24 +473,31 @@ def test_first_tick_after_start_still_sends(
     assert len(calls) == 1
 
 
-def test_lesson_started_long_ago_is_not_reminded(
+def test_first_tick_after_long_downtime_still_sends(
     monkeypatch, tutor_factory, student_factory, lesson_factory
 ):
-    """Давно прошедший урок не догоняется: окно догона ограничено.
+    """Первый тик после простоя дольше часа после начала урока не теряет напоминание.
 
-    Иначе восстановление cron после долгого простоя рассылало бы пачку
-    сообщений о занятиях, которые давно закончились.
+    Постановка требует обязательной отправки следующим тиком и не задаёт
+    предела длительности простоя: если cron не работал несколько часов,
+    неотправленное напоминание всё равно уходит первым же прогоном с
+    исходной формулировкой интервала. Повторный прогон дубля не даёт.
     """
     calls = []
     _patch_urlopen(monkeypatch, calls)
     tutor_id = tutor_factory()
-    student_id = student_factory(tutor_id=tutor_id)
+    student_id = student_factory(tutor_id=tutor_id, first_name="Иван", last_name="Иванов")
     lesson_factory(student_id=student_id, status="planned", starts_at=LESSON_AT)
     with SessionLocal() as db:
         _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
 
-    assert _run(now=LESSON_AT + timedelta(hours=2)) == 0
-    assert calls == []
+    assert _run(now=LESSON_AT + timedelta(hours=2)) == 1
+    assert _texts(calls) == [
+        "Через 1 час урок с Иван Иванов — \nВремя: 13 ноября в 09:30"
+    ]
+    # Напоминание ушло ровно один раз: повторный тик дубля не делает.
+    assert _run(now=LESSON_AT + timedelta(hours=2, minutes=1)) == 0
+    assert len(calls) == 1
 
 
 def test_cancelled_lesson_is_silent(
