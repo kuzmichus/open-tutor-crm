@@ -24,7 +24,10 @@
    прячет контейнер с плашками целиком (`.notice-stack__items`), а не сами
    плашки, — иначе собственное скрытие группы обнуляло бы счётчик.
    Состояние раскрытия лежит в localStorage, поэтому переживает
-   перезагрузку и переходы между разделами кабинета.
+   перезагрузку и переходы между разделами кабинета. Показывать контейнер
+   решает одно поле `expanded`: при одной видимой плашке оно истинно само
+   собой, иначе сводка и плашки разъезжались бы после закрытия одной из
+   двух плашек крестиком.
 
    Одиночная плашка и пустой случай обёртки не касаются: при одном
    предупреждении сводка скрыта и плашка видна как есть, при нуле — пустые
@@ -48,7 +51,7 @@
                :class="expanded ? 'notice-summary__chevron--open' : ''"></i>
         </button>
     </div>
-    <div class="notice-stack__items" x-show="count < 2 || expanded">
+    <div class="notice-stack__items" x-show="expanded">
         <div id="tutor-balance-notice"
              hx-get="/tutor/notices/balance"
              hx-trigger="load, lesson-saved from:body, payment-saved from:body, student-saved from:body"

@@ -112,7 +112,10 @@ def test_stack_hides_only_without_js_summary(client, tutor_factory):
 
     items = _opening_tag(stack, 'class="notice-stack__items"')
     assert "x-cloak" not in items
-    assert 'x-show="count < 2 || expanded"' in items
+    # Видимость контейнера решает одно производное поле `expanded`, а не
+    # отдельное условие по счётчику: иначе после закрытия крестиком одной
+    # из двух плашек сводка исчезала бы, а контейнер оставался скрытым.
+    assert 'x-show="expanded"' in items
 
 
 def test_summary_markup_has_counter_and_toggle(client, tutor_factory):
@@ -139,6 +142,12 @@ def test_js_factory_contract():
     # Счётчик считает видимые плашки, а не все подряд.
     assert 'querySelectorAll(".notice-banner")' in NOTICES_JS
     assert 'style.display !== "none"' in NOTICES_JS
+    # Видимость — одно производное поле: при одной видимой плашке группа
+    # раскрыта независимо от сохранённого предпочтения. Это регрессия из
+    # ревью: после закрытия крестиком одной из двух плашек `expanded`
+    # оставался `false`, и контейнер показывал плашку вопреки состоянию.
+    assert "this.expanded = visible < 2 || this.preference" in NOTICES_JS
+    assert "this.preference = !this.expanded" in NOTICES_JS
     # Наблюдатель отключается вместе с компонентом (иначе утечка на переходах).
     assert "disconnect()" in NOTICES_JS
 

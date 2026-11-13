@@ -18,6 +18,14 @@
  *    видимые плашки и прячет их контейнер, а не сами плашки: так счётчик
  *    не ломается от собственной свёртки, а закрытая крестиком плашка
  *    (`x-show` ставит inline `display: none`) из счёта выпадает.
+ *
+ *    Видимость контейнера — не самостоятельное условие в шаблоне, а одно
+ *    производное состояние `expanded` (шаблон спрашивает только его): при
+ *    одной видимой плашке оно принудительно истинно — плашка показывается
+ *    как есть, без сводки, — при двух и больше равно сохранённому
+ *    предпочтению репетитора. Иначе после закрытия крестиком одной из двух
+ *    плашек сводка исчезала бы, а контейнер оставался скрытым при
+ *    `expanded = false`, и состояние компонента расходилось бы с экраном.
  */
 (function () {
   "use strict";
@@ -67,9 +75,16 @@
 
     Alpine.data("noticeGroup", function () {
       return {
-        /* По умолчанию свёрнуто: предупреждения занимают верх страницы,
-           и репетитор раскрывает их осознанно. */
-        expanded: false,
+        /* Выбор репетитора, сохранённый между страницами: раскрывать
+           группу или держать её свёрнутой. */
+        preference: false,
+        /* Действительное состояние группы — единственное, что спрашивает
+           шаблон. Отдельное поле, а не геттер: Alpine не отслеживает
+           реактивность внутри геттеров, поэтому значение пересчитывается
+           в recount() и toggle(). Начальное `true` совпадает с формулой
+           при `count = 0` (плашек ещё нет — прятать нечего), пока
+           `recount()` не подставит сохранённое предпочтение. */
+        expanded: true,
         count: 0,
         observer: null,
         queued: false,
@@ -77,7 +92,7 @@
         init: function () {
           var self = this;
           try {
-            self.expanded = localStorage.getItem(EXPANDED_KEY) === "1";
+            self.preference = localStorage.getItem(EXPANDED_KEY) === "1";
           } catch (e) {
             /* localStorage недоступен (приватный режим) — сводка свёрнута. */
           }
@@ -125,20 +140,31 @@
         /* Считаем именно видимые плашки. Проверяем inline-стиль, а не
            `offsetParent`: собственное сворачивание группы прячет контейнер
            целиком, и по `offsetParent` все плашки разом «исчезли» бы из
-           счёта. */
+           счёта.
+
+           Здесь же синхронизируется `expanded` с тем, что видно на экране:
+           одна плашка — группа раскрыта (по ТЗ она показывается как есть,
+           без сводки), две и больше — действует сохранённое предпочтение.
+           Без этого шаблон показывал бы оставшуюся плашку при
+           `expanded = false`, и состояние компонента расходилось бы с
+           экраном (замечание ревью №1). */
         recount: function () {
           var banners = this.$el.querySelectorAll(".notice-banner");
           var visible = 0;
           Array.prototype.forEach.call(banners, function (banner) {
             if (banner.style.display !== "none") visible += 1;
           });
+
           this.count = visible;
+          this.expanded = visible < 2 || this.preference;
         },
 
         toggle: function () {
-          this.expanded = !this.expanded;
+          /* Клик по «Показать/Свернуть» — явный выбор репетитора. */
+          this.preference = !this.expanded;
+          this.expanded = this.count < 2 || this.preference;
           try {
-            localStorage.setItem(EXPANDED_KEY, this.expanded ? "1" : "0");
+            localStorage.setItem(EXPANDED_KEY, this.preference ? "1" : "0");
           } catch (e) {
             /* noop */
           }

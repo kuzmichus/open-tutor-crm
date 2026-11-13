@@ -2,11 +2,13 @@
 
 ## 1. Клиентская группа плашек
 
-- [x] 1.1 `app/static/notices.js`: Alpine-фабрика `noticeGroup` — `expanded`
-  (из `localStorage["opentutorcrm:notices-expanded"]`), `count`,
-  `recount()`, `toggle()`, `scheduleRecount()`, `init()`/`destroy()`.
+- [x] 1.1 `app/static/notices.js`: Alpine-фабрика `noticeGroup` — `preference`
+  (из `localStorage["opentutorcrm:notices-expanded"]`), производное `expanded`,
+  `count`, `recount()`, `toggle()`, `scheduleRecount()`, `init()`/`destroy()`.
 - [x] 1.2 `recount()` считает `.notice-banner` внутри `$el` с
   `style.display !== "none"` — закрытая крестиком плашка из счёта выпадает.
+  Там же `expanded = visible < 2 || preference`: при одной плашке группа
+  раскрыта независимо от сохранённого предпочтения.
 - [x] 1.3 `MutationObserver` на поддереве (`childList`, `subtree`,
   `attributes` + `attributeFilter: ["style"]`) с дебаунсом через
   `queueMicrotask`; отключение в `destroy()`.
@@ -34,9 +36,13 @@
 - [x] 3.2 `x-cloak` есть у сводки и нет у контейнера плашек.
 - [x] 3.3 Контракт `notices.js`: фабрика, ключ `opentutorcrm:notices-expanded`,
   `MutationObserver`, подсчёт видимых плашек, `disconnect()`.
-- [x] 3.4 Все классы сводки описаны в `styles.css`, у `.notice-summary` есть
+- [x] 3.4 Видимость контейнера — `x-show="expanded"` (регрессия ревью №1:
+  после закрытия одной из двух плашек крестиком сводка исчезает, а плашка
+  показывается как есть); формула `visible < 2 || preference` закреплена
+  в тесте контракта.
+- [x] 3.5 Все классы сводки описаны в `styles.css`, у `.notice-summary` есть
   `flex-wrap: wrap`.
-- [x] 3.5 Регрессии партиалов: ровно одна плашка со своими текстами, сводки
+- [x] 3.6 Регрессии партиалов: ровно одна плашка со своими текстами, сводки
   в ответе нет, пустое тело без данных, редирект без сессии.
 
 ## 4. Документация
