@@ -7,7 +7,7 @@
 """
 
 import re
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -35,6 +35,11 @@ def _key_of(html: str) -> str:
     match = re.search(r"noticeBanner\('([^']*)'\)", html)
     assert match, "в плашке нет ключа закрытия"
     return match.group(1)
+
+
+def _today() -> str:
+    """Сегодняшняя дата педагога в ISO-формате (фабрика даёт зону UTC)."""
+    return utcnow().date().isoformat()
 
 
 def test_requires_session(client):
@@ -70,7 +75,7 @@ def test_shows_single_student_shortfall(
     assert 'href="/tutor/students?shortfall=1"' in html
     assert 'aria-label="Скрыть напоминание"' in html
     # Ключ закрытия — состав учеников и сумма нехватки.
-    assert _key_of(html) == f"debt:{student_id}#1500"
+    assert _key_of(html) == f"debt:{_today()}:{student_id}#1500"
 
 
 def test_red_banner_markup(
@@ -149,7 +154,7 @@ def test_two_students_count_and_total(
         f"Сегодня занятия у 2 учеников, а на счёте не хватает 3{NBSP}500{NBSP}₽"
         in html
     )
-    assert _key_of(html) == f"debt:{'|'.join(sorted((first, second)))}#3500"
+    assert _key_of(html) == f"debt:{_today()}:{'|'.join(sorted((first, second)))}#3500"
 
 
 def test_same_student_twice_counted_once(
@@ -175,7 +180,7 @@ def test_same_student_twice_counted_once(
         f"Сегодня занятие у 1 ученика, а на счёте не хватает 2{NBSP}500{NBSP}₽"
         in html
     )
-    assert _key_of(html) == f"debt:{student_id}#2500"
+    assert _key_of(html) == f"debt:{_today()}:{student_id}#2500"
 
 
 def test_group_lesson_counts_each_participant(
@@ -208,7 +213,7 @@ def test_group_lesson_counts_each_participant(
         f"Сегодня занятие у 1 ученика, а на счёте не хватает 1{NBSP}000{NBSP}₽"
         in html
     )
-    assert _key_of(html) == f"debt:{poor}#1000"
+    assert _key_of(html) == f"debt:{_today()}:{poor}#1000"
 
 
 def test_isolation(client, tutor_factory, student_factory, lesson_factory):
@@ -248,6 +253,44 @@ def test_dismiss_key_follows_amount_and_composition(
 
     operation_factory(student_id=student_id, kind="payment", amount=2000)
     assert "noticeBanner(" not in client.get("/tutor/notices/balance").text
+
+
+def test_dismiss_key_follows_local_day(
+    client, tutor_factory, student_factory, lesson_factory, monkeypatch
+):
+    """Ключ закрытия содержит день педагога: завтрашний долг не скрывается.
+
+    Закрытие хранится в localStorage бессрочно, поэтому без даты в ключе
+    закрытое сегодня напоминание с тем же составом и суммой молча скрыло бы
+    такое же напоминание следующего дня — а регулярное расписание даёт
+    ровно такой повтор (замечание ревью №2).
+    """
+    tutor_id = _login(client, tutor_factory, "balance-key-day@example.com")
+    student_id = student_factory(tutor_id=tutor_id)
+
+    def at(moment: datetime) -> None:
+        """Фиксирует «сейчас» для расчёта дня педагога."""
+        monkeypatch.setattr("app.common.services.tutor_time.utcnow", lambda: moment)
+
+    first_day = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
+    at(first_day)
+    lesson_factory(
+        student_id=student_id, status="planned", starts_at=first_day, price=1500
+    )
+    today_key = _key_of(client.get("/tutor/notices/balance").text)
+    assert today_key == f"debt:2026-11-10:{student_id}#1500"
+    # Внутри одного дня ключ стабилен: повторный опрос htmx не «оживляет»
+    # закрытую плашку.
+    assert _key_of(client.get("/tutor/notices/balance").text) == today_key
+
+    next_day = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
+    at(next_day)
+    lesson_factory(
+        student_id=student_id, status="planned", starts_at=next_day, price=1500
+    )
+    tomorrow_key = _key_of(client.get("/tutor/notices/balance").text)
+    assert tomorrow_key == f"debt:2026-11-11:{student_id}#1500"
+    assert tomorrow_key != today_key
 
 
 def test_container_on_cabinet_pages(client, tutor_factory, student_factory):

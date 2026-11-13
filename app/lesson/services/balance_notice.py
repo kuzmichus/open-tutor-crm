@@ -30,6 +30,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from app.common.services.tutor_time import today_local
 from app.finance.services.balance import balance, shortfall
 from app.lesson.services.daily_digest import digest_lessons
 
@@ -44,13 +45,21 @@ def today_balance_notice(
 
     `students` — число учеников (уникальных, а не число уроков), `missing` —
     сумма их нехваток, `student_ids` — состав для ключа клиентского
-    закрытия. Уроков на день нет или денег хватает — `None`.
+    закрытия, `day` — календарная дата в зоне педагога, к которой относятся
+    данные. Уроков на день нет или денег хватает — `None`.
+
+    `day` возвращается наружу, потому что ключ закрытия плашки обязан
+    содержать день: иначе закрытое сегодня напоминание с тем же составом и
+    суммой молча скрыло бы завтрашний долг (замечание ревью №2).
 
     Балансы считаются по одному вызову `balance()` на ученика: формула
     баланса живёт в одном месте, а число учеников дня ограничено
     расписанием. При росте нагрузки это станет N+1 — тогда нужен агрегат
     в модуле finance, но не вторая копия формулы здесь.
     """
+    # День резолвится один раз: и окно выборки уроков, и ключ закрытия
+    # должны относиться к одной и той же календарной дате педагога.
+    day = day or today_local(tutor)
     lessons = digest_lessons(db, tutor, day)
 
     # Цены целей складываются по ученику: у одного ученика за день может
@@ -77,4 +86,5 @@ def today_balance_notice(
         "students": len(student_ids),
         "missing": sum(missing_by_student.values()),
         "student_ids": student_ids,
+        "day": day,
     }

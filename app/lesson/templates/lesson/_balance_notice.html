@@ -1,11 +1,12 @@
 {# Плашка «сегодня занятие, а на счёте не хватает денег» — ответ партиала
    /tutor/notices/balance.
 
-   Контекст: notice ({students, missing, student_ids}), notice_key, tutor.
+   Контекст: notice ({students, missing, student_ids, day}), notice_key, tutor.
    Подпись — `balance_notice_label` из presentation-модуля финансов, деньги
    форматируются там же. Закрытие — на клиенте (Alpine `noticeBanner` из
-   notices.js): ключ — состав учеников и сумма нехватки, поэтому частичная
-   оплата возвращает плашку, а полная убирает её с сервера. #}
+   notices.js): ключ — день педагога, состав учеников и сумма нехватки,
+   поэтому частичная оплата возвращает плашку, полная убирает её с сервера,
+   а на следующий день напоминание снова видно. #}
 <div class="notice-banner notice-banner--danger" role="status"
      x-data="noticeBanner('{{ notice_key }}')" x-show="open" x-cloak>
     <span class="notice-banner__icon" aria-hidden="true">
