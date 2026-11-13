@@ -50,8 +50,8 @@ from app.messenger.services.send import send_message
 from app.tutor.models.tutor import Tutor
 from app.tutor.models.tutor_param import TutorParam
 from app.tutor.models.tutor_settings import (
-    REMINDER_OFFSETS,
     REMINDER_OFFSET_LABELS,
+    REMINDER_OFFSETS,
 )
 from app.tutor.services.clock import as_utc, utcnow
 from app.tutor.services.settings import get_settings
