@@ -32,6 +32,7 @@ from app.gcalendar.services.reconcile import reconcile_all
 from app.lesson.services.auto_complete import auto_complete_finished_lessons
 from app.messenger.services.birthday_digest import notify_birthday_digest
 from app.messenger.services.daily_digest import run_daily_digests
+from app.messenger.services.lesson_reminders import run_lesson_reminders
 
 if TYPE_CHECKING:  # только для аннотации: циклический импорт не нужен
     from sqlalchemy.orm import Session
@@ -46,6 +47,9 @@ TASKS: list[tuple[str, TaskCallable]] = [
     ("lesson.auto_complete", auto_complete_finished_lessons),
     ("messenger.daily_digest", run_daily_digests),
     ("messenger.birthday_digest", notify_birthday_digest),
+    # Напоминание об уроке: за 15 минут / 1 час / 24 часа до начала —
+    # репетитору во все каналы, ученику при включённом `remind_lesson`.
+    ("messenger.lesson_reminders", run_lesson_reminders),
     # Страховка интеграции с Google: сверка создаёт пропущенные события,
     # правит изменившиеся и удаляет осиротевшие (design D12). Ручной путь
     # синхронизирует сразу, задание догоняет то, что не прошло из-за сети.
