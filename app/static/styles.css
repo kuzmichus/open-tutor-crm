@@ -6135,6 +6135,92 @@
     &:hover { background: color-mix(in srgb, var(--warning-fg) 12%, transparent); }
   }
 
+  /* Сводка нескольких предупреждений (.notice-summary): одна плашка
+     «Требует внимания · N   Показать» вместо стопки плашек. Показывается
+     только когда видимых плашек две и больше — решает Alpine-фабрика
+     `noticeGroup` (notices.js), сервер количество не знает. Каркас — тот
+     же, что у плашки, но тон спокойнее: сводка не само предупреждение, а
+     заголовок над ним. */
+  .notice-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 5);
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius-md);
+    background: var(--warning-soft);
+    color: var(--warning-fg);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+
+  .notice-summary__icon {
+    display: inline-flex;
+    flex-shrink: 0;
+
+    & [data-lucide] { width: 16px; height: 16px; }
+  }
+
+  /* Заголовок и счётчик — одна строка; при нехватке ширины она переносится
+     целиком, а кнопка уезжает на следующую строку (flex-wrap у сводки). */
+  .notice-summary__title {
+    display: flex;
+    align-items: baseline;
+    gap: calc(var(--space) * 1);
+    min-width: 0;
+    font-weight: 500;
+  }
+
+  .notice-summary__dot {
+    opacity: 0.7;
+  }
+
+  .notice-summary__count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  /* Кнопка прижата вправо: на широком экране она на одной строке со
+     счётчиком, на узком — переносится под него, а не сжимает текст. */
+  .notice-summary__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 1);
+    margin-left: auto;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+
+    & [data-lucide] { width: 14px; height: 14px; }
+
+    &:hover { text-decoration-thickness: 2px; }
+  }
+
+  /* Стрелка поворачивается при раскрытии: направление подсказывает, что
+     повторный клик свернёт плашки обратно. */
+  .notice-summary__chevron {
+    transition: transform var(--duration-fast) var(--ease);
+  }
+
+  .notice-summary__chevron--open {
+    transform: rotate(180deg);
+  }
+
+  /* Контейнер входящих в сводку плашек: видимостью управляет `noticeGroup`
+     (`count < 2 || expanded`), собственных отступов у него нет — их несут
+     сами плашки. */
+  .notice-stack__items {
+    display: block;
+  }
+
   /* ==========================================================================
      Статистика (/tutor/stats): табы, KPI, риск, таблицы, периоды
      ========================================================================== */

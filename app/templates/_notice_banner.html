@@ -14,12 +14,51 @@
       плашка должна исчезнуть сразу. Пояснение про автозавершение — только
       у главной: перед включением поставьте `{% set notice_explain = true %}`.
 
-   Плашка о деньгах идёт первой: неоплаченное занятие важнее отметки. #}
-<div id="tutor-balance-notice"
-     hx-get="/tutor/notices/balance"
-     hx-trigger="load, lesson-saved from:body, payment-saved from:body, student-saved from:body"
-     hx-swap="innerHTML"></div>
-<div id="tutor-notices"
-     hx-get="/tutor/notices{% if notice_explain | default(false) %}?explain=1{% endif %}"
-     hx-trigger="load, lesson-saved from:body"
-     hx-swap="innerHTML"></div>
+   Плашка о деньгах идёт первой: неоплаченное занятие важнее отметки.
+
+   Когда предупреждений два и больше, вместо них показывается одна сводная
+   плашка «Требует внимания · N» с действием «Показать»/«Свернуть»
+   (Alpine-фабрика `noticeGroup` из notices.js). Сервер о количестве плашек
+   не знает: партиалы приходят htmx-свопами уже после отрисовки страницы,
+   поэтому счётчик, скрытие и раскрытие — клиентские. Свёрнутая сводка
+   прячет контейнер с плашками целиком (`.notice-stack__items`), а не сами
+   плашки, — иначе собственное скрытие группы обнуляло бы счётчик.
+   Состояние раскрытия лежит в localStorage, поэтому переживает
+   перезагрузку и переходы между разделами кабинета. Показывать контейнер
+   решает одно поле `expanded`: при одной видимой плашке оно истинно само
+   собой, иначе сводка и плашки разъезжались бы после закрытия одной из
+   двух плашек крестиком.
+
+   Одиночная плашка и пустой случай обёртки не касаются: при одном
+   предупреждении сводка скрыта и плашка видна как есть, при нуле — пустые
+   контейнеры не занимают места. `x-cloak` есть только у сводки: контейнер
+   с плашками им не помечен, чтобы при выключенном JS одиночная плашка
+   не исчезла. #}
+<div id="tutor-notice-stack" x-data="noticeGroup">
+    <div class="notice-summary" x-show="count > 1" x-cloak>
+        <span class="notice-summary__icon" aria-hidden="true">
+            <i data-lucide="triangle-alert"></i>
+        </span>
+        <p class="notice-summary__title">
+            Требует внимания
+            <span class="notice-summary__dot" aria-hidden="true">·</span>
+            <span class="notice-summary__count" x-text="count">2</span>
+        </p>
+        <button class="notice-summary__toggle" type="button" @click="toggle()">
+            <span x-text="expanded ? 'Свернуть' : 'Показать'">Показать</span>
+            <i data-lucide="chevron-down"
+               class="notice-summary__chevron"
+               :class="expanded ? 'notice-summary__chevron--open' : ''"></i>
+        </button>
+    </div>
+    <div class="notice-stack__items" x-show="expanded">
+        <div id="tutor-balance-notice"
+             hx-get="/tutor/notices/balance"
+             hx-trigger="load, lesson-saved from:body, payment-saved from:body, student-saved from:body"
+             hx-swap="innerHTML"></div>
+        <div id="tutor-notices"
+             hx-get="/tutor/notices{% if notice_explain | default(false) %}?explain=1{% endif %}"
+             hx-trigger="load, lesson-saved from:body"
+             hx-swap="innerHTML"></div>
+    </div>
+</div>
