@@ -21,6 +21,7 @@ from app.common.services import cron as cron_module
 from app.database import SessionLocal
 from app.lesson.models.lesson_reminder import LessonReminder
 from app.messenger.models.student_invite import StudentMessengerInvite
+from app.messenger.services import lesson_reminders as lesson_reminders_module
 from app.messenger.services.binding import chat_id_key
 from app.messenger.services.lesson_reminders import run_lesson_reminders
 from app.messenger.services.messengers import token_key
@@ -64,12 +65,22 @@ def _patch_urlopen(monkeypatch, calls, *, fail_messenger=None):
     `fail_messenger` — имя мессенджера, для которого API отвечает ошибкой:
     так проверяется изоляция каналов.
     """
+    failing = {fail_messenger} if fail_messenger else set()
+    _patch_urlopen_flaky(monkeypatch, calls, failing)
+
+
+def _patch_urlopen_flaky(monkeypatch, calls, failing):
+    """То же, но набор сбойных мессенджеров можно менять между прогонами.
+
+    `failing` — изменяемый набор имён: тест «чинит» канал и проверяет, что
+    повторяется только он.
+    """
 
     def fake_urlopen(request, timeout=None, context=None):
         url = request.full_url
         call = {"url": url, "data": json.loads(request.data.decode())}
         calls.append(call)
-        if fail_messenger == "telegram" and "api.telegram.org" in url:
+        if "telegram" in failing and "api.telegram.org" in url:
             raise urllib.error.HTTPError(
                 url, 400, "Bad Request", None,
                 io.BytesIO(b'{"ok": false, "description": "chat not found"}'),
@@ -167,7 +178,10 @@ def test_sends_hour_reminder_to_all_tutor_channels(
 
     expected = "Через 1 час урок с Иван Иванов — \nВремя: 13 ноября в 09:30"
     assert _texts(calls) == [expected, expected]
-    assert len(_markers()) == 1
+    # Доставка фиксируется по каналу: по строке на Telegram и MAX.
+    markers = _markers()
+    assert {marker.channel for marker in markers} == {"telegram", "max"}
+    assert all(marker.delivered_at is not None for marker in markers)
 
 
 def test_fifteen_minutes_reminder_text(
@@ -515,7 +529,7 @@ def test_group_member_from_other_tutor_is_skipped(
 def test_failed_channel_does_not_block_other(
     monkeypatch, tutor_factory, student_factory, lesson_factory
 ):
-    """Сбой Telegram не мешает доставке в MAX; маркер всё равно ставится."""
+    """Сбой Telegram не мешает MAX и не закрывает сбойный канал."""
     calls = []
     _patch_urlopen(monkeypatch, calls, fail_messenger="telegram")
     tutor_id = tutor_factory()
@@ -529,4 +543,72 @@ def test_failed_channel_does_not_block_other(
     # Telegram повторяется ретраем, MAX доставлен с первой попытки.
     max_calls = [call for call in calls if "max.ru" in call["url"]]
     assert len(max_calls) == 1
-    assert len(_markers()) == 1
+    by_channel = {marker.channel: marker for marker in _markers()}
+    assert by_channel["max"].delivered_at is not None
+    # Сбой не подтверждён доставкой: следующий прогон повторит только его.
+    assert by_channel["telegram"].delivered_at is None
+
+
+def test_failed_channel_retries_after_lease_without_duplicate(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Сбойный канал повторяется после аренды захвата, доставленный — нет."""
+    calls = []
+    failing = {"telegram"}
+    _patch_urlopen_flaky(monkeypatch, calls, failing)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    lesson_factory(student_id=student_id, status="planned", starts_at=LESSON_AT)
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+        _connect_tutor(db, tutor_id, "max", MAX_CHAT_ID)
+
+    # Первый прогон: MAX доставлен, Telegram захвачен, но не подтверждён.
+    assert _run() == 1
+
+    # В пределах аренды повтор не делается: канал мог ещё отправляться.
+    assert _run(now=NOW + timedelta(minutes=1)) == 0
+    assert len([call for call in calls if "max.ru" in call["url"]]) == 1
+    assert len(_markers()) == 2
+
+    # Аренда истекла, канал починили — повторяется только сбойный канал.
+    failing.clear()
+    assert _run(now=NOW + timedelta(minutes=6)) == 1
+    assert len([call for call in calls if "max.ru" in call["url"]]) == 1
+    by_channel = {marker.channel: marker for marker in _markers()}
+    assert by_channel["telegram"].delivered_at is not None
+    assert by_channel["max"].delivered_at is not None
+
+    # Оба канала закрыты — дальше тишина.
+    assert _run(now=NOW + timedelta(minutes=7)) == 0
+
+
+def test_stale_delivery_cache_does_not_duplicate_send(
+    monkeypatch, tutor_factory, student_factory, lesson_factory
+):
+    """Наложившийся прогон со старой картой доставок упирается в UNIQUE.
+
+    Так выглядит гонка двух прогонов cron: оба прочитали «доставок нет»,
+    первый закоммитил захват и отправил, второй пытается вставить свой
+    захват и откатывается ещё до сетевого вызова.
+    """
+    calls = []
+    _patch_urlopen(monkeypatch, calls)
+    tutor_id = tutor_factory()
+    student_id = student_factory(tutor_id=tutor_id)
+    lesson_factory(student_id=student_id, status="planned", starts_at=LESSON_AT)
+    with SessionLocal() as db:
+        _connect_tutor(db, tutor_id, "telegram", CHAT_ID)
+        _connect_tutor(db, tutor_id, "max", MAX_CHAT_ID)
+
+    assert _run() == 2
+
+    # Второй прогон видит пустую карту доставок — как будто его проверка
+    # разминулась с коммитом первого. Дубля быть не должно: UNIQUE по
+    # каналу отбивает вставку захвата.
+    monkeypatch.setattr(
+        lesson_reminders_module, "_existing_deliveries", lambda db, ids: {}
+    )
+    assert _run(now=NOW + timedelta(minutes=1)) == 0
+    assert len(calls) == 2
+    assert len(_markers()) == 2

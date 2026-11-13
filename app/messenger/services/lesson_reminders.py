@@ -7,23 +7,33 @@
 привязанные каналы.
 
 ```
-есть урок в окне 24 часов?     ──нет──> пропустить
-переключатель включён?         ──нет──> пропустить
-интервал дошёл до «сейчас»?    ──нет──> пропустить
-маркер «урок + интервал» есть? ──да──> пропустить
-иначе: текст → все каналы получателя → маркер
+есть урок в окне 24 часов?          ──нет──> пропустить
+переключатель включён?              ──нет──> пропустить
+интервал дошёл до «сейчас»?         ──нет──> пропустить
+канал уже доставлен или захвачен?   ──да──> пропустить
+иначе: захват канала (commit) → текст → отправка → delivered_at
 ```
 
 Идемпотентность — от таблицы `lesson_reminders`: строка «урок + интервал
-+ получатель» ставится после попытки отправки. Проверка «уже отправлено»
-делается по таблице, поэтому повторный прогон и наложение минутных тиков
-не дублируют сообщение; UNIQUE-ограничение — второй рубеж на уровне БД.
++ получатель + канал» захватывается и коммитится **до** обращения к
+мессенджеру, а после успешной отправки получает `delivered_at`. Поэтому
+наложившийся прогон видит захват и дубль не отправляет, а UNIQUE по
+каналу — второй рубеж на уровне БД: проигравший гонку INSERT откатывается
+ещё до сетевого вызова.
+
+Доставка фиксируется по каналу: сбой одного мессенджера не закрывает
+напоминание целиком — успешный канал помечается доставленным, сбойный
+отпускает захват и повторяется следующим прогоном (только он). Захват без
+подтверждения истекает через `REMINDER_CLAIM_LEASE`, поэтому упавший
+посреди отправки прогон не «съедает» напоминание навсегда. Гарантия —
+«хотя бы один раз»: если прогон завис дольше аренды и всё-таки доставил,
+сообщение может прийти повторно; потеря напоминания хуже редкого дубля.
 
 Пропущенный тик догоняется следующим прогоном: интервал считается
 наступившим, пока урок не начался (`due_at <= now < starts_at`), а текст
 строится от интервала, а не от фактического остатка, поэтому не меняется.
 
-Маркер не ставится, если у получателя нет ни одного канала: подключение
+Строки не создаются, если у получателя нет ни одного канала: подключение
 канала внутри окна ещё успеет получить напоминание. Отменённый урок в
 выборку не попадает — напоминание о нём не отправляется.
 
@@ -35,11 +45,12 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import tutor_zone
-from app.lesson.models.lesson_reminder import LessonReminder
+from app.lesson.models.lesson_reminder import REMINDER_CLAIM_LEASE, LessonReminder
 from app.lesson.services.reminder_lesson import ReminderLesson
 from app.lesson.services.reminder_lessons import upcoming_lessons
 from app.lesson.services.reminder_student import ReminderStudent
@@ -188,56 +199,136 @@ def _student_zone(student: ReminderStudent, tutor: Tutor) -> ZoneInfo:
     return tutor_zone(tutor)
 
 
-def _sent_markers(db: Session, lesson_ids: list[str]) -> set[tuple]:
-    """Уже отправленные напоминания уроков: набор ключей маркеров."""
+def _existing_deliveries(
+    db: Session, lesson_ids: list[str]
+) -> dict[tuple, LessonReminder]:
+    """Доставки уроков одним запросом: ключ «урок + интервал + канал» → строка.
+
+    Нужен как быстрый фильтр перед захватом: уже доставленный канал не
+    трогаем вовсе, а по `claimed_at` видно, живой ли захват. Решение всё
+    равно принимает `_claim_delivery` — эта карта может устареть, если
+    параллельный прогон успел раньше.
+    """
     if not lesson_ids:
-        return set()
+        return {}
     rows = db.scalars(
         select(LessonReminder).where(LessonReminder.lesson_id.in_(lesson_ids))
     ).all()
     return {
-        (row.lesson_id, row.offset_min, row.audience, row.recipient_id)
+        (
+            row.lesson_id,
+            row.offset_min,
+            row.audience,
+            row.recipient_id,
+            row.channel,
+        ): row
         for row in rows
     }
 
 
-def _mark_sent(
+def _claim_expired(row: LessonReminder, now: datetime) -> bool:
+    """Захват доставки просрочен — прогон, взявший его, уже не придёт."""
+    return as_utc(row.claimed_at) <= as_utc(now) - REMINDER_CLAIM_LEASE
+
+
+def _claim_delivery(
     db: Session,
-    markers: set[tuple],
+    key: tuple[str, int, str, str, str],
+    existing: dict[tuple, LessonReminder],
+    now: datetime,
+) -> LessonReminder | None:
+    """Атомарно захватывает доставку в канал; None — канал уже взят.
+
+    Захват — INSERT строки (или UPDATE `claimed_at` у просроченного
+    захвата) с немедленным коммитом **до** сетевого вызова: второй
+    прогон, наложившийся на текущий, наткнётся на UNIQUE и отправит не
+    больше одного сообщения. Проигравший гонку INSERT откатывается здесь
+    же, поэтому его транзакция не отравит следующие уроки.
+
+    Просроченный захват перехватывается условным UPDATE: два прогона
+    одновременно увидят истёкшую аренду, но обновит строку только один —
+    у второго `rowcount` будет 0.
+    """
+    lesson_id, offset_min, audience, recipient_id, channel = key
+    row = existing.get(key)
+    if row is not None:
+        if row.delivered_at is not None:
+            return None
+        if not _claim_expired(row, now):
+            return None
+        claimed = db.execute(
+            update(LessonReminder)
+            .where(
+                LessonReminder.id == row.id,
+                LessonReminder.delivered_at.is_(None),
+                LessonReminder.claimed_at <= as_utc(now) - REMINDER_CLAIM_LEASE,
+            )
+            .values(claimed_at=as_utc(now))
+            # SQLite отдаёт время без tzinfo, а сравниваем с aware `now`:
+            # ORM-синхронизация падает на этом сравнении. Состояние строки
+            # выставляем ниже руками.
+            .execution_options(synchronize_session=False)
+        )
+        db.commit()
+        if claimed.rowcount != 1:  # перехватил параллельный прогон
+            return None
+        row.claimed_at = as_utc(now)
+        return row
+
+    row = LessonReminder(
+        lesson_id=lesson_id,
+        offset_min=offset_min,
+        audience=audience,
+        recipient_id=recipient_id,
+        channel=channel,
+        claimed_at=as_utc(now),
+    )
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return None
+    existing[key] = row
+    return row
+
+
+def _deliver(
+    db: Session,
+    *,
+    tutor_id: str,
+    chats: dict[str, str],
+    text: str,
     lesson_id: str,
     offset_min: int,
     audience: str,
     recipient_id: str,
-) -> None:
-    """Ставит маркер в текущей транзакции (коммит — у runner'а)."""
-    db.add(
-        LessonReminder(
-            lesson_id=lesson_id,
-            offset_min=offset_min,
-            audience=audience,
-            recipient_id=recipient_id,
-        )
-    )
-    markers.add((lesson_id, offset_min, audience, recipient_id))
-
-
-def _send_to_channels(
-    db: Session, tutor_id: str, chats: dict[str, str], text: str
+    existing: dict[tuple, LessonReminder],
+    now: datetime,
 ) -> int:
-    """Отправляет текст во все каналы; возвращает число доставок.
+    """Доставляет текст в каналы получателя; возвращает число доставок.
 
-    Ошибка одного канала не мешает остальным: она уже в журнале
-    `sent_messages`, а второй мессенджер сообщение всё равно получит.
+    Каждый канал проходит три шага: захват (коммит) → отправка →
+    `delivered_at` (коммит). Сбой канала не мешает остальным и не
+    закрывает напоминание: захват остаётся просроченным, поэтому
+    следующий прогон повторит только этот канал, а уже доставленный
+    пропустит.
     """
     sent = 0
     for messenger, chat_id in chats.items():
+        key = (lesson_id, offset_min, audience, recipient_id, messenger)
+        row = _claim_delivery(db, key, existing, now)
+        if row is None:
+            continue
         errors = send_message(db, tutor_id, messenger, chat_id, text)
         if errors:
             logger.warning(
                 "напоминание об уроке: %s не доставлено (%s)", messenger, errors[0]
             )
-        else:
-            sent += 1
+            continue
+        row.delivered_at = as_utc(now)
+        db.commit()
+        sent += 1
     return sent
 
 
@@ -259,27 +350,41 @@ def _send_reminders(db: Session, tutor: Tutor, now: datetime) -> int:
         return 0
 
     tutor_chats = bound_chats(db, tutor.id)
-    markers = _sent_markers(db, [lesson.lesson_id for lesson in lessons])
+    existing = _existing_deliveries(db, [lesson.lesson_id for lesson in lessons])
     sent = 0
     for lesson in lessons:
         for offset in due_offsets(offsets, lesson.starts_at, now):
-            tutor_key = (lesson.lesson_id, offset, "tutor", tutor.id)
-            if tutor_chats and tutor_key not in markers:
-                text = tutor_reminder_text(offset, lesson, tutor_zone(tutor))
-                sent += _send_to_channels(db, tutor.id, tutor_chats, text)
-                _mark_sent(db, markers, lesson.lesson_id, offset, "tutor", tutor.id)
+            if tutor_chats:
+                sent += _deliver(
+                    db,
+                    tutor_id=tutor.id,
+                    chats=tutor_chats,
+                    text=tutor_reminder_text(offset, lesson, tutor_zone(tutor)),
+                    lesson_id=lesson.lesson_id,
+                    offset_min=offset,
+                    audience="tutor",
+                    recipient_id=tutor.id,
+                    existing=existing,
+                    now=now,
+                )
 
             for student in lesson.students:
-                student_key = (lesson.lesson_id, offset, "student", student.student_id)
-                if student_key in markers:
-                    continue
                 chats = _student_chats(db, tutor.id, student.student_id)
                 if not chats:
                     continue
-                text = student_reminder_text(offset, lesson, _student_zone(student, tutor))
-                sent += _send_to_channels(db, tutor.id, chats, text)
-                _mark_sent(
-                    db, markers, lesson.lesson_id, offset, "student", student.student_id
+                sent += _deliver(
+                    db,
+                    tutor_id=tutor.id,
+                    chats=chats,
+                    text=student_reminder_text(
+                        offset, lesson, _student_zone(student, tutor)
+                    ),
+                    lesson_id=lesson.lesson_id,
+                    offset_min=offset,
+                    audience="student",
+                    recipient_id=student.student_id,
+                    existing=existing,
+                    now=now,
                 )
     return sent
 
@@ -288,9 +393,12 @@ def run_lesson_reminders(db: Session, *, now: datetime | None = None) -> int:
     """Отправляет напоминания всем, кому пора; число доставленных сообщений.
 
     `now` — момент проверки (aware UTC); в тестах подменяется, в бою —
-    `utcnow()`. Коммит после каждого репетитора: сетевые вызовы не должны
-    держать открытую транзакцию SQLite и блокировать запись веб-приложению.
-    Сбой одного репетитора не роняет рассылку остальным.
+    `utcnow()`. Захват и подтверждение доставки коммитятся внутри
+    `_deliver` (до и после сетевого вызова), поэтому открытая транзакция
+    SQLite не держится на время отправки и не блокирует запись
+    веб-приложению; коммит в конце закрывает остаток работы (журнал
+    отправок, чтение настроек). Сбой одного репетитора не роняет рассылку
+    остальным.
     """
     moment = as_utc(now or utcnow())
     sent = 0
