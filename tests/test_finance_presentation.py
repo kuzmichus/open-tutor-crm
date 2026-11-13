@@ -14,6 +14,8 @@ from app.finance.models.account_operation import AccountOperation
 from app.finance.services.presentation import (
     MINUS,
     balance_label,
+    balance_notice_label,
+    lessons_count_label,
     money,
     operation_datetime,
     operation_kind_label,
@@ -244,6 +246,36 @@ def test_operation_datetime_of_none_is_empty():
         tutor = _tutor(session)
 
     assert operation_datetime(None, tutor) == ""
+
+
+def test_balance_notice_label_declines_students_and_lessons():
+    """Подпись плашки: «занятие/занятия» и «ученика/учеников» по числу.
+
+    Одна форма «занятия» при двух и более учениках: занятий несколько.
+    «Ученика» даёт последняя цифра 1, кроме 11–14 — иначе «у 21 учеников».
+    """
+    assert (
+        balance_notice_label(1, 1500)
+        == f"Сегодня занятие у 1 ученика, а на счёте не хватает 1{NBSP}500{NBSP}₽"
+    )
+    assert (
+        balance_notice_label(2, 3500)
+        == f"Сегодня занятия у 2 учеников, а на счёте не хватает 3{NBSP}500{NBSP}₽"
+    )
+    assert balance_notice_label(5, 100).startswith("Сегодня занятия у 5 учеников")
+    assert balance_notice_label(21, 100).startswith("Сегодня занятия у 21 ученика")
+    assert balance_notice_label(11, 100).startswith("Сегодня занятия у 11 учеников")
+    assert balance_notice_label(12, 100).startswith("Сегодня занятия у 12 учеников")
+
+
+def test_lessons_count_label_declines_by_number():
+    """«1 занятие» / «2 занятия» / «5 занятий», включая 11–14."""
+    assert lessons_count_label(1) == "1 занятие"
+    assert lessons_count_label(3) == "3 занятия"
+    assert lessons_count_label(5) == "5 занятий"
+    assert lessons_count_label(11) == "11 занятий"
+    assert lessons_count_label(21) == "21 занятие"
+    assert lessons_count_label(0) == "0 занятий"
 
 
 def test_helpers_are_registered_in_jinja():
