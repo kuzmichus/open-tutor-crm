@@ -28,6 +28,7 @@ from app.homework.models.answer_link import HomeworkAnswerLink  # noqa: F401
 from app.homework.models.homework import Homework  # noqa: F401
 from app.lesson.models.lesson import Lesson  # noqa: F401
 from app.lesson.models.lesson_attendance import LessonAttendance  # noqa: F401
+from app.lesson.models.lesson_reminder import LessonReminder  # noqa: F401
 from app.lesson.models.lesson_series import LessonSeries  # noqa: F401
 from app.mailing.models.message_template import MessageTemplate  # noqa: F401
 from app.messenger.models.sent_message import SentMessage  # noqa: F401

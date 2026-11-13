@@ -32,6 +32,7 @@ from app.gcalendar.services.reconcile import reconcile_all
 from app.lesson.services.auto_complete import auto_complete_finished_lessons
 from app.messenger.services.birthday_digest import notify_birthday_digest
 from app.messenger.services.daily_digest import run_daily_digests
+from app.messenger.services.lesson_reminders import run_lesson_reminders
 
 if TYPE_CHECKING:  # только для аннотации: циклический импорт не нужен
     from sqlalchemy.orm import Session
@@ -42,7 +43,22 @@ logger = logging.getLogger("cron")
 TaskCallable = Callable[["Session"], int]
 
 # Реестр заданий: пополняется парами (имя, функция) из доменных сервисов.
+#
+# Порядок значим для напоминаний об уроке: они обязаны выполняться **до**
+# `lesson.auto_complete`. Автозавершение закрывает урок через 24 часа после
+# его окончания, а выборка напоминаний берёт только `status='planned'`;
+# если cron простоял дольше суток после урока, автозавершение, отработав
+# первым, перевело бы урок в `completed` и неотправленное напоминание
+# потерялось бы навсегда. Поэтому напоминания идут первыми: на первом же
+# прогоне после простоя урок ещё «Запланирован», напоминание уходит, а
+# автозавершение закрывает урок следом. Незавершённую доставку (сбой
+# канала) задание добирает и по закрытому уроку — в режиме повтора, без
+# новых захватов, — поэтому автозавершение не «съедает» и её.
 TASKS: list[tuple[str, TaskCallable]] = [
+    # Напоминание об уроке: за 15 минут / 1 час / 24 часа до начала —
+    # репетитору во все каналы, ученику при включённом `remind_lesson`.
+    # Стоит раньше автозавершения — см. пояснение выше.
+    ("messenger.lesson_reminders", run_lesson_reminders),
     ("lesson.auto_complete", auto_complete_finished_lessons),
     ("messenger.daily_digest", run_daily_digests),
     ("messenger.birthday_digest", notify_birthday_digest),
