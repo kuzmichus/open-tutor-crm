@@ -53,6 +53,8 @@ class MaxSender:
             ) from exc
         except urllib.error.URLError as exc:
             raise SendError(f"MAX: сеть недоступна ({exc.reason})") from exc
+        except TimeoutError as exc:
+            raise SendError("MAX: превышено время ожидания ответа") from exc
 
         # Успех — 200 с объектом отправленного сообщения.
         if not body.get("message"):

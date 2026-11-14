@@ -37,6 +37,7 @@ from app.lesson.services.unavailability_check import (
     start_unavailability_warning,
     warning_context,
 )
+from app.messenger.services.lesson_changes import lesson_change_snapshot, notify_lesson_change
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
 
@@ -117,6 +118,7 @@ async def update_lesson_view(
     """
     lesson = get_owned_lesson(db, lesson_id, tutor_id)
     tutor = db.get(Tutor, tutor_id)
+    before = lesson_change_snapshot(lesson)
     form = await request.form()
     data, errors = parse_lesson_form(form, tutor)
     errors += validate_targets(db, tutor_id, data)
@@ -163,6 +165,7 @@ async def update_lesson_view(
     # история денег осталась бы старой.
     sync_lesson_charges(db, lesson, series_applied=form.get("series_all") == "1")
     db.commit()
+    notify_lesson_change(db, tutor, lesson, before)
 
     # Синхронизация с Google — после коммита и best-effort (design D2, D10):
     # ошибка внешнего сервиса не отменяет сохранение урока. Массовая правка
