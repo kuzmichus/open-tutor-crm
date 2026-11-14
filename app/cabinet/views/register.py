@@ -7,7 +7,7 @@
 вход к карточке, открывает сессию ученика и ведёт в кабинет.
 """
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,10 @@ from app.cabinet.services.registration import (
     register_by_invite,
 )
 from app.cabinet.services.sessions import create_session, set_student_cookie
+from app.common.services.welcome_email import schedule_welcome_email
 from app.database import get_db
+from app.student.models.student import Student
+from app.student.services.presentation import student_full_name
 from app.templating import templates
 
 router = APIRouter()
@@ -67,6 +70,7 @@ def register_form(
 def register_submit(
     request: Request,
     token: str,
+    background_tasks: BackgroundTasks,
     email: str = Form(""),
     password: str = Form(""),
     db: Session = Depends(get_db),
@@ -91,6 +95,17 @@ def register_submit(
             errors=errors,
             email_value=email.strip(),
         )
+
+    # Имя для письма берётся из карточки ученика: форма его не спрашивает,
+    # а обращение по одному email выглядело бы безлико. Письмо — в фоне,
+    # после успешной регистрации: сбой SMTP не влияет на вход в кабинет.
+    student = db.get(Student, invite.student_id)
+    schedule_welcome_email(
+        background_tasks,
+        role="student",
+        to_email=email.strip(),
+        user_name=student_full_name(student) if student is not None else "",
+    )
 
     session_token = create_session(db, invite.student_id)
     response = RedirectResponse(url="/student", status_code=303)

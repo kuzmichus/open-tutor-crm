@@ -1,11 +1,12 @@
 """Регистрация репетитора: форма и создание аккаунта."""
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import system_zone_name
+from app.common.services.welcome_email import schedule_welcome_email
 from app.database import get_db
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
@@ -52,6 +53,7 @@ def register_form(
 @router.post("/tutor/register", response_class=HTMLResponse)
 def register_submit(
     request: Request,
+    background_tasks: BackgroundTasks,
     name: str = Form(""),
     email: str = Form(""),
     password: str = Form(""),
@@ -96,5 +98,14 @@ def register_submit(
     )
     db.add(tutor)
     db.commit()
+
+    # Приветственное письмо — только после успешного commit и в фоне:
+    # сбой SMTP не должен ни блокировать регистрацию, ни менять её ответ.
+    schedule_welcome_email(
+        background_tasks,
+        role="tutor",
+        to_email=email_clean,
+        user_name=name.strip(),
+    )
 
     return RedirectResponse(url="/tutor/login?registered=1", status_code=303)

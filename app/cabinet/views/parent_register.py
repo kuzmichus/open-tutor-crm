@@ -7,7 +7,7 @@
 вход к контакту, открывает сессию родителя и ведёт в кабинет.
 """
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,9 @@ from app.cabinet.services.contact_registration import (
     register_by_invite,
 )
 from app.cabinet.services.contact_sessions import create_session, set_contact_cookie
+from app.common.services.welcome_email import schedule_welcome_email
 from app.database import get_db
+from app.student.models.contact import Contact
 from app.templating import templates
 
 router = APIRouter()
@@ -67,6 +69,7 @@ def register_form(
 def register_submit(
     request: Request,
     token: str,
+    background_tasks: BackgroundTasks,
     email: str = Form(""),
     password: str = Form(""),
     db: Session = Depends(get_db),
@@ -91,6 +94,16 @@ def register_submit(
             errors=errors,
             email_value=email.strip(),
         )
+
+    # Имя для письма — из контакта, к которому привязан вход: форма его не
+    # спрашивает. Письмо ставится в фон уже после успешной регистрации.
+    contact = db.get(Contact, invite.contact_id)
+    schedule_welcome_email(
+        background_tasks,
+        role="parent",
+        to_email=email.strip(),
+        user_name=contact.full_name if contact is not None else "",
+    )
 
     session_token = create_session(db, invite.contact_id)
     response = RedirectResponse(url="/parent", status_code=303)
