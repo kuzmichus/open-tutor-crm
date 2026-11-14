@@ -17,7 +17,7 @@ from app.cabinet.services.contact_registration import (
     register_by_invite,
 )
 from app.cabinet.services.contact_sessions import create_session, set_contact_cookie
-from app.common.services.welcome_email import schedule_welcome_email
+from app.common.services.welcome_email import deliver_welcome_email
 from app.database import get_db
 from app.student.models.contact import Contact
 from app.templating import templates
@@ -98,8 +98,8 @@ def register_submit(
     # Имя для письма — из контакта, к которому привязан вход: форма его не
     # спрашивает. Письмо ставится в фон уже после успешной регистрации.
     contact = db.get(Contact, invite.contact_id)
-    schedule_welcome_email(
-        background_tasks,
+    background_tasks.add_task(
+        deliver_welcome_email,
         role="parent",
         to_email=email.strip(),
         user_name=contact.full_name if contact is not None else "",

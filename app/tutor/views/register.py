@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.common.services.tutor_time import system_zone_name
-from app.common.services.welcome_email import schedule_welcome_email
+from app.common.services.welcome_email import deliver_welcome_email
 from app.database import get_db
 from app.templating import templates
 from app.tutor.models.tutor import Tutor
@@ -101,8 +101,8 @@ def register_submit(
 
     # Приветственное письмо — только после успешного commit и в фоне:
     # сбой SMTP не должен ни блокировать регистрацию, ни менять её ответ.
-    schedule_welcome_email(
-        background_tasks,
+    background_tasks.add_task(
+        deliver_welcome_email,
         role="tutor",
         to_email=email_clean,
         user_name=name.strip(),

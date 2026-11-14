@@ -56,34 +56,15 @@ def send_welcome_email(*, role: str, to_email: str, user_name: str) -> list[str]
     return send_email(to_email=to_email, subject=subject, html=html)
 
 
-def schedule_welcome_email(
-    background_tasks,
-    *,
-    role: str,
-    to_email: str,
-    user_name: str,
-) -> None:
-    """Ставит отправку письма в фон запроса (`BackgroundTasks`).
+def deliver_welcome_email(*, role: str, to_email: str, user_name: str) -> None:
+    """Фоновая отправка: ошибки уходят в лог, наружу ничего не летит.
 
-    Синхронный SMTP в обработчике регистрации подвесил бы ответ на время
-    соединения с сервером, а его сбой влиял бы на HTTP-статус. Фоновая
-    задача выполняется после ответа и не видна пользователю.
-    """
-    background_tasks.add_task(
-        _deliver_welcome_email,
-        role=role,
-        to_email=to_email,
-        user_name=user_name,
-    )
-
-
-def _deliver_welcome_email(*, role: str, to_email: str, user_name: str) -> None:
-    """Фоновая обёртка: ошибки уходят в лог, наружу ничего не летит.
-
-    `send_email` возвращает список ошибок вместо исключений, но шаблон
-    может не отрендериться (битый файл, отсутствующая переменная) — такой
-    сбой тоже не должен всплывать в лог как необработанное исключение
-    задачи.
+    Вызывается через `BackgroundTasks` из вьюх регистрации: синхронный
+    SMTP в обработчике подвесил бы ответ на время соединения, а его сбой
+    влиял бы на HTTP-статус. `send_email` возвращает список ошибок вместо
+    исключений, но шаблон может не отрендериться (битый файл, отсутствующая
+    переменная) — такой сбой тоже не должен всплывать как необработанное
+    исключение задачи.
     """
     try:
         errors = send_welcome_email(role=role, to_email=to_email, user_name=user_name)

@@ -17,7 +17,7 @@ from app.cabinet.services.registration import (
     register_by_invite,
 )
 from app.cabinet.services.sessions import create_session, set_student_cookie
-from app.common.services.welcome_email import schedule_welcome_email
+from app.common.services.welcome_email import deliver_welcome_email
 from app.database import get_db
 from app.student.models.student import Student
 from app.student.services.presentation import student_full_name
@@ -100,8 +100,8 @@ def register_submit(
     # а обращение по одному email выглядело бы безлико. Письмо — в фоне,
     # после успешной регистрации: сбой SMTP не влияет на вход в кабинет.
     student = db.get(Student, invite.student_id)
-    schedule_welcome_email(
-        background_tasks,
+    background_tasks.add_task(
+        deliver_welcome_email,
         role="student",
         to_email=email.strip(),
         user_name=student_full_name(student) if student is not None else "",
