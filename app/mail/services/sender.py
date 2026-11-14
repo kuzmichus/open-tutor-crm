@@ -51,6 +51,10 @@ def build_message(
     message["From"] = formataddr((settings.app_name, settings.mail_from))
     message["To"] = to_email
     message["Subject"] = subject
+    # Reply-To задаёт владелец установки: с адреса робота отвечать некому,
+    # а заголовок уводит ответ на живой адрес поддержки.
+    if settings.mail_reply_to:
+        message["Reply-To"] = settings.mail_reply_to
     # Message-ID с доменом отправителя: без него часть провайдеров
     # помечает письмо как подозрительное.
     message["Message-ID"] = make_msgid(domain=_domain(settings.mail_from))
