@@ -134,6 +134,23 @@ def test_empty_name_falls_back_to_neutral_greeting(sent):
     assert "Здравствуйте, друг!" in sent[0]["html"]
 
 
+@pytest.mark.parametrize("role", ["tutor", "student", "parent"])
+def test_user_name_is_html_escaped(role, sent):
+    """Имя не становится разметкой: `.html.jinja2` не входит в select_autoescape.
+
+    Имя репетитора приходит из публичной формы регистрации, имена ученика и
+    родителя — из редактируемых карточек, поэтому `<b>`/`&` в имени должны
+    попасть в письмо как текст, а не как действующий HTML.
+    """
+    welcome_email.send_welcome_email(
+        role=role, to_email="user@example.com", user_name="<b>Иван & Мария</b>"
+    )
+
+    html = sent[0]["html"]
+    assert "&lt;b&gt;Иван &amp; Мария&lt;/b&gt;" in html
+    assert "<b>Иван & Мария</b>" not in html
+
+
 # --------------------------------------------------------------------------
 # Регистрация: фоновая задача и получатель
 # --------------------------------------------------------------------------

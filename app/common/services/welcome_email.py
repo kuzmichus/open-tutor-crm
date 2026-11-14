@@ -24,7 +24,7 @@ from app.common.email_subjects import (
     WELCOME_TUTOR,
 )
 from app.mail.services.sender import send_email
-from app.templating import templates
+from app.templating import email_templates
 
 logger = logging.getLogger("mail")
 
@@ -49,10 +49,14 @@ def send_welcome_email(*, role: str, to_email: str, user_name: str) -> list[str]
     поэтому правка файла в репозитории отражается в следующем письме без
     перезапуска приложения. Пустой `user_name` заменяется на нейтральное
     обращение: в письме не должно остаться «Здравствуйте, !».
+
+    Рендер идёт через `email_templates` — окружение с принудительным
+    `autoescape`: имя приходит из формы или карточки и не должно попадать
+    в письмо как HTML-разметка.
     """
     template_name, subject = WELCOME_EMAILS[role]
     context = {"user_name": (user_name or "").strip() or "друг"}
-    html = templates.env.get_template(template_name).render(**context)
+    html = email_templates.env.get_template(template_name).render(**context)
     return send_email(to_email=to_email, subject=subject, html=html)
 
 
