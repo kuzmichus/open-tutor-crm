@@ -18,6 +18,10 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SINGLE_MODE"] = "0"  # режим включают точечно сами тесты
 os.environ["GOOGLE_CLIENT_ID"] = ""  # иначе OAuth «настроен» не по умолчанию
 os.environ["GOOGLE_CLIENT_SECRET"] = ""
+# Почта: регистрация ставит приветственное письмо в фон, и с живым
+# SMTP_HOST из .env прогон дёргал бы настоящий сервер (и таймауты).
+os.environ["SMTP_HOST"] = ""
+os.environ["SMTP_REPLY_TO"] = ""
 # Публикация лендинга в ./landing меняла ответ GET / вместо 303.
 os.environ["LANDING_ROOT"] = tempfile.mkdtemp(prefix="tutor-tests-landing-")
 atexit.register(shutil.rmtree, os.environ["LANDING_ROOT"], ignore_errors=True)
