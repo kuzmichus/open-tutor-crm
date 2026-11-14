@@ -614,22 +614,25 @@ def test_failed_channel_retries_after_auto_complete(
 def test_transport_exception_does_not_lose_deliveries_after_auto_complete(
     monkeypatch, tutor_factory, student_factory, lesson_factory
 ):
-    """Исключение чтения ответа не теряет остальные каналы и интервалы.
+    """Сбой транспорта не теряет остальные каналы и интервалы.
 
-    Полный cron после простоя закрывает урок в том же тике. Все доставки
-    должны успеть пройти захват, чтобы повтор после автозавершения дослал
+    Разовый обрыв чтения ответа RetrySender заглушает ещё в тике отправки
+    (вторая попытка проходит), поэтому тест рвёт первые три чтения —
+    только исчерпание inline-ретраев превращает сбой в недоставленный
+    канал. Полный cron после простоя закрывает урок в том же тике, все
+    доставки успевают пройти захват, и повтор после автозавершения досылает
     сбойный канал, не дублируя успешные.
     """
     calls = []
     _patch_urlopen(monkeypatch, calls)
     original_read = _FakeResponse.read
-    failed = False
+    failed = 0
 
     def read_with_timeout(response):
-        """Первое чтение ответа обрывается необработанной ошибкой транспорта."""
+        """Первые чтения обрываются таймаутом — по одному на попытку RetrySender."""
         nonlocal failed
-        if not failed:
-            failed = True
+        if failed < 3:  # столько попыток делает RetrySender по умолчанию
+            failed += 1
             raise TimeoutError("истекло время чтения ответа")
         return original_read(response)
 
@@ -656,7 +659,7 @@ def test_transport_exception_does_not_lose_deliveries_after_auto_complete(
     markers = _markers()
     assert len(markers) == 9  # три интервала × три канала получателей
     assert sum(row.delivered_at is not None for row in markers) == 8
-    assert len(calls) == 9
+    assert len(calls) == 11  # 8 доставок по разу + 3 попытки сбойного канала
 
     with SessionLocal() as db:
         pending = db.scalars(
@@ -666,11 +669,11 @@ def test_transport_exception_does_not_lose_deliveries_after_auto_complete(
         db.commit()
 
     assert cron_module.run_tasks() == 0
-    assert len(calls) == 10
+    assert len(calls) == 12  # + одна досылка сбойного канала
     assert calls[-1] == calls[0]  # повтор сохраняет адресата и текст интервала
     assert all(row.delivered_at is not None for row in _markers())
     assert cron_module.run_tasks() == 0
-    assert len(calls) == 10
+    assert len(calls) == 12
 
 
 def test_completed_lesson_does_not_get_new_reminders(
