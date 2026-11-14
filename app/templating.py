@@ -17,6 +17,8 @@ _APP_DIR = Path(__file__).resolve().parent
 
 TEMPLATE_DIRS = [
     _APP_DIR / "templates",  # общие шаблоны
+    # Общие шаблоны вне веб-страниц: письма (`email/welcome_*.html.jinja2`).
+    _APP_DIR / "common" / "templates",
     _APP_DIR / "tutor" / "templates",  # модуль tutor
     _APP_DIR / "student" / "templates",  # модуль student
     _APP_DIR / "calendar" / "templates",  # модуль calendar

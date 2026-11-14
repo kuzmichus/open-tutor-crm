@@ -1,0 +1,57 @@
+{#-
+  Приветственное письмо репетитору (HTML-часть).
+
+  Отдельный макет, а не `auth.html`: письмо не наследует стили сайта —
+  почтовые клиенты вырезают внешние CSS. Поэтому все стили inline, а
+  вёрстка на таблице: так письмо одинаково рисуется в Gmail, Outlook и
+  мобильных клиентах. Подпись — часть шаблона: правка текста письма не
+  требует изменений в коде.
+
+  Переменные ограничены `user_name`: остальное — статичный текст.
+-#}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Добро пожаловать в Open Tutor CRM</title>
+</head>
+<body style="margin:0;padding:0;background:#F4F4F1;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#17171B;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F4F1;padding:24px 12px;">
+        <tr>
+            <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#FFFFFF;border:1px solid #E4E4DF;border-radius:12px;">
+                    <tr>
+                        <td style="padding:28px 28px 8px;">
+                            <p style="margin:0 0 20px;font-size:15px;font-weight:600;letter-spacing:.02em;">Open Tutor CRM</p>
+                            <h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;">Добро пожаловать!</h1>
+                            <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#3C3C42;">
+                                Здравствуйте, {{ user_name }}! Аккаунт в Open Tutor CRM создан —
+                                теперь можно вести расписание занятий, учеников, домашние
+                                задания и оплаты в одном месте.
+                            </p>
+                            <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#3C3C42;">
+                                Начните с карточки первого ученика или группы: после этого
+                                появятся уроки в календаре, а ссылку на запись можно будет
+                                отправить клиентам.
+                            </p>
+                            <p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:#3C3C42;">
+                                Если что-то пойдёт не так, ответьте на это письмо — мы поможем.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:16px 28px 24px;border-top:1px solid #EDEDE8;">
+                            <p style="margin:0;font-size:12px;line-height:1.5;color:#8A8A92;">
+                                С уважением,<br>
+                                команда Open Tutor CRM<br>
+                                Письмо отправлено автоматически при регистрации.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
