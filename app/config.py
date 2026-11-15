@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     # Адрес отправителя. Пусто — берётся `smtp_username`: у большинства
     # провайдеров отправитель обязан совпадать с логином.
     smtp_from: str = ""
+    # Адрес для ответа (Reply-To). Пусто — заголовок не ставится, и ответы
+    # уходят на отправителя: приветственные письма шлёт робот, а отвечать
+    # на них должен живой адрес поддержки.
+    smtp_reply_to: str = ""
     # 587 — STARTTLS (по умолчанию), 465 — сразу TLS (`smtp_use_ssl`).
     smtp_starttls: bool = True
     smtp_use_ssl: bool = False
@@ -168,6 +172,11 @@ class Settings(BaseSettings):
     def mail_from(self) -> str:
         """Адрес отправителя: `SMTP_FROM`, иначе логин `SMTP_USERNAME`."""
         return (self.smtp_from or self.smtp_username).strip()
+
+    @property
+    def mail_reply_to(self) -> str:
+        """Адрес для ответа (`Reply-To`); пусто — заголовок не ставится."""
+        return self.smtp_reply_to.strip()
 
     @property
     def allowed_extensions(self) -> tuple[str, ...]:

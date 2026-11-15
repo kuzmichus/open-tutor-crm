@@ -17,6 +17,8 @@ _APP_DIR = Path(__file__).resolve().parent
 
 TEMPLATE_DIRS = [
     _APP_DIR / "templates",  # общие шаблоны
+    # Общие шаблоны вне веб-страниц: письма (`email/welcome_*.html.jinja2`).
+    _APP_DIR / "common" / "templates",
     _APP_DIR / "tutor" / "templates",  # модуль tutor
     _APP_DIR / "student" / "templates",  # модуль student
     _APP_DIR / "calendar" / "templates",  # модуль calendar
@@ -35,6 +37,17 @@ TEMPLATE_DIRS = [
 ]
 
 templates = Jinja2Templates(directory=TEMPLATE_DIRS)
+
+# Окружение для писем: экранирование включено принудительно.
+# Стандартный `select_autoescape` считает HTML только `.html`/`.htm`/`.xml`,
+# а шаблоны писем лежат с расширением `.html.jinja2` (и `.txt` у текстовой
+# части) — подстановка имени пользователя попала бы в письмо как разметка.
+# Имена приходят из публичной формы регистрации и редактируемых карточек,
+# поэтому письмо не должно принимать из них HTML. Оверлей наследует
+# загрузчик, фильтры и globals общего окружения, но переопределяет
+# `autoescape`; собственный кэш оверлея по-прежнему обновляется по mtime,
+# так что правка файла шаблона видна в следующем письме.
+email_templates = Jinja2Templates(env=templates.env.overlay(autoescape=True))
 
 # Подпись сервиса в подвале (`_footer_signature.html`): версия и адрес
 # исходников. Версия берётся из манифеста (`app.__version__`), адрес — из
