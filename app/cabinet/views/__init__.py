@@ -17,9 +17,12 @@ from fastapi import APIRouter
 from app.cabinet.views import homework, index, login, logout, register
 from app.cabinet.views import (
     parent_finance,
+    parent_homework,
     parent_index,
+    parent_lessons,
     parent_login,
     parent_logout,
+    parent_notices,
     parent_profile,
     parent_register,
     parent_student_homework,
@@ -33,9 +36,15 @@ router.include_router(register.router)
 router.include_router(index.router)
 router.include_router(homework.router)
 # Кабинет родителя: публичные страницы первыми, затем страницы с сессией.
+# Общие страницы (`/parent/lessons`, `/parent/homework`) — до редиректов
+# `/parent/students/{id}`: статические маршруты раньше параметрических
+# (правило AGENTS.md 3, design D8).
 router.include_router(parent_register.router)
 router.include_router(parent_login.router)
 router.include_router(parent_logout.router)
+router.include_router(parent_lessons.router)
+router.include_router(parent_homework.router)
+router.include_router(parent_notices.router)
 router.include_router(parent_index.router)
 router.include_router(parent_student_lessons.router)
 router.include_router(parent_student_homework.router)

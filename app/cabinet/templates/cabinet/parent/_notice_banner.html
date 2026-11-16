@@ -1,0 +1,47 @@
+{# Контейнер плашек-предупреждений вверху страниц кабинета родителя
+   (change parent-cabinet-unified-pages, design D6) — зеркало
+   `app/templates/_notice_banner.html` репетитора: те же классы
+   (`notice-stack`, `notice-summary`) и та же Alpine-фабрика `noticeGroup`
+   (она не привязана к id контейнера). Включается на все четыре страницы
+   родителя сразу после открытия `main__container`.
+
+   Данные подгружают два независимых партиала (`hx-trigger="load"`) — в
+   кабинете родителя нет сохраняющих событий, поэтому `from:body`-триггеры
+   не нужны:
+
+   1. `/parent/notices/balance` — нехватка денег на занятия детей сегодня;
+   2. `/parent/notices/debt` — задолженность за прошедшие уроки (отрицательный
+      баланс ребёнка).
+
+   Сервер о количестве плашек не знает: партиалы приходят htmx-свопами уже
+   после отрисовки страницы, поэтому счётчик, скрытие и раскрытие —
+   клиентские (`noticeGroup` из notices.js). Плашка о деньгах идёт первой:
+   неоплаченное занятие важнее долга за прошлое. #}
+<div id="parent-notice-stack" x-data="noticeGroup">
+    <div class="notice-summary" x-show="count > 1" x-cloak>
+        <span class="notice-summary__icon" aria-hidden="true">
+            <i data-lucide="triangle-alert"></i>
+        </span>
+        <p class="notice-summary__title">
+            Требует внимания
+            <span class="notice-summary__dot" aria-hidden="true">·</span>
+            <span class="notice-summary__count" x-text="count">2</span>
+        </p>
+        <button class="notice-summary__toggle" type="button" @click="toggle()">
+            <span x-text="expanded ? 'Свернуть' : 'Показать'">Показать</span>
+            <i data-lucide="chevron-down"
+               class="notice-summary__chevron"
+               :class="expanded ? 'notice-summary__chevron--open' : ''"></i>
+        </button>
+    </div>
+    <div class="notice-stack__items" x-show="expanded">
+        <div id="parent-balance-notice"
+             hx-get="/parent/notices/balance"
+             hx-trigger="load"
+             hx-swap="innerHTML"></div>
+        <div id="parent-debt-notice"
+             hx-get="/parent/notices/debt"
+             hx-trigger="load"
+             hx-swap="innerHTML"></div>
+    </div>
+</div>

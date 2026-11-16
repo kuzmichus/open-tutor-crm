@@ -1,9 +1,11 @@
 """Тесты страниц кабинета родителя (change parent-cabinet).
 
-Регистрация по приглашению, вход, каркас `/parent` с секциями по детям,
-вкладки ребёнка (уроки, домашние задания), «Финансы», «Профиль», выход;
-бейдж «Личный кабинет» на миникарточке контакта; изоляция контактов и
-независимость трёх сессий (репетитор, ученик, родитель) в одном браузере.
+Регистрация по приглашению, вход, «Профиль», выход; бейдж «Личный
+кабинет» на миникарточке контакта; изоляция контактов и независимость
+трёх сессий (репетитор, ученик, родитель) в одном браузере. Общие
+страницы «Уроки» / «Домашние задания» / «Финансы» и редиректы вместо
+страниц ребёнка покрывает `test_parent_unified_pages.py`
+(change parent-cabinet-unified-pages).
 """
 
 from datetime import UTC, datetime, timedelta
@@ -213,48 +215,19 @@ def test_parent_login_wrong_password_generic_error(client, owner, contact_factor
 
 
 # --------------------------------------------------------------------------
-# 5.1 Каркас кабинета
+# 5.1 Каркас кабинета: плоское меню и редиректы вместо страниц ребёнка
 # --------------------------------------------------------------------------
 
 
-def test_parent_cabinet_requires_session(client):
-    assert client.get("/parent", follow_redirects=False).status_code == 303
-    assert (
-        client.get("/parent", follow_redirects=False).headers["location"]
-        == "/parent/login"
-    )
+def test_parent_lessons_requires_session(client):
+    """Общая страница «Уроки» требует сессию контакта: редирект на вход."""
+    response = client.get("/parent/lessons", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/parent/login"
 
 
-def test_parent_cabinet_sections_per_child(client, owner, student_factory, contact_factory):
-    """Секция на каждого ребёнка: имя и ссылки его страниц; общий итог."""
-    contact_id = _make_contact(owner)
-    first = student_factory(tutor_id=owner, first_name="Аня")
-    second = student_factory(tutor_id=owner, first_name="Боря")
-    archived = student_factory(
-        tutor_id=owner, first_name="Вера", status="archived"
-    )
-    for student in (first, second, archived):
-        _link(student, contact_id)
-    _seed_parent_access(contact_id)
-    client.post(
-        "/parent/login",
-        data={"email": "mama@example.com", "password": PASSWORD},
-    )
-
-    page = client.get("/parent").text
-    assert "Кабинет родителя" in page
-    for name in ("Аня", "Боря", "Вера"):
-        assert name in page
-    assert f'href="/parent/students/{first}"' in page
-    assert f'href="/parent/students/{first}/homework"' in page
-    assert f'href="/parent/students/{second}"' in page
-    assert 'href="/parent/finance"' in page
-    assert 'href="/parent/profile"' in page
-    # Архивный ребёнок наравне с активными (D5).
-    assert f'href="/parent/students/{archived}"' in page
-
-
-def test_parent_cabinet_without_children_common_items(client, owner, contact_factory):
+def test_parent_without_children_common_items(client, owner):
+    """Контакт без детей: «Уроки» открывается, меню и выход на месте."""
     contact_id = _make_contact(owner)
     _seed_parent_access(contact_id)
     client.post(
@@ -262,7 +235,7 @@ def test_parent_cabinet_without_children_common_items(client, owner, contact_fac
         data={"email": "mama@example.com", "password": PASSWORD},
     )
 
-    page = client.get("/parent").text
+    page = client.get("/parent/lessons").text
     assert "Кабинет родителя" in page
     assert 'href="/parent/finance"' in page
     assert 'href="/parent/profile"' in page
@@ -270,50 +243,13 @@ def test_parent_cabinet_without_children_common_items(client, owner, contact_fac
     assert 'action="/parent/logout"' in page
 
 
-# --------------------------------------------------------------------------
-# 5.2 Вкладка ребёнка «Мои уроки»
-# --------------------------------------------------------------------------
-
-
-def test_parent_child_lessons_nearest_first_no_past(
-    client, owner, student_factory, contact_factory, lesson_factory
-):
-    contact_id = _make_contact(owner)
-    student_id = student_factory(tutor_id=owner)
-    _link(student_id, contact_id)
-    _seed_parent_access(contact_id)
-    client.post(
-        "/parent/login",
-        data={"email": "mama@example.com", "password": PASSWORD},
-    )
-
-    # Прошедший урок не показывается; из будущих ближайший — первый.
-    # Даты относительно текущего момента: фиксированные даты протухают,
-    # когда тестовый день наступает (кабинет показывает только будущее).
-    past = utcnow() - timedelta(days=10)
-    nearest = utcnow() + timedelta(days=2)
-    later = utcnow() + timedelta(days=5)
-    lesson_factory(student_id=student_id, status="completed", starts_at=past)
-    lesson_factory(student_id=student_id, status="planned", starts_at=later)
-    lesson_factory(student_id=student_id, status="planned", starts_at=nearest)
-
-    page = client.get(f"/parent/students/{student_id}").text
-    assert "Ближайшее занятие" in page
-    assert "Запланированных занятий пока нет" not in page
-    # Порядок дат в разметке: ближайший раньше позднего (формат
-    # `lesson_date` — «ДД.ММ.ГГГГ»; у тестового репетитора зона UTC).
-    assert page.index(nearest.strftime("%d.%m.%Y")) < page.index(
-        later.strftime("%d.%m.%Y")
-    )
-    assert past.strftime("%d.%m.%Y") not in page
-
-
-def test_parent_child_group_lesson_visible(
+def test_parent_group_lesson_visible_with_group_name(
     client, owner, student_factory, group_factory, group_member_factory,
-    lesson_factory, contact_factory,
+    lesson_factory,
 ):
+    """Групповой урок ребёнка в сетке недели: «Имя · Группа»."""
     contact_id = _make_contact(owner)
-    student_id = student_factory(tutor_id=owner)
+    student_id = student_factory(tutor_id=owner, first_name="Аня")
     _link(student_id, contact_id)
     _seed_parent_access(contact_id)
     client.post(
@@ -321,7 +257,7 @@ def test_parent_child_group_lesson_visible(
         data={"email": "mama@example.com", "password": PASSWORD},
     )
 
-    group_id = group_factory(tutor_id=owner)
+    group_id = group_factory(tutor_id=owner, name="Алгебра-7")
     group_member_factory(group_id=group_id, student_id=student_id)
     lesson_factory(
         group_id=group_id,
@@ -330,11 +266,12 @@ def test_parent_child_group_lesson_visible(
         starts_at=utcnow() + timedelta(days=1),
     )
 
-    page = client.get(f"/parent/students/{student_id}").text
-    assert "Ближайшее занятие" in page
+    page = client.get("/parent/lessons").text
+    assert "Аня · Алгебра-7" in page
 
 
-def test_parent_child_unlinked_student_404(client, owner, student_factory, contact_factory):
+def test_parent_child_unlinked_student_404(client, owner, student_factory):
+    """Вкладки чужого ребёнка на общих страницах — 404; старые адреса — редирект."""
     contact_id = _make_contact(owner)
     _seed_parent_access(contact_id)
     client.post(
@@ -344,19 +281,24 @@ def test_parent_child_unlinked_student_404(client, owner, student_factory, conta
     stranger = student_factory(tutor_id=owner)
 
     for url in (
-        f"/parent/students/{stranger}",
-        f"/parent/students/{stranger}/homework",
+        f"/parent/homework?child={stranger}",
+        f"/parent/finance?child={stranger}",
     ):
         assert client.get(url).status_code == 404
+    # Старые адреса страницы ребёнка данных не отдают — редирект.
+    assert (
+        client.get(f"/parent/students/{stranger}", follow_redirects=False).status_code
+        == 303
+    )
 
 
 # --------------------------------------------------------------------------
-# 5.3 Вкладка ребёнка «Домашние задания»
+# 5.3 Страница «Домашние задания»
 # --------------------------------------------------------------------------
 
 
 def test_parent_child_homework_view_only_no_teacher_note(
-    client, owner, student_factory, contact_factory, lesson_factory
+    client, owner, student_factory, lesson_factory
 ):
     """Задания видны, заметки педагога в разметке нет, действий нет."""
     contact_id = _make_contact(owner)
@@ -368,11 +310,7 @@ def test_parent_child_homework_view_only_no_teacher_note(
         data={"email": "mama@example.com", "password": PASSWORD},
     )
 
-    lesson_id = lesson_factory(
-        student_id=student_id,
-        status="planned",
-        starts_at=datetime(2026, 11, 5, 15, 0, tzinfo=UTC),
-    )
+    lesson_id = lesson_factory(student_id=student_id, status="planned", price=0)
     with SessionLocal() as db:
         from app.homework.models.homework import Homework
 
@@ -387,7 +325,7 @@ def test_parent_child_homework_view_only_no_teacher_note(
         )
         db.commit()
 
-    page = client.get(f"/parent/students/{student_id}/homework").text
+    page = client.get(f"/parent/homework?child={student_id}").text
     assert "Страница 12, упражнения 3–5" in page
     assert "Комментарий для ученика" in page
     assert "Задано" in page
@@ -401,14 +339,14 @@ def test_parent_child_homework_view_only_no_teacher_note(
 
 
 # --------------------------------------------------------------------------
-# 5.4 Вкладка «Финансы»
+# 5.4 Страница «Финансы»
 # --------------------------------------------------------------------------
 
 
 def test_parent_finance_blocks_and_total(
-    client, owner, student_factory, contact_factory, operation_factory
+    client, owner, student_factory, operation_factory
 ):
-    """Двое детей — два блока с их операциями; итог суммирует; плательщик не назначен."""
+    """Итог по всем детям на любой вкладке; на вкладке — операции этого ребёнка."""
     contact_id = _make_contact(owner)
     first = student_factory(tutor_id=owner, first_name="Аня")
     second = student_factory(tutor_id=owner, first_name="Боря")
@@ -425,14 +363,9 @@ def test_parent_finance_blocks_and_total(
     operation_factory(student_id=second, kind="lesson", amount=600)
 
     page = client.get("/parent/finance").text
-    for name in ("Аня", "Боря"):
-        assert name in page
     assert "Общий баланс" in page
     # Итог: 3000 + (1500 − 600) = 3 900 ₽ (money() — неразрывные пробелы).
     assert "3\u00a0900\u00a0₽" in page
-    # Операции каждого ребёнка в его блоке: подпись списания и сумма.
-    assert "Урок" in page
-    assert "600\u00a0₽" in page
 
 
 # --------------------------------------------------------------------------
@@ -569,9 +502,9 @@ def test_contact_badge_three_states_in_student_form(
 
 
 def test_contact_session_cannot_open_other_contact_child(
-    client, owner, student_factory, contact_factory
+    client, owner, student_factory
 ):
-    """Сессия контакта A не открывает страницы ребёнка контакта B."""
+    """Сессия контакта A не открывает данные ребёнка контакта B."""
     own_contact = _make_contact(owner)
     own_student = student_factory(tutor_id=owner, first_name="Аня")
     _link(own_student, own_contact)
@@ -585,12 +518,12 @@ def test_contact_session_cannot_open_other_contact_child(
         data={"email": "own@example.com", "password": PASSWORD},
     )
 
-    # Своё видно, чужое — 404 (неразличимо с несуществующим).
-    assert client.get(f"/parent/students/{own_student}").status_code == 200
-    assert client.get(f"/parent/students/{other_student}").status_code == 404
-    assert (
-        client.get(f"/parent/students/{other_student}/homework").status_code == 404
-    )
+    # Своё видно, чужое — 404 (неразличимо с несуществующим). Вкладка
+    # выбирается параметром `?child=`, поэтому изоляция проверяется на ней.
+    assert client.get("/parent/lessons").status_code == 200
+    assert client.get(f"/parent/homework?child={own_student}").status_code == 200
+    assert client.get(f"/parent/homework?child={other_student}").status_code == 404
+    assert client.get(f"/parent/finance?child={other_student}").status_code == 404
 
 
 def test_contact_action_between_tutors_isolated(
@@ -656,7 +589,7 @@ def test_three_sessions_coexist_in_one_client(
 # --------------------------------------------------------------------------
 
 def test_parent_child_homework_lists_files(
-    client, owner, student_factory, contact_factory, lesson_factory
+    client, owner, student_factory, lesson_factory
 ):
     """Родитель видит прикреплённые к заданию файлы со ссылкой на скачивание."""
     from app.files.models.homework_file import HomeworkFile
@@ -697,7 +630,7 @@ def test_parent_child_homework_lists_files(
         db.commit()
         file_id = file.id
 
-    page = client.get(f"/parent/students/{student_id}/homework").text
+    page = client.get(f"/parent/homework?child={student_id}").text
 
     assert "условие.pdf" in page
     assert f'href="/files/{file_id}"' in page

@@ -1,15 +1,18 @@
-{# Общая вкладка «Финансы» кабинета родителя (change parent-cabinet).
+{# Страница «Финансы» кабинета родителя — вкладки по детям (change
+   parent-cabinet-unified-pages, design D7).
 
-   Блоки по каждому привязанному ребёнку: баланс, сумма пополнений и
-   история операций — плюс общий итог (сумма балансов). Данные видны
-   независимо от роли плательщика (решение владельца, design D8):
-   плательщик — роль для расчётов, а не разграничение видимости.
+   Общая плашка итога «Общий баланс по детям» сохраняется на любой
+   вкладке; ниже — вкладки по детям и блок активного ребёнка: баланс,
+   сумма пополнений и история операций. Ограничение выборки активным
+   ребёнком делает шаблон по `active_child` — сервис `finance_overview`
+   не меняется (блоки по всем детям нужны итогу).
 
    Деньги и подписи операций — хелперы модуля финансов (`money`,
    `signed_money`, `operation_kind_label`, `operation_datetime`), регистр
    дат — в зоне репетитора, как во всей CRM.
 
-   Контекст: contact, children, blocks (список ChildFinance), total. #}
+   Контекст: contact, children, tutor, blocks (список ChildFinance),
+   total, active_child (ученик вкладки либо None). #}
 {% extends "base.html" %}
 {% block title %}Финансы — Open Tutor CRM{% endblock %}
 
@@ -27,6 +30,10 @@
 
 <main class="main">
     <div class="main__container">
+        {# Плашки-предупреждения: нехватка на сегодня и задолженность
+           (change parent-cabinet-unified-pages, design D6). #}
+        {% include "cabinet/parent/_notice_banner.html" %}
+
         <div class="page-header">
             <div>
                 <h1>Финансы</h1>
@@ -34,54 +41,68 @@
             </div>
         </div>
 
-        {# Общий итог: сумма балансов всех привязанных детей. #}
+        {# Общий итог: сумма балансов всех привязанных детей, виден на
+           любой вкладке. #}
         <section class="card parent-finance__total">
             <span class="parent-finance__total-label">Общий баланс по детям</span>
             <span class="parent-finance__total-value">{{ money(total) }}</span>
         </section>
 
-        {% for block in blocks %}
-        <section class="card parent-finance__child">
-            <h2 class="parent-finance__name">{{ student_full_name(block.student) }}</h2>
+        {% set base_url = '/parent/finance' %}
+        {% include "cabinet/parent/_child_tabs.html" %}
 
-            <div class="parent-finance__cards">
-                <div class="parent-finance__metric">
-                    <span class="parent-finance__metric-label">Баланс</span>
-                    <span class="parent-finance__metric-value">{{ money(block.balance) }}</span>
-                </div>
-                <div class="parent-finance__metric">
-                    <span class="parent-finance__metric-label">Пополнения</span>
-                    <span class="parent-finance__metric-value">{{ money(block.payments_total) }}</span>
-                </div>
-            </div>
+        {% if active_child %}
+            {% for block in blocks %}
+            {% if block.student.id == active_child.id %}
+            <section class="card parent-finance__child">
+                <h2 class="parent-finance__name">{{ student_full_name(block.student) }}</h2>
 
-            {% if block.history %}
-            <table class="cabinet-table">
-                <caption class="sr-only">
-                    История операций {{ student_full_name(block.student) }}: дата, операция, сумма
-                </caption>
-                <thead>
-                <tr>
-                    <th scope="col">Дата</th>
-                    <th scope="col">Операция</th>
-                    <th scope="col">Сумма</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for operation in block.history %}
-                <tr>
-                    <td class="cabinet-table__date">{{ operation_datetime(operation.occurred_at, tutor) }}</td>
-                    <td class="cabinet-table__type">{{ operation_kind_label(operation) }}</td>
-                    <td class="cabinet-table__time">{{ signed_money(operation) }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <p class="cabinet-empty">Операций пока нет.</p>
+                <div class="parent-finance__cards">
+                    <div class="parent-finance__metric">
+                        <span class="parent-finance__metric-label">Баланс</span>
+                        <span class="parent-finance__metric-value">{{ money(block.balance) }}</span>
+                    </div>
+                    <div class="parent-finance__metric">
+                        <span class="parent-finance__metric-label">Пополнения</span>
+                        <span class="parent-finance__metric-value">{{ money(block.payments_total) }}</span>
+                    </div>
+                </div>
+
+                {% if block.history %}
+                <table class="cabinet-table">
+                    <caption class="sr-only">
+                        История операций {{ student_full_name(block.student) }}: дата, операция, сумма
+                    </caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">Дата</th>
+                        <th scope="col">Операция</th>
+                        <th scope="col">Сумма</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for operation in block.history %}
+                    <tr>
+                        <td class="cabinet-table__date">{{ operation_datetime(operation.occurred_at, tutor) }}</td>
+                        <td class="cabinet-table__type">{{ operation_kind_label(operation) }}</td>
+                        <td class="cabinet-table__time">{{ signed_money(operation) }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="cabinet-empty">Операций пока нет.</p>
+                {% endif %}
+            </section>
             {% endif %}
-        </section>
-        {% endfor %}
+            {% endfor %}
+        {% else %}
+        <div class="card">
+            <p class="cabinet-empty">
+                Ученики пока не привязаны к вашему профилю. Общий баланс появится здесь после привязки.
+            </p>
+        </div>
+        {% endif %}
     </div>
 </main>
 {% endblock %}

@@ -1,22 +1,26 @@
-{# Вкладка ребёнка «Домашние задания» кабинета родителя (change parent-cabinet).
+{# Страница «Домашние задания» кабинета родителя — вкладки по детям (change
+   parent-cabinet-unified-pages).
 
-   Только просмотр (design D7): карточки без действий — отправлять ответы
-   и менять данные родитель не может. Разметка карточки повторяет классы
-   вкладки ученика (`hw-card*` из `cabinet/_homework_card.html`), но без
-   `<details>` и формы ответа: задание видно сразу, раскрывать нечего.
-   Контекст карточки собран сервисом `cabinet/services/child_homework.py`
-   явным списком колонок: заметки педагога в данных нет в принципе —
-   скрытие гарантируется выборкой, а не условием в шаблоне.
+   Заменяет вкладку ребёнка: одна страница, серверные вкладки по детям
+   (`?child=<id>`), карточки активного ребёнка — те же `hw-card*`, что
+   были на странице ребёнка. Только просмотр: отправлять ответы и менять
+   данные родитель не может.
 
-   Подписи статусов и срока — общие хелперы кабинета (presentation.py).
-   Контекст: contact, children, child (ученик вкладки), tutor, cards
-   (список ChildHomeworkCard). #}
+   Плашка срока (design D5) — один блок над вкладками, вне notice-stack:
+   другой источник данных (состав горящих заданий) и другое закрытие
+   (Alpine `noticeBanner` с ключом «день + id заданий» из
+   `homework_deadline_notice.close_key()`). Заметки педагога в контексте
+   нет в принципе — скрытие гарантируется выборкой, а не условием в
+   шаблоне (`cabinet/services/child_homework.py`).
+
+   Контекст: contact, children, tutor, active_child (активный ученик либо None),
+   cards (список ChildHomeworkCard), deadline (HomeworkDeadlineNotice
+   либо None), deadline_key. #}
 {% extends "base.html" %}
-{% block title %}Домашние задания — {{ student_full_name(child) }} — Open Tutor CRM{% endblock %}
+{% block title %}Домашние задания — Open Tutor CRM{% endblock %}
 
 {% block body %}
 {% set active_page = 'homework' %}
-{% set active_student_id = child.id %}
 {% include "cabinet/parent/_sidebar.html" %}
 
 <!-- Мобильная шапка -->
@@ -29,57 +33,92 @@
 
 <main class="main">
     <div class="main__container">
+        {# Плашки-предупреждения: нехватка на сегодня и задолженность
+           (change parent-cabinet-unified-pages, design D6). Плашка срока
+           ДЗ — ниже, отдельным блоком: другой источник и закрытие. #}
+        {% include "cabinet/parent/_notice_banner.html" %}
+
         <div class="page-header">
             <div>
-                <h1>{{ student_full_name(child) }}</h1>
-                <p>Домашние задания — только просмотр</p>
+                <h1>Домашние задания</h1>
+                <p>Задания всех детей — только просмотр</p>
             </div>
         </div>
 
-        {% if cards %}
-        <div class="hw-list">
-            {% for item in cards %}
-            <article class="hw-card">
-                <div class="hw-card__head">
-                    <span class="hw-card__title">
-                        {{ lesson_date(item.lesson_starts_at, tutor) }}
-                        · {{ lesson_type_chip(item.lesson_type) }}
-                    </span>
-                    <span class="chip {{ homework_chip_class(item.status) }}">
-                        {{ homework_status_label(item.status) }}
-                    </span>
-                </div>
-
-                <div class="hw-card__body">
-                    <p class="hw-card__assignment">{{ item.assignment }}</p>
-
-                    {% if item.due_at %}
-                    <p class="hw-card__due">Срок: {{ homework_due_label(item.due_at, tutor) }}</p>
-                    {% endif %}
-                    {% if item.teacher_comment %}
-                    <p class="hw-card__comment">
-                        <span class="hw-card__comment-label">Комментарий педагога:</span>
-                        {{ item.teacher_comment }}
-                    </p>
-                    {% endif %}
-                    {% if item.recording_url %}
-                    <p class="hw-card__recording">
-                        <a href="{{ item.recording_url }}" target="_blank" rel="noopener">Запись урока</a>
-                    </p>
-                    {% endif %}
-                    {# Файлы задания: родитель только скачивает — кнопки
-                       удаления нет (`editable` не задан). #}
-                    {% if item.files %}
-                    {% set files = item.files %}
-                    {% include "homework/_files.html" %}
-                    {% endif %}
-                </div>
-            </article>
-            {% endfor %}
+        {% if deadline %}
+        {# Плашка срока: срок истекает сегодня или уже истёк у задания
+           любого ребёнка. Закрытие запоминается в localStorage, пока не
+           изменится состав (день + id заданий). #}
+        <div class="notice-banner" role="status"
+             x-data="noticeBanner('{{ deadline_key }}')" x-show="open" x-cloak>
+            <span class="notice-banner__icon" aria-hidden="true">
+                <i data-lucide="clock"></i>
+            </span>
+            <div class="notice-banner__body">
+                <p class="notice-banner__text">{{ homework_deadline_label(deadline.count) }}</p>
+            </div>
+            <button class="notice-banner__close" type="button"
+                    @click="close()" aria-label="Скрыть напоминание">
+                <i data-lucide="x"></i>
+            </button>
         </div>
+        {% endif %}
+
+        {% set base_url = '/parent/homework' %}
+        {% include "cabinet/parent/_child_tabs.html" %}
+
+        {% if active_child %}
+            {% if cards %}
+            <div class="hw-list">
+                {% for item in cards %}
+                <article class="hw-card">
+                    <div class="hw-card__head">
+                        <span class="hw-card__title">
+                            {{ lesson_date(item.lesson_starts_at, tutor) }}
+                            · {{ lesson_type_chip(item.lesson_type) }}
+                        </span>
+                        <span class="chip {{ homework_chip_class(item.status) }}">
+                            {{ homework_status_label(item.status) }}
+                        </span>
+                    </div>
+
+                    <div class="hw-card__body">
+                        <p class="hw-card__assignment">{{ item.assignment }}</p>
+
+                        {% if item.due_at %}
+                        <p class="hw-card__due">Срок: {{ homework_due_label(item.due_at, tutor) }}</p>
+                        {% endif %}
+                        {% if item.teacher_comment %}
+                        <p class="hw-card__comment">
+                            <span class="hw-card__comment-label">Комментарий педагога:</span>
+                            {{ item.teacher_comment }}
+                        </p>
+                        {% endif %}
+                        {% if item.recording_url %}
+                        <p class="hw-card__recording">
+                            <a href="{{ item.recording_url }}" target="_blank" rel="noopener">Запись урока</a>
+                        </p>
+                        {% endif %}
+                        {# Файлы задания: родитель только скачивает — кнопки
+                           удаления нет (`editable` не задан). #}
+                        {% if item.files %}
+                        {% set files = item.files %}
+                        {% include "homework/_files.html" %}
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card">
+                <p class="cabinet-empty">У {{ student_full_name(active_child) }} домашних заданий пока нет.</p>
+            </div>
+            {% endif %}
         {% else %}
         <div class="card">
-            <p class="cabinet-empty">Домашних заданий пока нет.</p>
+            <p class="cabinet-empty">
+                Ученики пока не привязаны к вашему профилю. Домашние задания появятся здесь после привязки.
+            </p>
         </div>
         {% endif %}
     </div>

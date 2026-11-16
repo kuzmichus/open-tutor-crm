@@ -1,19 +1,30 @@
-{# Вкладка ребёнка «Мои уроки» кабинета родителя (change parent-cabinet).
+{# Страница «Уроки» кабинета родителя — сетка недели всех детей (change
+   parent-cabinet-unified-pages).
 
-   Тот же CRM-каркас, что у кабинета ученика; список строит сервис
-   `cabinet/services/lessons.py` (переиспользование, design D6) —
-   ближайшие запланированные уроки, индивидуальные и групповые. Время
-   выводится в зоне репетитора (design: своя зона родителя — после
-   появления «Профиля»).
+   Заменяет вкладку ребёнка «Мои уроки»: одна страница показывает занятия
+   всех детей, ось карточки — «который из детей» (имя в подписи, цвет —
+   цвет ребёнка). Тот же визуальный компонент `.cal-*`, что у репетитора
+   и кабинета ученика, но строго для чтения (карточка не открывается и не
+   переносится). Карточка «Ближайшее занятие» осталась: ближайшее среди
+   всех детей, с именами детей этого занятия.
 
-   Контекст: contact, children, child (ученик вкладки), tutor, lessons,
-   nearest (первый элемент lessons либо None). #}
+   Разметка области живёт в `cabinet/parent/_lessons_calendar.html` — она
+   же отдаётся фрагментом при листании недель (`hx-target="#parent-calendar"`).
+
+   Время выводится в зоне первого ребёнка (решение владельца: как у
+   ученика; без пояса у ребёнка — зона педагога) — и в сетке
+   (`timezone_label` из сервиса), и в плашке «Ближайшее занятие»
+   (`display_zone`).
+
+   Контекст: contact, tutor, nearest (урок либо None), nearest_names,
+   display_zone (носитель зоны отображения), и всё из
+   `parent_calendar_context()` — days, grid_rows, range_title,
+   prev_start/next_start, timezone_label, is_empty. #}
 {% extends "base.html" %}
-{% block title %}Мои уроки — {{ student_full_name(child) }} — Open Tutor CRM{% endblock %}
+{% block title %}Уроки — Open Tutor CRM{% endblock %}
 
 {% block body %}
 {% set active_page = 'lessons' %}
-{% set active_student_id = child.id %}
 {% include "cabinet/parent/_sidebar.html" %}
 
 <!-- Мобильная шапка -->
@@ -26,10 +37,14 @@
 
 <main class="main">
     <div class="main__container">
+        {# Плашки-предупреждения: нехватка на сегодня и задолженность
+           (change parent-cabinet-unified-pages, design D6). #}
+        {% include "cabinet/parent/_notice_banner.html" %}
+
         <div class="page-header">
             <div>
-                <h1>{{ student_full_name(child) }}</h1>
-                <p>Ближайшие запланированные занятия</p>
+                <h1>Уроки</h1>
+                <p>Расписание занятий всех детей на неделю</p>
             </div>
         </div>
 
@@ -37,39 +52,22 @@
         <section class="card cabinet-nearest">
             <span class="cabinet-nearest__label">Ближайшее занятие</span>
             <span class="cabinet-nearest__when">
-                {{ lesson_datetime(nearest.starts_at, tutor) }}
-                · {{ lesson_time_span(nearest, tutor) }}
+                {{ lesson_datetime(nearest.starts_at, display_zone) }}
+                · {{ lesson_time_span(nearest, display_zone) }}
+                {% if nearest_names %}· {{ nearest_names }}{% endif %}
             </span>
         </section>
         {% endif %}
 
-        {% if lessons %}
-        <div class="card">
-            <table class="cabinet-table">
-                <caption class="sr-only">Ближайшие уроки: дата, время, тип занятия</caption>
-                <thead>
-                <tr>
-                    <th scope="col">Дата</th>
-                    <th scope="col">Время</th>
-                    <th scope="col">Занятие</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for lesson in lessons %}
-                <tr>
-                    <td class="cabinet-table__date">{{ lesson_date(lesson.starts_at, tutor) }}</td>
-                    <td class="cabinet-table__time">{{ lesson_time_span(lesson, tutor) }}</td>
-                    <td class="cabinet-table__type">{{ lesson_type_chip(lesson.type) }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="card">
-            <p class="cabinet-empty">Запланированных занятий пока нет.</p>
-        </div>
-        {% endif %}
+        {# Календарь только для чтения: перенос, открытие и редактирование
+           занятий из кабинета родителя недоступны. `#parent-calendar` —
+           корень области подмены: htmx меняет его `innerHTML`, поэтому
+           каркас карточки при листании недель не перерисовывается. #}
+        <section class="card cabinet-calendar">
+            <div id="parent-calendar" class="cabinet-calendar__area">
+                {% include "cabinet/parent/_lessons_calendar.html" %}
+            </div>
+        </section>
     </div>
 </main>
 {% endblock %}

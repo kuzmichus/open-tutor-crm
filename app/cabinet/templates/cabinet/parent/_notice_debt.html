@@ -1,0 +1,24 @@
+{# Плашка «задолженность за прошедшие уроки» — ответ партиала
+   /parent/notices/debt (change parent-cabinet-unified-pages, design D6).
+
+   Контекст: notice ({names, total, student_ids}), notice_key. Подпись —
+   `parent_debt_label` из presentation-модуля кабинета: дети с долгом и
+   общий размер. Закрытие — Alpine `noticeBanner`: ключ — состав
+   должников и сумма; погасили долг (платёж) — сервер не рендерит
+   разметку вовсе. #}
+<div class="notice-banner notice-banner--danger" role="status"
+     x-data="noticeBanner('{{ notice_key }}')" x-show="open" x-cloak>
+    <span class="notice-banner__icon" aria-hidden="true">
+        <i data-lucide="hand-coins"></i>
+    </span>
+    <div class="notice-banner__body">
+        <p class="notice-banner__text">
+            {{ parent_debt_label(notice.names, notice.total) }}
+            <a class="notice-banner__link" href="/parent/finance">Открыть</a>
+        </p>
+    </div>
+    <button class="notice-banner__close" type="button"
+            @click="close()" aria-label="Скрыть напоминание">
+        <i data-lucide="x"></i>
+    </button>
+</div>
