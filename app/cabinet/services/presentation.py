@@ -101,6 +101,36 @@ def homework_badge_label(status: str) -> str:
     return homework_status_label(status)
 
 
+def _plural(count: int, one: str, few: str, many: str) -> str:
+    """Форма существительного по числу: правило последней цифры, кроме 11–14."""
+    if count % 10 == 1 and count % 100 != 11:
+        return one
+    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        return few
+    return many
+
+
+def homework_deadline_label(count: int) -> str:
+    """«У 1 задания истекает срок сдачи»; подпись плашки срока ДЗ родителя.
+
+    Число — количество заданий всех детей с горящим сроком: плашка общая,
+    поэтому имена не перечисляются, а состав виден по вкладкам ниже.
+    """
+    return f"У {count} {_plural(count, 'задания', 'заданий', 'заданий')} истекает срок сдачи"
+
+
+def parent_debt_label(names: list[str], total: int) -> str:
+    """«Задолженность за прошедшие уроки: Аня, Боря — 1 500 ₽».
+
+    Подпись плашки о задолженности: перечисляются дети с отрицательным
+    балансом, сумма — общий долг по ним. Деньги — через `money()`,
+    чтобы сумма читалась так же, как в счёте.
+    """
+    from app.finance.services.presentation import money
+
+    return f"Задолженность за прошедшие уроки: {', '.join(names)} — {money(total)}"
+
+
 def register_template_helpers() -> None:
     """Регистрирует функции отображения в общем Jinja-окружении."""
     from app.templating import templates
@@ -112,4 +142,6 @@ def register_template_helpers() -> None:
         homework_chip_class=homework_chip_class,
         homework_badge_class=homework_badge_class,
         homework_badge_label=homework_badge_label,
+        homework_deadline_label=homework_deadline_label,
+        parent_debt_label=parent_debt_label,
     )

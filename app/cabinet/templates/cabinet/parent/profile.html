@@ -22,6 +22,11 @@
 
 <main class="main">
     <div class="main__container">
+        {# Плашки-предупреждения: нехватка на сегодня и задолженность
+           (change parent-cabinet-unified-pages, design D6) — на всех
+           страницах кабинета по одним правилам (спека cabinet-notices). #}
+        {% include "cabinet/parent/_notice_banner.html" %}
+
         <div class="page-header">
             <div>
                 <h1>Профиль</h1>

@@ -2,23 +2,23 @@
    (`.sidebar`, `.nav-item`, `.sidebar__footer`) — интерфейс кабинета
    повторяет кабинет репетитора (решение владельца, design D4/D5).
 
-   Навигация: секция на каждого привязанного ребёнка (имя ученика и ссылки
-   «Мои уроки» и «Домашние задания») плюс общие «Финансы» и «Профиль».
-   Дети в архиве показываются наравне с активными (D5): иначе навигация
-   разошлась бы с «Финансами», где их история остаётся видна. У контакта
-   без детей секций нет — остаются общие пункты (спека).
+   Навигация плоская (change parent-cabinet-unified-pages, design D1):
+   четыре пункта — «Уроки», «Домашние задания», «Финансы», «Профиль» —
+   без секций по детям. Страницы общие для всех детей, поэтому активность
+   определяется только разделом, без выбора ребёнка; дети в архиве на
+   меню не влияют — они и так учитываются на общих страницах, иначе
+   навигация разошлась бы с «Финансами», где их история остаётся видимой.
 
    Тема и сворачивание работают общим `app.js`: `data-theme-toggle` -
    кнопки переключают класс `.dark` на <html>, `data-sidebar-toggle` /
    `data-sidebar-open` - сайдбар.
 
    Использование:
-       {% set active_page = 'lessons' %}{% set active_student_id = child.id %}
-       {% include "cabinet/parent/_sidebar.html" %}
+       {% set active_page = 'lessons' %}{% include "cabinet/parent/_sidebar.html" %}
 
-   Контекст: contact (строка контакта), children (список учеников). #}
+   Контекст: contact (строка контакта); children не нужен — меню от
+   состава детей не зависит (спека parent-cabinet, «Плоское меню»). #}
 {% set _active = active_page | default('') %}
-{% set _active_child = active_student_id | default('') %}
 <aside class="sidebar" aria-label="Навигация кабинета">
 
     <div class="sidebar__header">
@@ -37,30 +37,20 @@
     </button>
 
     <nav class="sidebar__nav" id="parent-nav">
-        {% for child in children %}
-        {# Секция ребёнка: имя и две его страницы. Активность — пара
-           «раздел + ребёнок», у двух детей одна вкладка не может быть
-           активной одновременно. #}
-        <div class="parent-nav__section">
-            <span class="parent-nav__heading" title="{{ student_full_name(child) }}">
-                {{ student_full_name(child) }}
-            </span>
-            <a href="/parent/students/{{ child.id }}"
-               class="nav-item{% if _active == 'lessons' and _active_child == child.id %} nav-item--active{% endif %}"
-               title="Мои уроки"
-               {% if _active == 'lessons' and _active_child == child.id %}aria-current="page"{% endif %}>
-                <i data-lucide="book-open"></i>
-                <span>Мои уроки</span>
-            </a>
-            <a href="/parent/students/{{ child.id }}/homework"
-               class="nav-item{% if _active == 'homework' and _active_child == child.id %} nav-item--active{% endif %}"
-               title="Домашние задания"
-               {% if _active == 'homework' and _active_child == child.id %}aria-current="page"{% endif %}>
-                <i data-lucide="file-text"></i>
-                <span>Домашние задания</span>
-            </a>
-        </div>
-        {% endfor %}
+        <a href="/parent/lessons"
+           class="nav-item{% if _active == 'lessons' %} nav-item--active{% endif %}"
+           title="Уроки"
+           {% if _active == 'lessons' %}aria-current="page"{% endif %}>
+            <i data-lucide="book-open"></i>
+            <span>Уроки</span>
+        </a>
+        <a href="/parent/homework"
+           class="nav-item{% if _active == 'homework' %} nav-item--active{% endif %}"
+           title="Домашние задания"
+           {% if _active == 'homework' %}aria-current="page"{% endif %}>
+            <i data-lucide="file-text"></i>
+            <span>Домашние задания</span>
+        </a>
 
         <hr class="nav-divider">
 

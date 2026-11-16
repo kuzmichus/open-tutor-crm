@@ -519,26 +519,9 @@
     padding: calc(var(--space) * 2);
   }
 
-  /* Секция ребёнка в сайдбаре кабинета родителя (change parent-cabinet):
-     имя-заголовок и две его страницы. Классы навигации — те же `.nav-item`. */
-  .parent-nav__section {
-    display: flex;
-    flex-direction: column;
-    gap: calc(var(--space) * 1);
-    margin-bottom: calc(var(--space) * 2);
-  }
-
-  .parent-nav__heading {
-    padding: calc(var(--space) * 2) calc(var(--space) * 3) calc(var(--space) * 1);
-    color: var(--muted-foreground);
-    font-size: var(--text-xs);
-    font-weight: var(--font-medium);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  /* Сайдбар кабинета родителя плоский (change
+     parent-cabinet-unified-pages): секции по детям убраны вместе с их
+     классами, пункты — общие `.nav-item`. */
 
   .sidebar__footer {
     flex: none;
@@ -9537,36 +9520,56 @@
     color: var(--destructive);
   }
 
+  /* Звёздочка оценки «★ N» в карточке кабинета (change
+     parent-cabinet-unified-pages): золото читается и на обычной, и на
+     серой карточке прошедшего урока — оценка не должна гаснуть вместе
+     с ней. Токен `--warning-fg`, а не литерал: в тёмной теме это золото,
+     в светлой — тёмный янтарный, оба видны на фоне карточки. */
+  .cal-event__rating {
+    flex: 0 0 auto;
+    font-weight: var(--font-semibold);
+    color: var(--warning-fg);
+  }
+
   /* ---- Кабинет родителя (change parent-cabinet): те же токены, что у
      CRM; сайдбар переиспользует `.sidebar*`, таблицы — `.cabinet-table`. ---- */
 
-  /* Главная страница: карточки-секции по детям и общий пункт. */
-  .parent-overview {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: calc(var(--space) * 3);
-
-    @media (min-width: 640px) {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  .parent-overview__child {
-    display: flex;
-    flex-direction: column;
-    gap: calc(var(--space) * 3);
-  }
-
-  .parent-overview__name {
-    margin: 0;
-    font-size: var(--text-lg);
-    font-weight: var(--font-medium);
-  }
-
-  .parent-overview__links {
+  /* Серверные вкладки по детям на общих страницах («Домашние задания»,
+     «Финансы», change parent-cabinet-unified-pages): обычные ссылки,
+     работают без JS. Строка вкладок прижата к карточкам ниже. */
+  .parent-tabs {
     display: flex;
     flex-wrap: wrap;
     gap: calc(var(--space) * 2);
+    margin-bottom: calc(var(--space) * 4);
+  }
+
+  .parent-tabs__tab {
+    padding: calc(var(--space) * 2) calc(var(--space) * 4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    color: var(--muted-foreground);
+    font-size: var(--text-sm);
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease),
+                background var(--duration-fast) var(--ease);
+  }
+
+  .parent-tabs__tab:hover {
+    color: var(--foreground);
+    background: var(--muted);
+  }
+
+  .parent-tabs__tab--active {
+    border-color: var(--brand);
+    background: var(--brand);
+    color: var(--brand-foreground);
+    font-weight: var(--font-medium);
+  }
+
+  .parent-tabs__tab--active:hover {
+    color: var(--brand-foreground);
+    background: var(--brand);
   }
 
   /* Вкладка «Финансы»: общий итог сверху и метрики по ребёнку. */

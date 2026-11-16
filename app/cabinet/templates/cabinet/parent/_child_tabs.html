@@ -1,0 +1,27 @@
+{# Серверные вкладки по детям на общих страницах кабинета родителя
+   (change parent-cabinet-unified-pages, design D4).
+
+   Активная вкладка — параметр адреса, поэтому это обычные ссылки: работают
+   без JS, переключение не требует Alpine-состояния, а контент вкладок всё
+   равно собирается на сервере. Активность — только по id активного ребёнка;
+   у контакта без детей вкладок нет (страницы сами показывают пустые
+   состояния).
+
+   Использование:
+       {% set base_url = '/parent/homework' %}
+       {% include "cabinet/parent/_child_tabs.html" %}
+
+   Контекст: children (список учеников), active_child (ученик вкладки
+   либо None), base_url (адрес страницы — «/parent/homework» или
+   «/parent/finance»). #}
+{% if children %}
+<nav class="parent-tabs" aria-label="Дети">
+    {% for kid in children %}
+    <a class="parent-tabs__tab{% if active_child and kid.id == active_child.id %} parent-tabs__tab--active{% endif %}"
+       href="{{ base_url }}?child={{ kid.id }}"
+       {% if active_child and kid.id == active_child.id %}aria-current="page"{% endif %}>
+        {{ student_full_name(kid) }}
+    </a>
+    {% endfor %}
+</nav>
+{% endif %}
