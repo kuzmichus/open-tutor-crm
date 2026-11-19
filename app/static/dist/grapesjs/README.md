@@ -25,10 +25,37 @@
 | `grapes.min.css` | стили интерфейса и канваса | `fb55e939b3349c280d68c0617dc87e56baa3eab55ea56a1855db9f5efcc7268d` |
 | `LICENSE` | текст лицензии из npm-пакета | `1a7603ac82661e3ec4f0ad015e37f68ab62c85c725f07659b81760edb459ff8d` |
 | `i18n-ru.js` | русский словарь UI (собственный файл проекта) | — |
+| `font-awesome/css/font-awesome.min.css` | иконки панелей GrapesJS (правлена только `@font-face`) | `57b7a3aedf438f8c4bf4686bcfdadacfc31008a63c6cf72b1352f8061b439ca5` |
+| `font-awesome/fonts/fontawesome-webfont.woff2` | шрифт иконок (основной формат) | `2adefcbc041e7d18fcf2d417879dc5a09997aa64d675b7a3c4b6ce33da13f3fe` |
+| `font-awesome/fonts/fontawesome-webfont.woff` | шрифт иконок (запасной формат) | `ba0c59deb5450f5cb41b3f93609ee2d0d995415877ddfa223e8a8a7533474f07` |
 
 Файлы `grapes.min.js` и `grapes.min.css` скопированы из пакета байт в байт
 и не пересобираются. Версия видна в баннере начала `grapes.min.js`:
 `/*! grapesjs - 0.23.9 */`.
+
+## Иконки Font Awesome
+
+Панели GrapesJS подписаны классами Font Awesome 4.7.0 (`fa fa-cog`,
+`fa fa-eye`, `fa fa-bars`, …), зашитыми в ядро. Ядро по умолчанию само
+вставляет в `<head>` ссылку на
+`https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css`,
+поэтому в редакторе (`app/landing/templates/landing/editor.html`) стили
+подключены локальным тегом `<link>`, а автоподключение отключено опцией
+`cssIcons: ''`.
+
+Файлы взяты из npm-пакета `font-awesome@4.7.0`; в наборе оставлены только
+CSS и два шрифтовых формата (`woff2` и `woff`). В `@font-face` убраны ссылки
+на непоставленные `eot`/`ttf`/`svg` — иначе старый браузер запрашивал бы
+отсутствующий файл и получал 404. Остальной CSS не менялся: селекторы
+`fa fa-*` и коды иконок совпадают с дистрибутивом.
+Лицензии — в `font-awesome/LICENSE.md` (шрифт SIL OFL 1.1, CSS MIT).
+
+## Телеметрия
+
+GrapesJS 0.23.9 по умолчанию отправляет `POST` на
+`https://app.grapesjs.com/api/gjs/telemetry/collect`. Приложение работает без
+внешних запросов, поэтому в init передаётся `telemetry: false`; встраивать
+патч в `grapes.min.js` не нужно.
 
 ## Русская локаль
 

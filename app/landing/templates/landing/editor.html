@@ -6,11 +6,19 @@
     <title>Редактор лендинга — Open Tutor CRM</title>
     {#
       Автономная страница: не наследует base.html, не включает сайдбар и
-      общий app.css — по образцу публичных страниц бронирования. GrapesJS
-      и русская локаль подключены локально из /static/dist/grapesjs/,
-      внешних CDN нет.
+      общий app.css — по образцу публичных страниц бронирования. GrapesJS,
+      русская локаль и набор иконок Font Awesome подключены локально из
+      /static/dist/grapesjs/, внешних CDN нет.
     #}
     <link rel="stylesheet" href="/static/dist/grapesjs/grapes.min.css">
+    {#
+      Иконки панелей GrapesJS — классы Font Awesome 4.7.0 (`fa fa-cog`,
+      `fa fa-eye` и т.п.), зашитые в ядро. По умолчанию ядро само вставляет
+      в <head> ссылку на внешний CDN, поэтому стили подключаются здесь
+      локально, а автоподключение отключено опцией `cssIcons: ''` в init.
+    #}
+    <link rel="stylesheet"
+          href="/static/dist/grapesjs/font-awesome/css/font-awesome.min.css">
     <style>
         html, body {
             height: 100%;
@@ -149,6 +157,15 @@
                 height: '100%',
                 components: draft.body,
                 style: draft.css,
+                // Иконки Font Awesome подключены тегом <link> выше, локально.
+                // Ядро по умолчанию само вставляет в <head> ссылку на
+                // внешний CDN — пустая строка отключает эту вставку
+                // (проверка в ядре: `if (cssIcons) {…}`).
+                cssIcons: '',
+                // Телеметрия GrapesJS отправляет POST на сервер разработчиков
+                // ядра: приложение работает без внешних запросов, поэтому
+                // отправка отключена.
+                telemetry: false,
                 // Черновик хранит сервер: встроенное хранилище GrapesJS
                 // (localStorage) не используется.
                 storageManager: { type: 'none' },

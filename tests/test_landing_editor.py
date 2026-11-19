@@ -150,11 +150,19 @@ def test_editor_page_is_standalone(client, owner):
     assert "localeFallback: 'en'" in page
     assert "storageManager" in page
     assert "type: 'none'" in page
+    # Иконки панелей — локальный Font Awesome, автоподключение из ядра
+    # отключено: иначе GrapesJS сам вставит ссылку на cdnjs.
+    assert "/static/dist/grapesjs/font-awesome/css/font-awesome.min.css" in page
+    assert "cssIcons: ''" in page
+    # Телеметрия GrapesJS шлёт POST на app.grapesjs.com — она выключена.
+    assert "telemetry: false" in page
 
     assert "/static/styles.css" not in page
     assert 'class="sidebar' not in page
     assert "unpkg.com" not in page
     assert "cdn." not in page
+    assert "cdnjs.cloudflare.com" not in page
+    assert "app.grapesjs.com" not in page
     # Скрипт подмены входов не подключается в канвасе: репетитор видит
     # исходные кнопки «Вход…».
     assert "/static/landing-auth.js" not in page
@@ -332,6 +340,44 @@ def test_grapesjs_is_vendored_locally():
     ):
         assert section in locale, section
     assert re.search(r"[А-Яа-яЁё]", locale)
+
+
+def test_font_awesome_is_vendored_locally():
+    """Иконки панелей GrapesJS лежат локально и ссылаются только на себя.
+
+    Ядро рисует панели классами Font Awesome (`fa fa-cog`, `fa fa-eye`), и
+    без набора иконки пропадают. Набор не должен тянуть шрифт с CDN: адреса
+    внутри `font-awesome.min.css` относительные и указывают на локальный
+    каталог `fonts/`.
+    """
+    css_path = VENDOR_DIR / "font-awesome" / "css" / "font-awesome.min.css"
+    assert css_path.is_file()
+    assert css_path.stat().st_size > 0
+
+    css = css_path.read_text(encoding="utf-8")
+    assert "Font Awesome 4.7.0" in css
+    # Все адреса шрифтов — относительные: CDN и абсолютные URL недопустимы.
+    for url in re.findall(r"url\(([^)]*)\)", css):
+        assert url.strip("'\"").startswith("../fonts/"), url
+
+    for name in ("fontawesome-webfont.woff2", "fontawesome-webfont.woff"):
+        font = VENDOR_DIR / "font-awesome" / "fonts" / name
+        assert font.is_file(), name
+        assert font.stat().st_size > 0, name
+
+
+def test_editor_serves_font_awesome_and_no_cdn(client, owner):
+    """Редактор отдаёт локальные файлы иконок; CDN в разметке не остаётся."""
+    page = client.get("/tutor/landing/editor").text
+    assert "/static/dist/grapesjs/font-awesome/css/font-awesome.min.css" in page
+
+    for path in (
+        "/static/dist/grapesjs/font-awesome/css/font-awesome.min.css",
+        "/static/dist/grapesjs/font-awesome/fonts/fontawesome-webfont.woff2",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.content, path
 
 
 def test_locale_translates_style_manager_properties():
