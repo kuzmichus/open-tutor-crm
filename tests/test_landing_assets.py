@@ -441,3 +441,32 @@ def test_editor_configures_asset_manager(client, owner):
     assert "method: 'DELETE'" in page
     assert "Загрузить изображение" in page
     assert "/landing-assets/" in page
+
+
+def test_editor_confirms_delete_on_asset_remove_button(client, owner):
+    """Подтверждение удаления висит на клике по «×», а не на событии.
+
+    Кнопка удаления Asset Manager убирает модель прямо из коллекции
+    (`AssetImageView.onRemove`), поэтому `asset:remove:before` не
+    поднимается: обработчик на нём файл с диска удалял бы без
+    предупреждения. Проверяем именно перехват клика по
+    `[data-toggle=asset-remove]`.
+    """
+    page = client.get("/tutor/landing/editor").text
+
+    assert "[data-toggle=asset-remove]" in page
+    assert "document.addEventListener('click'" in page
+    assert "event.stopPropagation()" in page
+    # Обработчика на `asset:remove:before` быть не должно: он не срабатывает
+    # при удалении кнопкой ×, поэтому подтверждение живёт на клике.
+    assert "editor.on('asset:remove:before'" not in page
+    # Текст предупреждает о последствии: ссылки на удалённый файл сломаются.
+    assert "ссылки на него на странице перестанут" in page
+
+
+def test_editor_deletes_asset_by_name_from_absolute_link(client, owner):
+    """Имя для DELETE восстанавливается из абсолютного `/landing-assets/`."""
+    page = client.get("/tutor/landing/editor").text
+
+    assert "var assetPrefix = '/landing-assets/';" in page
+    assert "assetsUrl + '/' + encodeURIComponent(name)" in page

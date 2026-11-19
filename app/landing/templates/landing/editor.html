@@ -284,11 +284,22 @@
             // Удаление ассета в редакторе удаляет и файл с диска: иначе
             // `assets/` копил бы картинки без ссылок. Ссылки абсолютные,
             // поэтому имя восстанавливается из префикса `/landing-assets/`.
-            // Сначала подтверждение: удалённый файл ломает ссылку на
-            // странице, и вернуть его из редактора нельзя.
-            editor.on('asset:remove:before', function (asset, remove, options) {
-                var name = assetName(asset && asset.get('src'));
-                if (!name) {
+            //
+            // Подтверждение перехватывает сам клик по «×», а не событие
+            // `asset:remove:before`: кнопка удаления Asset Manager убирает
+            // модель прямо из коллекции (`AssetImageView.onRemove`), и
+            // `asset:remove:before` при этом не поднимается вовсе — с
+            // обработчиком на нём файл удалялся бы без предупреждения.
+            // Слушатель стоит на фазе перехвата и на `document`: отказ гасит
+            // событие раньше, чем оно дойдёт до обработчика GrapesJS, и
+            // ассет остаётся в списке. Удалённый файл ломает ссылку на
+            // странице, вернуть его из редактора нельзя.
+            document.addEventListener('click', function (event) {
+                var target = event.target;
+                if (!target || !target.closest) {
+                    return;
+                }
+                if (!target.closest('[data-toggle=asset-remove]')) {
                     return;
                 }
                 var confirmed = window.confirm(
@@ -296,10 +307,12 @@
                     'с диска, а ссылки на него на странице перестанут ' +
                     'работать.'
                 );
-                if (!confirmed && options) {
-                    options.abort = true;
+                if (confirmed) {
+                    return;
                 }
-            });
+                event.preventDefault();
+                event.stopPropagation();
+            }, true);
 
             editor.on('asset:remove', function (asset) {
                 var name = assetName(asset && asset.get('src'));
